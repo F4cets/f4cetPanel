@@ -5,28 +5,30 @@
 
 * Product Page: https://www.creative-tim.com/product/nextjs-material-dashboard-pro
 * Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
+* Coded by Creative Tim and F4cets Team
+=========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
+// React imports
 import { useState, useEffect } from "react";
 
+// Next.js components
 import Link from "next/link";
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 
 // prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
 
-// @material-ui core components
+// @mui material components
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import Icon from "@mui/material/Icon";
+import InputBase from "@mui/material/InputBase";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -55,16 +57,19 @@ import {
   setOpenConfigurator,
 } from "/context";
 
+// Solana Wallet Imports
+import { useWallet } from "@solana/wallet-adapter-react";
+
+// Dynamically import WalletMultiButton to avoid SSR issues
+const WalletMultiButton = dynamic(
+  () => import("@solana/wallet-adapter-react-ui").then((mod) => mod.WalletMultiButton),
+  { ssr: false }
+);
+
 function DashboardNavbar({ absolute, light, isMini }) {
   const [navbarType, setNavbarType] = useState();
   const [controller, dispatch] = useMaterialUIController();
-  const {
-    miniSidenav,
-    transparentNavbar,
-    fixedNavbar,
-    openConfigurator,
-    darkMode,
-  } = controller;
+  const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
   const route = useRouter().pathname.split("/").slice(1);
 
@@ -98,8 +103,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
   }, [dispatch, fixedNavbar]);
 
   const handleMiniSidenav = () => setMiniSidenav(dispatch, !miniSidenav);
-  const handleConfiguratorOpen = () =>
-    setOpenConfigurator(dispatch, !openConfigurator);
+  const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
   const handleOpenMenu = (event) => setOpenMenu(event.currentTarget);
   const handleCloseMenu = () => setOpenMenu(false);
 
@@ -148,22 +152,11 @@ function DashboardNavbar({ absolute, light, isMini }) {
     <AppBar
       position={absolute ? "absolute" : navbarType}
       color="inherit"
-      sx={(theme) =>
-        navbar(theme, { transparentNavbar, absolute, light, darkMode })
-      }
+      sx={(theme) => navbar(theme, { transparentNavbar, absolute, light, darkMode })}
     >
       <Toolbar sx={(theme) => navbarContainer(theme)}>
-        <MDBox
-          color="inherit"
-          mb={{ xs: 1, md: 0 }}
-          sx={(theme) => navbarRow(theme, { isMini })}
-        >
-          <Breadcrumbs
-            icon="home"
-            title={route[route.length - 1]}
-            route={route}
-            light={light}
-          />
+        <MDBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
+          <Breadcrumbs icon="home" title={route[route.length - 1]} route={route} light={light} />
           <IconButton
             sx={navbarDesktopMenu}
             onClick={handleMiniSidenav}
@@ -177,15 +170,16 @@ function DashboardNavbar({ absolute, light, isMini }) {
         </MDBox>
         {isMini ? null : (
           <MDBox sx={(theme) => navbarRow(theme, { isMini })}>
-            <MDBox pr={1}>
-              <MDInput label="Search here" />
+            <MDBox display="flex" alignItems="center">
+              <MDBox pr={1}>
+                <WalletMultiButton />
+              </MDBox>
+              <MDBox pr={1}>
+                <MDInput label="Search here" />
+              </MDBox>
             </MDBox>
             <MDBox color={light ? "white" : "inherit"}>
-              <Link
-                href="/authentication/sign-in/basic"
-                passHref
-                legacyBehavior
-              >
+              <Link href="/authentication/sign-in/basic">
                 <IconButton sx={navbarIconButton} size="small" disableRipple>
                   <Icon sx={iconsStyle}>account_circle</Icon>
                 </IconButton>

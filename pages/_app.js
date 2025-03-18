@@ -1,22 +1,27 @@
 /**
 =========================================================
-* NextJS Material Dashboard 2 PRO - v2.2.0
+* F4cetPanel - NextJS Material Dashboard 2 PRO v2.2.0
 =========================================================
 
 * Product Page: https://www.creative-tim.com/product/nextjs-material-dashboard-pro
 * Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
+* Coded by Creative Tim and F4cets Team
+=========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
 import { useState, useEffect, useMemo } from "react";
-
 import Head from "next/head";
 import { useRouter } from "next/router";
+
+// Solana Wallet Imports
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
+import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { clusterApiUrl } from '@solana/web3.js';
+import '@solana/wallet-adapter-react-ui/styles.css';
 
 // @emotion
 import createCache from "@emotion/cache";
@@ -39,8 +44,6 @@ import Configurator from "/examples/Configurator";
 // NextJS Material Dashboard 2 PRO themes
 import theme from "/assets/theme";
 import themeRTL from "/assets/theme/theme-rtl";
-
-// NextJS Material Dashboard 2 PRO Dark Mode themes
 import themeDark from "/assets/theme-dark";
 import themeDarkRTL from "/assets/theme-dark/theme-rtl";
 
@@ -51,12 +54,10 @@ import rtlPlugin from "stylis-plugin-rtl";
 import routes from "/routes";
 
 // NextJS Material Dashboard 2 PRO Context Provider
-import {
-  MaterialUIControllerProvider,
-  useMaterialUIController,
-  setMiniSidenav,
-  setOpenConfigurator,
-} from "/context";
+import { MaterialUIControllerProvider, useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "/context";
+
+// Custom Wallet Redirect Hook
+import { useWalletRedirect } from "/lib/useWalletRedirect";
 
 // Images
 import favicon from "/assets/images/favicon.png";
@@ -69,27 +70,17 @@ const clientSideEmotionCache = createCache({ key: "css", prepend: true });
 
 function Main({ Component, pageProps }) {
   const [controller, dispatch] = useMaterialUIController();
-  const {
-    miniSidenav,
-    direction,
-    layout,
-    openConfigurator,
-    sidenavColor,
-    transparentSidenav,
-    whiteSidenav,
-    darkMode,
-  } = controller;
+  const { miniSidenav, direction, layout, openConfigurator, sidenavColor, transparentSidenav, whiteSidenav, darkMode } = controller;
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useRouter();
 
+  // Use the custom wallet redirect hook
+  useWalletRedirect();
+
   // Cache for the rtl
   useMemo(() => {
-    const cacheRtl = createCache({
-      key: "rtl",
-      stylisPlugins: [rtlPlugin],
-    });
-
+    const cacheRtl = createCache({ key: "rtl", stylisPlugins: [rtlPlugin] });
     setRtlCache(cacheRtl);
   }, []);
 
@@ -110,8 +101,7 @@ function Main({ Component, pageProps }) {
   };
 
   // Change the openConfigurator state
-  const handleConfiguratorOpen = () =>
-    setOpenConfigurator(dispatch, !openConfigurator);
+  const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
 
   // Setting the dir attribute for the body element
   useEffect(() => {
@@ -124,8 +114,7 @@ function Main({ Component, pageProps }) {
     document.scrollingElement.scrollTop = 0;
   }, [pathname]);
 
-  const brandIcon =
-    (transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite;
+  const brandIcon = (transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite;
 
   const configsButton = (
     <MDBox
@@ -145,9 +134,7 @@ function Main({ Component, pageProps }) {
       sx={{ cursor: "pointer" }}
       onClick={handleConfiguratorOpen}
     >
-      <Icon fontSize="small" color="inherit">
-        settings
-      </Icon>
+      <Icon fontSize="small" color="inherit">settings</Icon>
     </MDBox>
   );
 
@@ -161,7 +148,7 @@ function Main({ Component, pageProps }) {
             <Sidenav
               color={sidenavColor}
               brand={brandIcon}
-              brandName="Material Dashboard PRO"
+              brandName="F4cet Dashboard PRO"
               routes={routes}
               onMouseEnter={handleOnMouseEnter}
               onMouseLeave={handleOnMouseLeave}
@@ -182,7 +169,7 @@ function Main({ Component, pageProps }) {
           <Sidenav
             color={sidenavColor}
             brand={brandIcon}
-            brandName="Material Dashboard PRO"
+            brandName="F4cet Dashboard PRO"
             routes={routes}
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
@@ -196,23 +183,32 @@ function Main({ Component, pageProps }) {
   );
 }
 
-function MyApp({
-  Component,
-  pageProps,
-  emotionCache = clientSideEmotionCache,
-}) {
+function MyApp({ Component, pageProps, emotionCache = clientSideEmotionCache }) {
+  const network = WalletAdapterNetwork.Mainnet;
+  const endpoint = clusterApiUrl(network);
+  const wallets = [
+    new PhantomWalletAdapter(),
+    new SolflareWalletAdapter(),
+  ];
+
   return (
-    <MaterialUIControllerProvider>
-      <CacheProvider value={emotionCache}>
-        <Head>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <link rel="shortcut icon" href={favicon.src} />
-          <link rel="apple-touch-icon" sizes="76x76" href={appleIcon.src} />
-          <title>Next Material Dashboard 2 PRO</title>
-        </Head>
-        <Main Component={Component} pageProps={pageProps} />
-      </CacheProvider>
-    </MaterialUIControllerProvider>
+    <ConnectionProvider endpoint={endpoint}>
+      <WalletProvider wallets={wallets} autoConnect>
+        <WalletModalProvider>
+          <MaterialUIControllerProvider>
+            <CacheProvider value={emotionCache}>
+              <Head>
+                <meta name="viewport" content="width=device-width, initial-scale=1" />
+                <link rel="shortcut icon" href={favicon.src} />
+                <link rel="apple-touch-icon" sizes="76x76" href={appleIcon.src} />
+                <title>F4cet Dashboard PRO</title>
+              </Head>
+              <Main Component={Component} pageProps={pageProps} />
+            </CacheProvider>
+          </MaterialUIControllerProvider>
+        </WalletModalProvider>
+      </WalletProvider>
+    </ConnectionProvider>
   );
 }
 
