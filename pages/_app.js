@@ -56,9 +56,6 @@ import routes from "/routes";
 // NextJS Material Dashboard 2 PRO Context Provider
 import { MaterialUIControllerProvider, useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "/context";
 
-// Custom Wallet Redirect Hook
-import { useWalletRedirect } from "/lib/useWalletRedirect";
-
 // Images
 import favicon from "/assets/images/favicon.png";
 import appleIcon from "/assets/images/apple-icon.png";
@@ -74,9 +71,6 @@ function Main({ Component, pageProps }) {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useRouter();
-
-  // Use the custom wallet redirect hook
-  useWalletRedirect();
 
   // Cache for the rtl
   useMemo(() => {
