@@ -23,25 +23,14 @@ import MDBox from "/components/MDBox";
 // NextJS Material Dashboard 2 PRO context
 import { useMaterialUIController, setLayout } from "/context";
 
-// Solana Wallet Imports
-import { useWallet } from "@solana/wallet-adapter-react";
-
 function DashboardLayout({ children }) {
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav } = controller;
   const { pathname } = useRouter();
-  const { publicKey, connected } = useWallet();
-  const router = useRouter();
 
   useEffect(() => {
     setLayout(dispatch, "dashboard");
   }, [dispatch, pathname]);
-
-  useEffect(() => {
-    if (!connected || !publicKey) {
-      router.replace("/"); // Relative path should resolve to base URL in production
-    }
-  }, [connected, publicKey, router]);
 
   return (
     <MDBox

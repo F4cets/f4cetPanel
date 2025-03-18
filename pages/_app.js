@@ -11,13 +11,13 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
 // Solana Wallet Imports
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { ConnectionProvider, WalletProvider, useWallet } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
@@ -71,6 +71,26 @@ function Main({ Component, pageProps }) {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useRouter();
+  const { publicKey, connected } = useWallet();
+  const router = useRouter();
+  const redirectRef = useRef({ hasRedirected: false }); // Use ref instead of state
+
+  // Wallet redirect logic with loop prevention
+  useEffect(() => {
+    const currentPath = pathname;
+
+    if (!connected || !publicKey) {
+      if (currentPath !== "/" && !redirectRef.current.hasRedirected) {
+        redirectRef.current.hasRedirected = true;
+        router.replace("/");
+      }
+    } else if (currentPath === "/" && !redirectRef.current.hasRedirected) {
+      redirectRef.current.hasRedirected = true;
+      router.replace("/dashboards/analytics"); // Corrected to match actual path
+    } else if (redirectRef.current.hasRedirected) {
+      redirectRef.current.hasRedirected = false; // Reset after navigation
+    }
+  }, [connected, publicKey, router]); // Only wallet state changes trigger this
 
   // Cache for the rtl
   useMemo(() => {

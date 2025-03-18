@@ -26,7 +26,7 @@ function BasePage() {
 
   useEffect(() => {
     if (connected && publicKey) {
-      router.replace("/dashboard/analytics"); // Use replace to avoid history stack issues
+      router.replace("/dashboards/analytics"); // Corrected to match actual path
     }
   }, [connected, publicKey, router]);
 
