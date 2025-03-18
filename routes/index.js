@@ -41,14 +41,14 @@ import MDAvatar from "/components/MDAvatar";
 import Icon from "@mui/material/Icon";
 
 // Images
-import profilePicture from "/assets/images/team-3.jpg";
+import profilePicture from "/assets/images/seanofdefi.png";
 
 const routes = [
   {
     type: "collapse",
-    name: "Brooklyn Alice",
-    key: "brooklyn-alice",
-    icon: <MDAvatar src={profilePicture.src} alt="Brooklyn Alice" size="sm" />,
+    name: "SeanofDefi",
+    key: "Sean-of-Defi",
+    icon: <MDAvatar src={profilePicture.src} alt="SeanofDefi" size="sm" />,
     collapse: [
       {
         name: "My Profile",
