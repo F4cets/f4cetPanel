@@ -71,14 +71,13 @@ function Main({ Component, pageProps }) {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useRouter();
-  const { publicKey, connected } = useWallet();
+  const { publicKey, connected, wallet } = useWallet();
   const router = useRouter();
-  const redirectRef = useRef({ hasRedirected: false }); // Use ref instead of state
+  const redirectRef = useRef({ hasRedirected: false });
 
   // Wallet redirect logic with loop prevention
   useEffect(() => {
     const currentPath = pathname;
-
     if (!connected || !publicKey) {
       if (currentPath !== "/" && !redirectRef.current.hasRedirected) {
         redirectRef.current.hasRedirected = true;
@@ -86,11 +85,31 @@ function Main({ Component, pageProps }) {
       }
     } else if (currentPath === "/" && !redirectRef.current.hasRedirected) {
       redirectRef.current.hasRedirected = true;
-      router.replace("/dashboards/analytics"); // Corrected to match actual path
+      const walletId = publicKey.toString();
+      router.replace(`/buyer/${walletId}`);
     } else if (redirectRef.current.hasRedirected) {
-      redirectRef.current.hasRedirected = false; // Reset after navigation
+      redirectRef.current.hasRedirected = false;
     }
-  }, [connected, publicKey, router]); // Only wallet state changes trigger this
+  }, [connected, publicKey, router]);
+
+  // Listen for wallet connection event to ensure immediate redirect
+  useEffect(() => {
+    if (wallet && wallet.adapter) {
+      const handleConnect = () => {
+        if (pathname === "/" && !redirectRef.current.hasRedirected) {
+          redirectRef.current.hasRedirected = true;
+          const walletId = wallet.adapter.publicKey.toString();
+          router.replace(`/buyer/${walletId}`);
+        }
+      };
+
+      wallet.adapter.on("connect", handleConnect);
+
+      return () => {
+        wallet.adapter.off("connect", handleConnect);
+      };
+    }
+  }, [wallet, pathname, router]);
 
   // Cache for the rtl
   useMemo(() => {

@@ -16,7 +16,7 @@ import Router from "next/router";
 
 export default function Custom404() {
   useEffect(() => {
-    Router.push("/dashboards/analytics"); // Corrected to match actual path
+    Router.push("/"); // Redirect to base page instead of /dashboards/analytics
   }, []);
 
   return <div />;
