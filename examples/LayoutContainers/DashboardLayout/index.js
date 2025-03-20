@@ -11,7 +11,7 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 
 // prop-types is a library for typechecking of props.
@@ -23,14 +23,34 @@ import MDBox from "/components/MDBox";
 // NextJS Material Dashboard 2 PRO context
 import { useMaterialUIController, setLayout } from "/context";
 
+// Solana Wallet Imports
+import { useWallet } from "@solana/wallet-adapter-react";
+
 function DashboardLayout({ children }) {
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav } = controller;
   const { pathname } = useRouter();
+  const { publicKey, connected } = useWallet();
+  const router = useRouter();
+  const [isWalletChecked, setIsWalletChecked] = useState(false);
 
   useEffect(() => {
     setLayout(dispatch, "dashboard");
   }, [dispatch, pathname]);
+
+  // Redirect to base page if wallet is not connected
+  useEffect(() => {
+    if (!connected || !publicKey) {
+      router.replace("/");
+    } else {
+      setIsWalletChecked(true); // Only render children after wallet check passes
+    }
+  }, [connected, publicKey, router]);
+
+  // Prevent rendering children until wallet check is complete
+  if (!isWalletChecked) {
+    return null; // Or a loading spinner if desired
+  }
 
   return (
     <MDBox
