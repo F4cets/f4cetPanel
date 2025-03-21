@@ -6,6 +6,9 @@
 * Copyright 2023 F4cets Team
 */
 
+// React imports
+import { useEffect } from "react";
+
 // Next.js components
 import { useRouter } from "next/router";
 
@@ -14,9 +17,21 @@ import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
 
 // Solana Wallet Imports
+import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 function BasePage() {
+  const { publicKey, connected } = useWallet();
+  const router = useRouter();
+
+  // Redirect to buyer-specific route when wallet connects
+  useEffect(() => {
+    if (connected && publicKey) {
+      const walletId = publicKey.toString();
+      router.replace(`/buyer/${walletId}`);
+    }
+  }, [connected, publicKey, router]);
+
   return (
     <MDBox
       display="flex"

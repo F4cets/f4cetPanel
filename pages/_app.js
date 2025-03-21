@@ -71,45 +71,22 @@ function Main({ Component, pageProps }) {
   const [onMouseEnter, setOnMouseEnter] = useState(false);
   const [rtlCache, setRtlCache] = useState(null);
   const { pathname } = useRouter();
-  const { publicKey, connected, wallet } = useWallet();
+  const { publicKey, connected } = useWallet();
   const router = useRouter();
   const redirectRef = useRef({ hasRedirected: false });
 
-  // Wallet redirect logic with loop prevention
+  // Redirect to base page if wallet is not connected, but allow /buyer/[walletId]
   useEffect(() => {
     const currentPath = pathname;
     if (!connected || !publicKey) {
-      if (currentPath !== "/" && !redirectRef.current.hasRedirected) {
+      if (currentPath !== "/" && !currentPath.startsWith("/buyer/") && !redirectRef.current.hasRedirected) {
         redirectRef.current.hasRedirected = true;
         router.replace("/");
       }
-    } else if (currentPath === "/" && !redirectRef.current.hasRedirected) {
-      redirectRef.current.hasRedirected = true;
-      const walletId = publicKey.toString();
-      router.replace(`/buyer/${walletId}`);
     } else if (redirectRef.current.hasRedirected) {
       redirectRef.current.hasRedirected = false;
     }
   }, [connected, publicKey, router]);
-
-  // Listen for wallet connection event to ensure immediate redirect
-  useEffect(() => {
-    if (wallet && wallet.adapter) {
-      const handleConnect = () => {
-        if (pathname === "/" && !redirectRef.current.hasRedirected) {
-          redirectRef.current.hasRedirected = true;
-          const walletId = wallet.adapter.publicKey.toString();
-          router.replace(`/buyer/${walletId}`);
-        }
-      };
-
-      wallet.adapter.on("connect", handleConnect);
-
-      return () => {
-        wallet.adapter.off("connect", handleConnect);
-      };
-    }
-  }, [wallet, pathname, router]);
 
   // Cache for the rtl
   useMemo(() => {
