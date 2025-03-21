@@ -22,7 +22,7 @@ import MDButton from "/components/MDButton";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 
-// Mock Data (Replace with Firestore data later)
+// Data (Replace with Firestore data later)
 const initialUserData = {
   username: "",
   shippingAddress: "",
@@ -62,22 +62,20 @@ function AccountSettings() {
           <Grid item xs={12}>
             <Card>
               <MDBox
-                mx={2}
-                mt={-3}
-                py={3}
-                px={2}
-                variant="gradient"
-                bgColor="info"
-                borderRadius="lg"
-                coloredShadow="info"
+                pt={4}
+                pb={3}
+                px={3}
+                component="form"
+                role="form"
+                onSubmit={handleSubmit}
               >
-                <MDTypography variant="h6" color="white">
-                  Account Settings
-                </MDTypography>
-              </MDBox>
-              <MDBox p={3}>
-                <form onSubmit={handleSubmit}>
-                  <Grid container spacing={3}>
+                <MDBox mb={2}>
+                  <MDTypography variant="h5" color="dark">
+                    Account Settings
+                  </MDTypography>
+                </MDBox>
+                <MDBox mb={3}>
+                  <Grid container spacing={2}>
                     {/* Username */}
                     <Grid item xs={12} md={6}>
                       <MDBox mb={2}>
@@ -91,7 +89,6 @@ function AccountSettings() {
                           onChange={handleInputChange}
                           fullWidth
                           placeholder="Enter your username"
-                          variant="standard"
                         />
                       </MDBox>
                     </Grid>
@@ -108,7 +105,6 @@ function AccountSettings() {
                           onChange={handleInputChange}
                           fullWidth
                           placeholder="Enter your email"
-                          variant="standard"
                         />
                       </MDBox>
                     </Grid>
@@ -124,10 +120,12 @@ function AccountSettings() {
                           value={userData.shippingAddress}
                           onChange={handleInputChange}
                           fullWidth
-                          placeholder="Enter your global shipping address"
-                          variant="standard"
+                          placeholder="Enter your global shipping address Ex: 
+                          1234 Main St.
+                          Portland OR 97103
+                          United States"
                           multiline
-                          rows={3}
+                          rows={4}
                         />
                       </MDBox>
                     </Grid>
@@ -143,7 +141,6 @@ function AccountSettings() {
                             accept="image/*"
                             onChange={handleAvatarChange}
                             fullWidth
-                            variant="standard"
                           />
                           {avatarPreview && (
                             <MDBox mt={2}>
@@ -158,12 +155,20 @@ function AccountSettings() {
                       </MDBox>
                     </Grid>
                   </Grid>
-                  <MDBox mt={4} mb={1}>
-                    <MDButton type="submit" variant="gradient" color="info" fullWidth>
-                      Save Settings
-                    </MDButton>
-                  </MDBox>
-                </form>
+                </MDBox>
+                <MDBox display="flex" justifyContent="center">
+                  <MDButton
+                    type="submit"
+                    color="info"
+                    size="small" // Reduced size
+                    sx={{
+                      width: { xs: "100%", sm: "150px" }, // Responsive width
+                      fontSize: { xs: "0.75rem", sm: "0.875rem" }, // Responsive font size
+                    }}
+                  >
+                    Save Settings
+                  </MDButton>
+                </MDBox>
               </MDBox>
             </Card>
           </Grid>

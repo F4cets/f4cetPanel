@@ -48,17 +48,22 @@ import {
   setWhiteSidenav,
 } from "/context";
 
-function Sidenav({ color, brand, brandName, routes, ...rest }) {
+// NextJS Material Dashboard 2 PRO routes
+import routes from "/routes";
+
+function Sidenav({ color, brand, brandName, ...rest }) {
   const [openCollapse, setOpenCollapse] = useState(false);
   const [openNestedCollapse, setOpenNestedCollapse] = useState(false);
   const [controller, dispatch] = useMaterialUIController();
-  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } =
-    controller;
+  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } = controller;
   const { pathname } = useRouter();
   const collapseName = pathname.split("/").slice(1)[0];
   const items = pathname.split("/").slice(1);
   const itemParentName = items[1];
   const itemName = items[items.length - 1];
+
+  // Mock user role (Replace with Firestore role fetching later)
+  const userRole = "buyer"; // This will be "buyer", "seller", or "god"
 
   let textColor = "white";
 
@@ -101,6 +106,26 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     return () => window.removeEventListener("resize", handleMiniSidenav);
   }, [dispatch, transparentSidenav, whiteSidenav]);
 
+  // Filter routes based on user role
+  const filteredRoutes = routes.filter(route => {
+    if (!route.roles) return true; // If no roles specified, show for all
+    return route.roles.includes(userRole);
+  });
+
+  // Further filter collapse items if they exist
+  const processedRoutes = filteredRoutes.map(route => {
+    if (route.collapse) {
+      return {
+        ...route,
+        collapse: route.collapse.filter(item => {
+          if (!item.roles) return true;
+          return item.roles.includes(userRole);
+        }),
+      };
+    }
+    return route;
+  });
+
   // Render all the nested collapse items from the routes.js
   const renderNestedCollapse = (collapse) => {
     const template = collapse.map(({ name, route, key, href }) =>
@@ -123,6 +148,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
 
     return template;
   };
+
   // Render the all the collpases from the routes.js
   const renderCollapse = (collapses) =>
     collapses.map(({ name, collapse, route, href, key }) => {
@@ -167,7 +193,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     });
 
   // Render all the routes from the routes.js (All the visible items on the Sidenav)
-  const renderRoutes = routes.map(
+  const renderRoutes = processedRoutes.map(
     ({ type, name, icon, title, collapse, noCollapse, key, href, route }) => {
       let returnValue;
 
