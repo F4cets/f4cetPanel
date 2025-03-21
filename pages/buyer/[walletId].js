@@ -10,6 +10,9 @@
 import { useRouter } from "next/router";
 import Link from "next/link";
 
+// Framer Motion for animations
+import { motion } from "framer-motion";
+
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -18,6 +21,7 @@ import Footer from "/examples/Footer";
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
+import MDButton from "/components/MDButton";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import DataTable from "/examples/Tables/DataTable";
@@ -58,12 +62,12 @@ function BuyerDashboard() {
   const affiliateTableData = {
     columns: [
       { Header: "Order ID", accessor: "id", width: "15%" },
-      { Header: "Date", accessor: "date", width: "15%" },
-      { Header: "Clicks", accessor: "clicks", width: "15%" },
-      { Header: "Purchases", accessor: "purchases", width: "15%" },
-      { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%" },
-      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "15%" },
-      { Header: "Status", accessor: "status", width: "10%" },
+      { Header: "Date", accessor: "date", width: "14%" },
+      { Header: "Clicks", accessor: "clicks", width: "14%" },
+      { Header: "Purchases", accessor: "purchases", width: "14%" },
+      { Header: "Pending WNDO", accessor: "pendingWndo", width: "14%" },
+      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "14%" },
+      { Header: "Status", accessor: "status", width: "15%" },
     ],
     rows: affiliateOrders.slice(0, 5).map(order => ({
       ...order,
@@ -83,7 +87,7 @@ function BuyerDashboard() {
       { Header: "Order ID", accessor: "id", width: "20%" },
       { Header: "Date", accessor: "date", width: "20%" },
       { Header: "Product", accessor: "product", width: "20%" },
-      { Header: "Amount ($)", accessor: "amount", width: "20%" },
+      { Header: "Amount", accessor: "amount", width: "20%" },
       { Header: "Status", accessor: "status", width: "20%" },
     ],
     rows: marketplaceOrders.slice(0, 5).map(order => ({
@@ -98,13 +102,72 @@ function BuyerDashboard() {
     })),
   };
 
+  // Animation variants for the button
+  const buttonVariants = {
+    rest: {
+      scale: 1,
+      rotate: 0,
+      transition: { duration: 0.3 },
+    },
+    hover: {
+      scale: 1.1, // Pop effect
+      rotate: [0, 5, -5, 5, 0], // Shake effect
+      transition: {
+        scale: { duration: 0.2 },
+        rotate: { repeat: 1, duration: 0.5 },
+      },
+    },
+  };
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        <MDTypography variant="h4" color="dark" mb={3}>
-          {walletId ? walletId.slice(0, 6) + "..." + walletId.slice(-4) : "User"} -- User Dashboard
-        </MDTypography>
+        <MDBox
+          maxWidth="1200px" // Constrain width for centering
+          mx="auto" // Center on the page
+          mb={3}
+        >
+          <MDBox
+            display="flex"
+            flexDirection={{ xs: "column", sm: "row" }} // Stack on mobile, row on desktop
+            justifyContent={{ xs: "center", sm: "space-between" }}
+            alignItems={{ xs: "center", sm: "center" }}
+            gap={{ xs: 2, sm: 2 }}
+          >
+            <MDTypography variant="h4" color="dark">
+              {walletId ? walletId.slice(0, 6) + "..." + walletId.slice(-4) : "User"} -- User Dashboard
+            </MDTypography>
+            <motion.div
+              variants={buttonVariants}
+              initial="rest"
+              whileHover="hover"
+            >
+              <MDButton
+                component={Link}
+                href="/seller/[walletId]" // Replace with actual seller signup path
+                variant="gradient"
+                color="info" // Use Material-UI color
+                size="large"
+                sx={{
+                  px: 4,
+                  py: 1.5,
+                  fontWeight: "bold",
+                  borderRadius: "12px",
+                  boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                  background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
+                  "&:hover": {
+                    background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
+                  },
+                  width: { xs: "100%", sm: "auto" }, // Full width on mobile
+                  maxWidth: { xs: "300px", sm: "auto" }, // Limit width on mobile
+                }}
+              >
+                Sell on F4cet
+              </MDButton>
+            </motion.div>
+          </MDBox>
+        </MDBox>
 
         {/* Key Metrics Section */}
         <Grid container spacing={3} mb={3}>
