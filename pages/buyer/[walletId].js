@@ -61,13 +61,13 @@ function BuyerDashboard() {
   // Affiliate Order List (Recent 5)
   const affiliateTableData = {
     columns: [
-      { Header: "Order ID", accessor: "id", width: "15%" },
-      { Header: "Date", accessor: "date", width: "14%" },
-      { Header: "Clicks", accessor: "clicks", width: "14%" },
-      { Header: "Purchases", accessor: "purchases", width: "14%" },
-      { Header: "Pending WNDO", accessor: "pendingWndo", width: "14%" },
-      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "14%" },
-      { Header: "Status", accessor: "status", width: "15%" },
+      { Header: "Order ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Clicks", accessor: "clicks", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Purchases", accessor: "purchases", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
     ],
     rows: affiliateOrders.slice(0, 5).map(order => ({
       ...order,
@@ -84,11 +84,11 @@ function BuyerDashboard() {
   // Marketplace Order List (Recent 5)
   const marketplaceTableData = {
     columns: [
-      { Header: "Order ID", accessor: "id", width: "20%" },
-      { Header: "Date", accessor: "date", width: "20%" },
-      { Header: "Product", accessor: "product", width: "20%" },
-      { Header: "Amount", accessor: "amount", width: "20%" },
-      { Header: "Status", accessor: "status", width: "20%" },
+      { Header: "Order ID", accessor: "id", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Date", accessor: "date", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Amount ($)", accessor: "amount", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Status", accessor: "status", width: "20%", sx: { paddingRight: "20px" } },
     ],
     rows: marketplaceOrders.slice(0, 5).map(order => ({
       ...order,
@@ -296,13 +296,26 @@ function BuyerDashboard() {
         {/* Order Lists Section */}
         <Grid container spacing={3}>
           {/* Affiliate Order List */}
-          <Grid item xs={12} lg={6}>
+          <Grid item xs={12}> {/* Full width on all screen sizes */}
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
                   Recent Affiliate Activity (Last 5)
                 </MDTypography>
-                <DataTable table={affiliateTableData} canSearch={false} />
+                <DataTable
+                  table={affiliateTableData}
+                  entriesPerPage={false} // Disable entries per page dropdown
+                  canSearch={false}
+                  sx={{
+                    "& th": {
+                      paddingRight: "30px !important", // Increase padding to avoid overlap
+                      paddingLeft: "10px !important",
+                    },
+                    "& .MuiTablePagination-root": {
+                      display: "none", // Explicitly hide pagination controls
+                    },
+                  }}
+                />
                 <MDBox mt={2} textAlign="center">
                   <Link href="/affiliate-marketplace/affiliate">
                     <MDTypography variant="button" color="info" fontWeight="medium">
@@ -315,13 +328,26 @@ function BuyerDashboard() {
           </Grid>
 
           {/* Marketplace Order List */}
-          <Grid item xs={12} lg={6}>
+          <Grid item xs={12}> {/* Full width on all screen sizes */}
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
                   Recent Marketplace Orders (Last 5)
                 </MDTypography>
-                <DataTable table={marketplaceTableData} canSearch={false} />
+                <DataTable
+                  table={marketplaceTableData}
+                  entriesPerPage={false} // Disable entries per page dropdown
+                  canSearch={false}
+                  sx={{
+                    "& th": {
+                      paddingRight: "30px !important", // Increase padding to avoid overlap
+                      paddingLeft: "10px !important",
+                    },
+                    "& .MuiTablePagination-root": {
+                      display: "none", // Explicitly hide pagination controls
+                    },
+                  }}
+                />
                 <MDBox mt={2} textAlign="center">
                   <Link href="/affiliate-marketplace/marketplace">
                     <MDTypography variant="button" color="info" fontWeight="medium">
