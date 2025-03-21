@@ -16,13 +16,21 @@ import { useRouter } from "next/router";
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
 
+// NextJS Material Dashboard 2 PRO context
+import { useMaterialUIController } from "/context";
+
 // Solana Wallet Imports
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+// Background image
+import bgImage from "/assets/images/bg1.jpg";
+
 function BasePage() {
   const { publicKey, connected } = useWallet();
   const router = useRouter();
+  const [controller] = useMaterialUIController();
+  const { darkMode } = controller;
 
   // Redirect to buyer-specific route when wallet connects
   useEffect(() => {
@@ -42,17 +50,21 @@ function BasePage() {
     >
       <MDBox
         sx={{
-          backgroundColor: "white",
+          background: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url(${bgImage.src})`, // Same background image with overlay for both modes
+          backgroundSize: "cover",
+          backgroundPosition: "center",
           padding: 3,
           borderRadius: 2,
           textAlign: "center",
-          boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.1)",
+          boxShadow: darkMode
+            ? "0px 4px 20px rgba(0, 0, 0, 0.7)" // Dark shadow in dark mode
+            : "0px 4px 20px rgba(0, 0, 0, 0.7)", // Lighter shadow in light mode
         }}
       >
-        <MDTypography variant="h4" color="dark" mb={2}>
+        <MDTypography variant="h4" color="white" mb={2}>
           Welcome to F4cet Dashboard
         </MDTypography>
-        <MDTypography variant="h6" color="dark" mb={2}>
+        <MDTypography variant="h6" color="white" mb={2}>
           Please connect your wallet to access the dashboard
         </MDTypography>
         <MDBox>

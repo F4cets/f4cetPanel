@@ -55,22 +55,22 @@ const colors = {
   },
 
   info: {
-    main: "#1A73E8",
+    main: "#21CBF3",
     focus: "#1662C4",
   },
 
   success: {
-    main: "#4CAF50",
+    main: "#6fcb9f",
     focus: "#67bb6a",
   },
 
   warning: {
-    main: "#fb8c00",
+    main: "#fec868",
     focus: "#fc9d26",
   },
 
   error: {
-    main: "#F44335",
+    main: "#f96161",
     focus: "#f65f53",
   },
 
@@ -133,7 +133,7 @@ const colors = {
     },
 
     dark: {
-      main: "#42424a",
+      main: "#4d455d",
       state: "#191919",
     },
   },

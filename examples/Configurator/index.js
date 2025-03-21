@@ -15,19 +15,11 @@ Coded by www.creative-tim.com
 
 import { useState, useEffect } from "react";
 
-// react-github-btn
-import GitHubButton from "react-github-btn";
-
 // @mui material components
 import Divider from "@mui/material/Divider";
 import Switch from "@mui/material/Switch";
 import IconButton from "@mui/material/IconButton";
-import Link from "@mui/material/Link";
 import Icon from "@mui/material/Icon";
-
-// @mui icons
-import TwitterIcon from "@mui/icons-material/Twitter";
-import FacebookIcon from "@mui/icons-material/Facebook";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -45,7 +37,6 @@ import {
   setWhiteSidenav,
   setMiniSidenav,
   setFixedNavbar,
-  setSidenavColor,
   setDarkMode,
 } from "/context";
 
@@ -55,20 +46,11 @@ function Configurator() {
     openConfigurator,
     miniSidenav,
     fixedNavbar,
-    sidenavColor,
     transparentSidenav,
     whiteSidenav,
     darkMode,
   } = controller;
   const [disabled, setDisabled] = useState(false);
-  const sidenavColors = [
-    "primary",
-    "dark",
-    "info",
-    "success",
-    "warning",
-    "error",
-  ];
 
   // Use the useEffect hook to change the button state for the sidenav type based on window size.
   useEffect(() => {
@@ -124,20 +106,15 @@ function Configurator() {
 
   // sidenav type active button styles
   const sidenavTypeActiveButtonStyles = ({
-    functions: { pxToRem, linearGradient },
-    palette: { white, gradients, background },
+    functions: { pxToRem },
+    palette: { white, dark, background },
   }) => ({
     height: pxToRem(39),
-    background: darkMode
-      ? white.main
-      : linearGradient(gradients.dark.main, gradients.dark.state),
-    color: darkMode ? background.sidenav : white.main,
-
+    background: "#4d455d", // Custom color for active state
+    color: white.main, // Ensure text is readable on the new background
     "&:hover, &:focus, &:focus:not(:hover)": {
-      background: darkMode
-        ? white.main
-        : linearGradient(gradients.dark.main, gradients.dark.state),
-      color: darkMode ? background.sidenav : white.main,
+      background: "#4d455d", // Maintain the same color on hover/focus
+      color: white.main,
     },
   });
 
@@ -152,7 +129,7 @@ function Configurator() {
         px={3}
       >
         <MDBox>
-          <MDTypography variant="h5">Material UI Configurator</MDTypography>
+          <MDTypography variant="h5">F4cet Configurator</MDTypography>
           <MDTypography variant="body2" color="text">
             See our dashboard options.
           </MDTypography>
@@ -176,60 +153,6 @@ function Configurator() {
       <Divider />
 
       <MDBox pt={0.5} pb={3} px={3}>
-        <MDBox>
-          <MDTypography variant="h6">Sidenav Colors</MDTypography>
-
-          <MDBox mb={0.5}>
-            {sidenavColors.map((color) => (
-              <IconButton
-                key={color}
-                sx={({
-                  borders: { borderWidth },
-                  palette: { white, dark, background },
-                  transitions,
-                }) => ({
-                  width: "24px",
-                  height: "24px",
-                  padding: 0,
-                  border: `${borderWidth[1]} solid ${
-                    darkMode ? background.sidenav : white.main
-                  }`,
-                  borderColor: () => {
-                    let borderColorValue = sidenavColor === color && dark.main;
-
-                    if (darkMode && sidenavColor === color) {
-                      borderColorValue = white.main;
-                    }
-
-                    return borderColorValue;
-                  },
-                  transition: transitions.create("border-color", {
-                    easing: transitions.easing.sharp,
-                    duration: transitions.duration.shorter,
-                  }),
-                  backgroundImage: ({
-                    functions: { linearGradient },
-                    palette: { gradients },
-                  }) =>
-                    linearGradient(
-                      gradients[color].main,
-                      gradients[color].state
-                    ),
-
-                  "&:not(:last-child)": {
-                    mr: 1,
-                  },
-
-                  "&:hover, &:focus, &:active": {
-                    borderColor: darkMode ? white.main : dark.main,
-                  },
-                })}
-                onClick={() => setSidenavColor(dispatch, color)}
-              />
-            ))}
-          </MDBox>
-        </MDBox>
-
         <MDBox mt={3} lineHeight={1}>
           <MDTypography variant="h6">Sidenav Type</MDTypography>
           <MDTypography variant="button" color="text">
@@ -321,74 +244,6 @@ function Configurator() {
           <MDTypography variant="h6">Light / Dark</MDTypography>
 
           <Switch checked={darkMode} onChange={handleDarkMode} />
-        </MDBox>
-        <Divider />
-        <MDBox mt={3} mb={2}>
-          <MDBox mb={2}>
-            <MDButton
-              component={Link}
-              href="https://www.creative-tim.com/product/nextjs-material-dashboard-pro"
-              target="_blank"
-              rel="noreferrer"
-              color="dark"
-              variant="gradient"
-              fullWidth
-            >
-              buy now
-            </MDButton>
-          </MDBox>
-          <MDButton
-            component={Link}
-            href="https://www.creative-tim.com/learning-lab/nextjs/quick-start/material-dashboard/"
-            target="_blank"
-            rel="noreferrer"
-            color={darkMode ? "light" : "dark"}
-            variant="outlined"
-            fullWidth
-          >
-            view documentation
-          </MDButton>
-        </MDBox>
-        <MDBox display="flex" justifyContent="center">
-          <GitHubButton
-            href="https://github.com/creativetimofficial/ct-nextjs-material-dashboard-pro"
-            data-icon="octicon-star"
-            data-size="large"
-            data-show-count="true"
-            aria-label="Star creativetimofficial/ct-nextjs-material-dashboard-pro on GitHub"
-          >
-            Star
-          </GitHubButton>
-        </MDBox>
-        <MDBox mt={2} textAlign="center">
-          <MDBox mb={0.5}>
-            <MDTypography variant="h6">Thank you for sharing!</MDTypography>
-          </MDBox>
-
-          <MDBox display="flex" justifyContent="center">
-            <MDBox mr={1.5}>
-              <MDButton
-                component={Link}
-                href="//twitter.com/intent/tweet?text=Check%20NextJS%20Material%20Dashboard%202%20PRO%20made%20by%20%40CreativeTim%20%23webdesign%20%23dashboard%20%23nextjs%20%mui&url=https%3A%2F%2Fwww.creative-tim.com%2Fproduct%2Fnextjs-material-dashboard-pro"
-                target="_blank"
-                rel="noreferrer"
-                color="dark"
-              >
-                <TwitterIcon />
-                &nbsp; Tweet
-              </MDButton>
-            </MDBox>
-            <MDButton
-              component={Link}
-              href="https://www.facebook.com/sharer/sharer.php?u=https://www.creative-tim.com/product/nextjs-material-dashboard-pro"
-              target="_blank"
-              rel="noreferrer"
-              color="dark"
-            >
-              <FacebookIcon />
-              &nbsp; Share
-            </MDButton>
-          </MDBox>
         </MDBox>
       </MDBox>
     </ConfiguratorRoot>

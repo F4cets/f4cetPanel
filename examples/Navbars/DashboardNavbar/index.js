@@ -72,6 +72,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
   const route = useRouter().pathname.split("/").slice(1);
+  const router = useRouter();
 
   useEffect(() => {
     // Setting the navbar type
@@ -107,6 +108,12 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const handleOpenMenu = (event) => setOpenMenu(event.currentTarget);
   const handleCloseMenu = () => setOpenMenu(false);
 
+  // Handle navigation with menu close
+  const handleNavigation = (path) => {
+    handleCloseMenu(); // Close the menu first
+    router.push(path); // Navigate to the specified path
+  };
+
   // Render the notifications menu
   const renderMenu = () => (
     <Menu
@@ -120,14 +127,16 @@ function DashboardNavbar({ absolute, light, isMini }) {
       onClose={handleCloseMenu}
       sx={{ mt: 2 }}
     >
-      <NotificationItem icon={<Icon>email</Icon>} title="Check new messages" />
+      <NotificationItem icon={<Icon>email</Icon>} title="Check new messages" onClick={handleCloseMenu} />
       <NotificationItem
-        icon={<Icon>podcasts</Icon>}
-        title="Manage Podcast sessions"
+        icon={<Icon>currency_exchange</Icon>}
+        title="Check WNDO Rewards"
+        onClick={() => handleNavigation("/affiliate-marketplace/affiliate")}
       />
       <NotificationItem
         icon={<Icon>shopping_cart</Icon>}
-        title="Payment successfully completed"
+        title="Check Marketplace Orders"
+        onClick={() => handleNavigation("/affiliate-marketplace/marketplace")}
       />
     </Menu>
   );
@@ -179,7 +188,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
               </MDBox>
             </MDBox>
             <MDBox color={light ? "white" : "inherit"}>
-              <Link href="/authentication/sign-in/basic">
+              <Link href="/account/settings">
                 <IconButton sx={navbarIconButton} size="small" disableRipple>
                   <Icon sx={iconsStyle}>account_circle</Icon>
                 </IconButton>

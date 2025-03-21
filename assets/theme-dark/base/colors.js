@@ -21,9 +21,9 @@ Coded by www.creative-tim.com
 
 const colors = {
   background: {
-    default: "#1a2035",
-    sidenav: "#1f283e",
-    card: "#202940",
+    default: "#393345",
+    sidenav: "#6e6385",
+    card: "#594f6b",
   },
 
   text: {
@@ -57,22 +57,22 @@ const colors = {
   },
 
   info: {
-    main: "#1A73E8",
+    main: "#84d2c5",
     focus: "#1662C4",
   },
 
   success: {
-    main: "#4CAF50",
+    main: "#6fcb9f",
     focus: "#67bb6a",
   },
 
   warning: {
-    main: "#fb8c00",
+    main: "#fec868",
     focus: "#fc9d26",
   },
 
   error: {
-    main: "#F44335",
+    main: "#f96161",
     focus: "#f65f53",
   },
 
@@ -82,8 +82,8 @@ const colors = {
   },
 
   dark: {
-    main: "#344767",
-    focus: "#2c3c58",
+    main: "#4d455d",
+    focus: "#4d455d",
   },
 
   grey: {
@@ -135,8 +135,8 @@ const colors = {
     },
 
     dark: {
-      main: "#323a54",
-      state: "#1a2035",
+      main: "#4d455d",
+      state: "#4d455d",
     },
   },
 
@@ -239,7 +239,7 @@ const colors = {
     },
 
     dark: {
-      background: "#8097bf",
+      background: "#4d455d",
       text: "#1e2e4a",
     },
   },
@@ -252,7 +252,7 @@ const colors = {
     warning: "#ff9900",
     error: "#f44336",
     light: "#adb5bd",
-    dark: "#404040",
+    dark: "#4d455d",
   },
 
   inputBorderColor: "#d2d6da",

@@ -64,7 +64,7 @@ const routes = [
     type: "collapse",
     name: "Affiliate Activity",
     key: "affiliate",
-    icon: <Icon fontSize="medium">link</Icon>,
+    icon: <Icon fontSize="medium">currency_exchange</Icon>,
     route: "/affiliate-marketplace/affiliate",
     noCollapse: true,
     roles: ["buyer"],

@@ -155,9 +155,9 @@ function BuyerDashboard() {
                   fontWeight: "bold",
                   borderRadius: "12px",
                   boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                  background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
+                  background: "linear-gradient(45deg, #7db9b6 30%, #21CBF3 90%)",
                   "&:hover": {
-                    background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
+                    background: "linear-gradient(45deg, #7db9b6 30%, #1E88E5 90%)",
                   },
                   width: { xs: "100%", sm: "auto" }, // Full width on mobile
                   maxWidth: { xs: "300px", sm: "auto" }, // Limit width on mobile
