@@ -127,23 +127,37 @@ function AffiliateActivity() {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox my={3}>
-        <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-          <MDTypography variant="h4" color="dark">
+        <MDBox
+          display="flex"
+          flexDirection={{ xs: "column", sm: "row" }} // Stack on mobile, row on larger screens
+          justifyContent={{ xs: "flex-start", sm: "space-between" }}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          mb={2}
+          gap={{ xs: 2, sm: 0 }} // Add gap when stacked on mobile
+        >
+          <MDTypography variant="h4" color="dark" mb={{ xs: 1, sm: 0 }}>
             Affiliate Activity
           </MDTypography>
-          <MDBox display="flex" alignItems="center">
-            <MDBox mr={2}>
+          <MDBox
+            display="flex"
+            flexDirection={{ xs: "column", sm: "row" }} // Stack search and filter on mobile
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            gap={{ xs: 1, sm: 2 }}
+            width={{ xs: "100%", sm: "auto" }}
+          >
+            <MDBox width={{ xs: "100%", sm: "200px" }}>
               <MDInput
                 placeholder="Search by ID or Link..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ width: "200px" }}
+                fullWidth
               />
             </MDBox>
             <MDButton
               variant={menu ? "contained" : "outlined"}
               color="dark"
               onClick={openMenu}
+              sx={{ width: { xs: "100%", sm: "auto" } }}
             >
               Filters <Icon>keyboard_arrow_down</Icon>
             </MDButton>
