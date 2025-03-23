@@ -19,7 +19,7 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 
 // Framer Motion for animations
-import { motion } from "framer-motion";
+import { motion, useAnimation } from "framer-motion";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -44,6 +44,19 @@ function SellOnF4cet() {
   const pricingRef = useRef(null);
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
+
+  // Animation controls for the flash effect
+  const monthlyPriceControls = useAnimation();
+  const sixMonthPriceControls = useAnimation();
+  const yearlyPriceControls = useAnimation();
+
+  // Flash animation variant
+  const flashVariant = {
+    flash: {
+      backgroundColor: ["rgba(255, 255, 0, 0)", "rgba(255, 255, 0, 0.5)", "rgba(255, 255, 0, 0)"],
+      transition: { duration: 0.5 },
+    },
+  };
 
   // Fetch SOL price in USD from CoinGecko API
   const fetchSolPrice = async () => {
@@ -82,13 +95,13 @@ function SellOnF4cet() {
     };
   }, []);
 
-  // Refresh SOL price every 60 seconds when pricing section is visible
+  // Refresh SOL price every 15 seconds when pricing section is visible
   useEffect(() => {
     let interval;
     if (isPricingVisible) {
       interval = setInterval(() => {
         fetchSolPrice();
-      }, 60000);
+      }, 15000); // Changed to 15 seconds (15000 ms)
     }
 
     return () => {
@@ -97,6 +110,15 @@ function SellOnF4cet() {
       }
     };
   }, [isPricingVisible]);
+
+  // Trigger flash animation when solPrice updates
+  useEffect(() => {
+    if (solPrice !== null) {
+      monthlyPriceControls.start("flash");
+      sixMonthPriceControls.start("flash");
+      yearlyPriceControls.start("flash");
+    }
+  }, [solPrice, monthlyPriceControls, sixMonthPriceControls, yearlyPriceControls]);
 
   // USD prices for the plans
   const monthlyPriceUSD = 10;
@@ -137,7 +159,7 @@ function SellOnF4cet() {
         <Container>
           <MDBox
             py={3}
-            px={{ xs: 1, sm: 2, md: 3 }} // Reduced padding: 8px on mobile (xs), 16px on sm, 24px on md and up
+            px={{ xs: 1, sm: 2, md: 3 }}
             sx={{
               borderRadius: "16px",
               boxShadow: "0px 2px 10px rgba(0, 0, 0, 0.1)",
@@ -279,9 +301,11 @@ function SellOnF4cet() {
                         <MDTypography variant="h4" color={darkMode ? "white" : "dark"} mb={1}>
                           ${monthlyPriceUSD}
                         </MDTypography>
-                        <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
-                          {monthlyPriceSOL} SOL
-                        </MDTypography>
+                        <motion.div animate={monthlyPriceControls} variants={flashVariant}>
+                          <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
+                            {monthlyPriceSOL} SOL
+                          </MDTypography>
+                        </motion.div>
                         <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={3}>
                           Perfect for trying out F4cet. Pay month-to-month and cancel anytime.
                         </MDTypography>
@@ -316,9 +340,11 @@ function SellOnF4cet() {
                         <MDTypography variant="h4" color={darkMode ? "white" : "dark"} mb={1}>
                           ${sixMonthPriceUSD}
                         </MDTypography>
-                        <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
-                          {sixMonthPriceSOL} SOL
-                        </MDTypography>
+                        <motion.div animate={sixMonthPriceControls} variants={flashVariant}>
+                          <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
+                            {sixMonthPriceSOL} SOL
+                          </MDTypography>
+                        </motion.div>
                         <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={3}>
                           Save more with a 6-month plan. Ideal for growing your Web3 store.
                         </MDTypography>
@@ -353,9 +379,11 @@ function SellOnF4cet() {
                         <MDTypography variant="h4" color={darkMode ? "white" : "dark"} mb={1}>
                           ${yearlyPriceUSD}
                         </MDTypography>
-                        <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
-                          {yearlyPriceSOL} SOL
-                        </MDTypography>
+                        <motion.div animate={yearlyPriceControls} variants={flashVariant}>
+                          <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={2}>
+                            {yearlyPriceSOL} SOL
+                          </MDTypography>
+                        </motion.div>
                         <MDTypography variant="body2" color={darkMode ? "white" : "text"} mb={3}>
                           Best value for long-term sellers. Get a full year of F4cet benefits.
                         </MDTypography>
