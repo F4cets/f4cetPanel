@@ -50,15 +50,15 @@ function BasePage() {
     >
       <MDBox
         sx={{
-          background: `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url(${bgImage.src})`, // Same background image with overlay for both modes
+          background: `linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url(${bgImage.src})`, // Same background image with overlay for both modes
           backgroundSize: "cover",
           backgroundPosition: "center",
           padding: 3,
           borderRadius: 2,
           textAlign: "center",
           boxShadow: darkMode
-            ? "0px 4px 20px rgba(0, 0, 0, 0.7)" // Dark shadow in dark mode
-            : "0px 4px 20px rgba(0, 0, 0, 0.7)", // Lighter shadow in light mode
+            ? "0px 4px 20px rgba(0, 0, 0, 0.5)" // Dark shadow in dark mode
+            : "0px 4px 20px rgba(0, 0, 0, 0.1)", // Lighter shadow in light mode
         }}
       >
         <MDTypography variant="h4" color="white" mb={2}>
