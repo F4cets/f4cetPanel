@@ -137,7 +137,7 @@ function SellOnF4cet() {
         <Container>
           <MDBox
             py={3}
-            px={6} // Added left and right padding
+            px={{ xs: 1, sm: 2, md: 3 }} // Reduced padding: 8px on mobile (xs), 16px on sm, 24px on md and up
             sx={{
               borderRadius: "16px",
               boxShadow: "0px 2px 10px rgba(0, 0, 0, 0.1)",
@@ -247,10 +247,10 @@ function SellOnF4cet() {
             {/* Pricing Section */}
             <MDBox ref={pricingRef} py={6}>
               <MDBox textAlign="center" mb={6}>
-                <MDTypography variant="h2" color="dark" mb={2}>
+                <MDTypography variant="h2" sx={{ color: "#344767" }} mb={2}>
                   Choose Your Plan
                 </MDTypography>
-                <MDTypography variant="body1" color="text" maxWidth="800px" mx="auto">
+                <MDTypography variant="body1" sx={{ color: "#344767" }} maxWidth="800px" mx="auto">
                   Start selling on F4cet with a plan that suits your needs. Pay in SOL with dynamic pricing based on USD.
                 </MDTypography>
               </MDBox>
@@ -372,7 +372,7 @@ function SellOnF4cet() {
             {/* Trusted Brands Section */}
             <MDBox py={6}>
               <MDBox textAlign="center" mb={4}>
-                <MDTypography variant="body2" color={darkMode ? "white" : "text"} fontWeight="medium">
+                <MDTypography variant="body2" sx={{ color: "#344767" }} fontWeight="medium">
                   Trusted by Web3 Innovators
                 </MDTypography>
               </MDBox>
@@ -401,10 +401,10 @@ function SellOnF4cet() {
             {/* FAQ Section */}
             <MDBox py={6} pb={16}>
               <MDBox textAlign="center" mb={6}>
-                <MDTypography variant="h2" color="dark" mb={2}>
+                <MDTypography variant="h2" sx={{ color: "#344767" }} mb={2}>
                   Frequently Asked Questions
                 </MDTypography>
-                <MDTypography variant="body1" color="text" maxWidth="800px" mx="auto">
+                <MDTypography variant="body1" sx={{ color: "#344767" }} maxWidth="800px" mx="auto">
                   Everything you need to know about selling on F4cet’s Web3 platform.
                 </MDTypography>
               </MDBox>
