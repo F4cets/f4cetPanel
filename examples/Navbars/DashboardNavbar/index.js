@@ -73,6 +73,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const [openMenu, setOpenMenu] = useState(false);
   const route = useRouter().pathname.split("/").slice(1);
   const router = useRouter();
+  const { publicKey, connected } = useWallet(); // Get wallet public key
 
   useEffect(() => {
     // Setting the navbar type
@@ -113,6 +114,11 @@ function DashboardNavbar({ absolute, light, isMini }) {
     handleCloseMenu(); // Close the menu first
     router.push(path); // Navigate to the specified path
   };
+
+  // Determine the href for the "Sell on F4cet" button
+  const sellOnF4cetHref = connected && publicKey
+    ? `/seller/${publicKey.toString()}` // If wallet is connected, go to seller admin panel
+    : "/buyer/sell-on-f4cet"; // If not connected, go to sell-on-f4cet page
 
   // Render the notifications menu
   const renderMenu = () => (

@@ -7,6 +7,7 @@
 */
 
 // Next.js imports
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -58,6 +59,23 @@ function BuyerDashboard() {
   const router = useRouter();
   const { walletId } = router.query; // Get walletId from URL
 
+  // Animation variants for the button
+  const buttonVariants = {
+    rest: {
+      scale: 1,
+      rotate: 0,
+      transition: { duration: 0.3 },
+    },
+    hover: {
+      scale: 1.1, // Pop effect
+      rotate: [0, 5, -5, 5, 0], // Shake effect
+      transition: {
+        scale: { duration: 0.2 },
+        rotate: { repeat: 1, duration: 0.5 },
+      },
+    },
+  };
+
   // Affiliate Order List (Recent 5)
   const affiliateTableData = {
     columns: [
@@ -102,21 +120,13 @@ function BuyerDashboard() {
     })),
   };
 
-  // Animation variants for the button
-  const buttonVariants = {
-    rest: {
-      scale: 1,
-      rotate: 0,
-      transition: { duration: 0.3 },
-    },
-    hover: {
-      scale: 1.1, // Pop effect
-      rotate: [0, 5, -5, 5, 0], // Shake effect
-      transition: {
-        scale: { duration: 0.2 },
-        rotate: { repeat: 1, duration: 0.5 },
-      },
-    },
+  // Handle navigation to the seller admin panel or sell-on-f4cet page
+  const handleSellOnF4cet = () => {
+    if (walletId) {
+      router.push(`/seller/${walletId}`);
+    } else {
+      router.push("/buyer/sell-on-f4cet");
+    }
   };
 
   return (
@@ -124,13 +134,13 @@ function BuyerDashboard() {
       <DashboardNavbar />
       <MDBox py={3}>
         <MDBox
-          maxWidth="1200px" // Constrain width for centering
-          mx="auto" // Center on the page
+          maxWidth="1200px"
+          mx="auto"
           mb={3}
         >
           <MDBox
             display="flex"
-            flexDirection={{ xs: "column", sm: "row" }} // Stack on mobile, row on desktop
+            flexDirection={{ xs: "column", sm: "row" }}
             justifyContent={{ xs: "center", sm: "space-between" }}
             alignItems={{ xs: "center", sm: "center" }}
             gap={{ xs: 2, sm: 2 }}
@@ -144,10 +154,9 @@ function BuyerDashboard() {
               whileHover="hover"
             >
               <MDButton
-                component={Link}
-                href="/seller/[walletId]" // Replace with actual seller signup path
+                onClick={handleSellOnF4cet}
                 variant="gradient"
-                color="info" // Use Material-UI color
+                color="info"
                 size="large"
                 sx={{
                   px: 4,
@@ -155,12 +164,12 @@ function BuyerDashboard() {
                   fontWeight: "bold",
                   borderRadius: "12px",
                   boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                  background: "linear-gradient(45deg, #7db9b6 30%, #21CBF3 90%)",
+                  background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
                   "&:hover": {
-                    background: "linear-gradient(45deg, #7db9b6 30%, #1E88E5 90%)",
+                    background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
                   },
-                  width: { xs: "100%", sm: "auto" }, // Full width on mobile
-                  maxWidth: { xs: "300px", sm: "auto" }, // Limit width on mobile
+                  width: { xs: "100%", sm: "auto" },
+                  maxWidth: { xs: "300px", sm: "auto" },
                 }}
               >
                 Sell on F4cet
@@ -296,7 +305,7 @@ function BuyerDashboard() {
         {/* Order Lists Section */}
         <Grid container spacing={3}>
           {/* Affiliate Order List */}
-          <Grid item xs={12}> {/* Full width on all screen sizes */}
+          <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
@@ -304,15 +313,15 @@ function BuyerDashboard() {
                 </MDTypography>
                 <DataTable
                   table={affiliateTableData}
-                  entriesPerPage={false} // Disable entries per page dropdown
+                  entriesPerPage={false}
                   canSearch={false}
                   sx={{
                     "& th": {
-                      paddingRight: "30px !important", // Increase padding to avoid overlap
-                      paddingLeft: "10px !important",
+                      paddingRight: "20px !important",
+                      paddingLeft: "20px !important",
                     },
                     "& .MuiTablePagination-root": {
-                      display: "none", // Explicitly hide pagination controls
+                      display: "none !important",
                     },
                   }}
                 />
@@ -328,7 +337,7 @@ function BuyerDashboard() {
           </Grid>
 
           {/* Marketplace Order List */}
-          <Grid item xs={12}> {/* Full width on all screen sizes */}
+          <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
@@ -336,15 +345,15 @@ function BuyerDashboard() {
                 </MDTypography>
                 <DataTable
                   table={marketplaceTableData}
-                  entriesPerPage={false} // Disable entries per page dropdown
+                  entriesPerPage={false}
                   canSearch={false}
                   sx={{
                     "& th": {
-                      paddingRight: "30px !important", // Increase padding to avoid overlap
-                      paddingLeft: "10px !important",
+                      paddingRight: "20px !important",
+                      paddingLeft: "20px !important",
                     },
                     "& .MuiTablePagination-root": {
-                      display: "none", // Explicitly hide pagination controls
+                      display: "none !important",
                     },
                   }}
                 />
