@@ -120,13 +120,9 @@ function BuyerDashboard() {
     })),
   };
 
-  // Handle navigation to the seller admin panel or sell-on-f4cet page
+  // Handle navigation to the sell-on-f4cet page
   const handleSellOnF4cet = () => {
-    if (walletId) {
-      router.push(`/seller/${walletId}`);
-    } else {
-      router.push("/buyer/sell-on-f4cet");
-    }
+    router.push("/buyer/sell-on-f4cet");
   };
 
   return (
@@ -372,6 +368,25 @@ function BuyerDashboard() {
       <Footer />
     </DashboardLayout>
   );
+}
+
+// Add getServerSideProps to handle dynamic route on server-side
+export async function getServerSideProps(context) {
+  const { walletId } = context.params;
+
+  // Validate walletId (optional, add your validation logic if needed)
+  if (!walletId) {
+    return {
+      notFound: true, // Return 404 if walletId is not provided
+    };
+  }
+
+  // Return props (can fetch data here if needed)
+  return {
+    props: {
+      walletId,
+    },
+  };
 }
 
 export default BuyerDashboard;

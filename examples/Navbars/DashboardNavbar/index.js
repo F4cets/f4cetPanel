@@ -91,16 +91,8 @@ function DashboardNavbar({ absolute, light, isMini }) {
       );
     }
 
-    /** 
-     The event listener that's calling the handleTransparentNavbar function when 
-     scrolling the window.
-    */
     window.addEventListener("scroll", handleTransparentNavbar);
-
-    // Call the handleTransparentNavbar function to set the state with the initial value.
     handleTransparentNavbar();
-
-    // Remove event listener on cleanup
     return () => window.removeEventListener("scroll", handleTransparentNavbar);
   }, [dispatch, fixedNavbar]);
 
@@ -111,14 +103,9 @@ function DashboardNavbar({ absolute, light, isMini }) {
 
   // Handle navigation with menu close
   const handleNavigation = (path) => {
-    handleCloseMenu(); // Close the menu first
-    router.push(path); // Navigate to the specified path
+    handleCloseMenu();
+    router.push(path);
   };
-
-  // Determine the href for the "Sell on F4cet" button
-  const sellOnF4cetHref = connected && publicKey
-    ? `/seller/${publicKey.toString()}` // If wallet is connected, go to seller admin panel
-    : "/buyer/sell-on-f4cet"; // If not connected, go to sell-on-f4cet page
 
   // Render the notifications menu
   const renderMenu = () => (
@@ -143,6 +130,11 @@ function DashboardNavbar({ absolute, light, isMini }) {
         icon={<Icon>shopping_cart</Icon>}
         title="Check Marketplace Orders"
         onClick={() => handleNavigation("/affiliate-marketplace/marketplace")}
+      />
+      <NotificationItem
+        icon={<Icon>star</Icon>}
+        title="Sell on F4cet"
+        onClick={() => handleNavigation("/buyer/sell-on-f4cet")}
       />
     </Menu>
   );
