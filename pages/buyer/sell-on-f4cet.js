@@ -50,21 +50,25 @@ function SellOnF4cet() {
   const sixMonthPriceControls = useAnimation();
   const yearlyPriceControls = useAnimation();
 
-  // Flash animation variant
+  // Flash animation variant (more visible yellow flash)
   const flashVariant = {
     flash: {
-      backgroundColor: ["rgba(255, 255, 0, 0)", "rgba(255, 255, 0, 0.5)", "rgba(255, 255, 0, 0)"],
-      transition: { duration: 0.5 },
+      backgroundColor: darkMode
+        ? ["rgba(255, 255, 0, 0)", "rgba(255, 255, 0, 0.8)", "rgba(255, 255, 0, 0)"]
+        : ["rgba(255, 255, 0, 0)", "rgba(255, 255, 0, 0.5)", "rgba(255, 255, 0, 0)"],
+      transition: { duration: 1.2 }, // Slightly longer duration for visibility
     },
   };
 
   // Fetch SOL price in USD from CoinGecko API
   const fetchSolPrice = async () => {
     try {
+      // Add a timestamp to prevent caching
       const response = await fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
+        `https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&t=${Date.now()}`
       );
       const data = await response.json();
+      console.log("Fetched SOL price:", data.solana.usd); // Debug API response
       setSolPrice(data.solana.usd);
     } catch (error) {
       console.error("Error fetching SOL price:", error);
@@ -79,9 +83,10 @@ function SellOnF4cet() {
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
+        console.log("Pricing section visible:", entry.isIntersecting); // Debug Intersection Observer
         setIsPricingVisible(entry.isIntersecting);
       },
-      { threshold: 0.1 }
+      { threshold: 0 } // Trigger as soon as any part is visible
     );
 
     if (pricingRef.current) {
@@ -99,9 +104,12 @@ function SellOnF4cet() {
   useEffect(() => {
     let interval;
     if (isPricingVisible) {
+      console.log("Starting SOL price refresh interval"); // Debug interval start
       interval = setInterval(() => {
         fetchSolPrice();
-      }, 15000); // Changed to 15 seconds (15000 ms)
+      }, 15000); // 15 seconds
+    } else {
+      console.log("Stopping SOL price refresh interval"); // Debug interval stop
     }
 
     return () => {
@@ -114,6 +122,7 @@ function SellOnF4cet() {
   // Trigger flash animation when solPrice updates
   useEffect(() => {
     if (solPrice !== null) {
+      console.log("Triggering flash animation for SOL price update"); // Debug animation trigger
       monthlyPriceControls.start("flash");
       sixMonthPriceControls.start("flash");
       yearlyPriceControls.start("flash");
