@@ -63,15 +63,14 @@ function SellOnF4cet() {
   // Fetch SOL price in USD from CoinGecko API
   const fetchSolPrice = async () => {
     try {
-      // Add a timestamp to prevent caching
       const response = await fetch(
         `https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&t=${Date.now()}`
       );
       const data = await response.json();
-      console.log("Fetched SOL price:", data.solana.usd); // Debug API response
+      console.log("Fetched SOL price from CoinGecko:", data.solana.usd); // Debug API response
       setSolPrice(data.solana.usd);
     } catch (error) {
-      console.error("Error fetching SOL price:", error);
+      console.error("Error fetching SOL price from CoinGecko:", error);
       setSolPrice(0); // Fallback to 0 if API fails
     }
   };
