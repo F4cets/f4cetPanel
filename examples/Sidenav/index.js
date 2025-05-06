@@ -5,21 +5,19 @@
 
 * Product Page: https://www.creative-tim.com/product/nextjs-material-dashboard-pro
 * Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
+* Coded by www.creative-tim.com and F4cets Team
+=========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
 import { useEffect, useState } from "react";
-
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-// prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { db } from "/lib/firebase";
 
 // @mui material components
 import List from "@mui/material/List";
@@ -57,16 +55,37 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } = controller;
   const { pathname } = useRouter();
-  const collapseName = pathname.split("/").slice(1)[0];
-  const items = pathname.split("/").slice(1);
-  const itemParentName = items[1];
-  const itemName = items[items.length - 1];
+  const { publicKey } = useWallet();
+  const [userRole, setUserRole] = useState("buyer"); // Default to buyer
 
-  // Mock user role (Replace with Firestore role fetching later)
-  const userRole = "buyer"; // This will be "buyer", "seller", or "god"
+  // Fetch user role from Firestore
+  useEffect(() => {
+    const fetchRole = async () => {
+      if (publicKey) {
+        const walletId = publicKey.toString();
+        console.log("Sidenav: Fetching role for wallet:", walletId);
+        const userDoc = await getDoc(doc(db, "users", walletId));
+        if (userDoc.exists()) {
+          const role = userDoc.data().role || "buyer";
+          setUserRole(role);
+          console.log("Sidenav: Role set to:", role, "Path:", pathname);
+        } else {
+          console.log("Sidenav: No user found for", walletId);
+          setUserRole("buyer");
+        }
+      } else {
+        console.log("Sidenav: No wallet connected");
+      }
+    };
+    fetchRole();
+  }, [publicKey]);
+
+  // Debug route access
+  useEffect(() => {
+    console.log("Sidenav: Current Path:", pathname, "Role:", userRole);
+  }, [pathname, userRole]);
 
   let textColor = "white";
-
   if (transparentSidenav || (whiteSidenav && !darkMode)) {
     textColor = "dark";
   } else if (whiteSidenav && darkMode) {
@@ -76,12 +95,11 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   const closeSidenav = () => setMiniSidenav(dispatch, true);
 
   useEffect(() => {
-    setOpenCollapse(collapseName);
-    setOpenNestedCollapse(itemParentName);
-  }, [collapseName, itemParentName]);
+    setOpenCollapse(pathname.split("/").slice(1)[0]);
+    setOpenNestedCollapse(pathname.split("/").slice(1)[1]);
+  }, [pathname]);
 
   useEffect(() => {
-    // A function that sets the mini state of the sidenav.
     function handleMiniSidenav() {
       setMiniSidenav(dispatch, window.innerWidth < 1200);
       setTransparentSidenav(
@@ -93,32 +111,30 @@ function Sidenav({ color, brand, brandName, ...rest }) {
         window.innerWidth < 1200 ? false : whiteSidenav
       );
     }
-
-    /** 
-     The event listener that's calling the handleMiniSidenav function when resizing the window.
-    */
     window.addEventListener("resize", handleMiniSidenav);
-
-    // Call the handleMiniSidenav function to set the state with the initial value.
     handleMiniSidenav();
-
-    // Remove event listener on cleanup
     return () => window.removeEventListener("resize", handleMiniSidenav);
   }, [dispatch, transparentSidenav, whiteSidenav]);
 
-  // Filter routes based on user role
-  const filteredRoutes = routes.filter(route => {
-    if (!route.roles) return true; // If no roles specified, show for all
+  // Filter routes based on user role (sellers see buyer routes too)
+  const filteredRoutes = routes(publicKey?.toString() || "").filter((route) => {
+    if (!route.roles) return true;
+    if (userRole === "seller") {
+      return route.roles.includes("buyer") || route.roles.includes("seller");
+    }
     return route.roles.includes(userRole);
   });
 
   // Further filter collapse items if they exist
-  const processedRoutes = filteredRoutes.map(route => {
+  const processedRoutes = filteredRoutes.map((route) => {
     if (route.collapse) {
       return {
         ...route,
-        collapse: route.collapse.filter(item => {
+        collapse: route.collapse.filter((item) => {
           if (!item.roles) return true;
+          if (userRole === "seller") {
+            return item.roles.includes("buyer") || item.roles.includes("seller");
+          }
           return item.roles.includes(userRole);
         }),
       };
@@ -127,8 +143,8 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   });
 
   // Render all the nested collapse items from the routes.js
-  const renderNestedCollapse = (collapse) => {
-    const template = collapse.map(({ name, route, key, href }) =>
+  const renderNestedCollapse = (collapse) =>
+    collapse.map(({ name, route, key, href }) =>
       href ? (
         <MuiLink
           key={key}
@@ -146,21 +162,17 @@ function Sidenav({ color, brand, brandName, ...rest }) {
       )
     );
 
-    return template;
-  };
-
-  // Render the all the collpases from the routes.js
+  // Render the all the collapses from the routes.js
   const renderCollapse = (collapses) =>
     collapses.map(({ name, collapse, route, href, key }) => {
       let returnValue;
-
       if (collapse) {
         returnValue = (
           <SidenavItem
             key={key}
             color={color}
             name={name}
-            active={key === itemParentName ? "isParent" : false}
+            active={key === pathname.split("/").slice(1)[1] ? "isParent" : false}
             open={openNestedCollapse === key}
             onClick={({ currentTarget }) =>
               openNestedCollapse === key &&
@@ -181,22 +193,21 @@ function Sidenav({ color, brand, brandName, ...rest }) {
             rel="noreferrer"
             sx={{ textDecoration: "none" }}
           >
-            <SidenavItem color={color} name={name} active={key === itemName} />
+            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(1)[2]} />
           </MuiLink>
         ) : (
           <Link href={route} key={key} sx={{ textDecoration: "none" }}>
-            <SidenavItem color={color} name={name} active={key === itemName} />
+            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(1)[2]} />
           </Link>
         );
       }
       return <SidenavList key={key}>{returnValue}</SidenavList>;
     });
 
-  // Render all the routes from the routes.js (All the visible items on the Sidenav)
+  // Render all the routes from the routes.js
   const renderRoutes = processedRoutes.map(
     ({ type, name, icon, title, collapse, noCollapse, key, href, route }) => {
       let returnValue;
-
       if (type === "collapse") {
         if (href) {
           returnValue = (
@@ -210,7 +221,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
               <SidenavCollapse
                 name={name}
                 icon={icon}
-                active={key === collapseName}
+                active={key === pathname.split("/").slice(1)[0]}
                 noCollapse={noCollapse}
               />
             </MuiLink>
@@ -222,7 +233,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
                 name={name}
                 icon={icon}
                 noCollapse={noCollapse}
-                active={key === collapseName}
+                active={key === pathname.split("/").slice(1)[0]}
               >
                 {collapse ? renderCollapse(collapse) : null}
               </SidenavCollapse>
@@ -234,7 +245,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
               key={key}
               name={name}
               icon={icon}
-              active={key === collapseName}
+              active={key === pathname.split("/").slice(1)[0]}
               open={openCollapse === key}
               onClick={() =>
                 openCollapse === key
@@ -274,7 +285,6 @@ function Sidenav({ color, brand, brandName, ...rest }) {
           />
         );
       }
-
       return returnValue;
     }
   );

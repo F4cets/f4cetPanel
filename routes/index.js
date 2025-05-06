@@ -5,24 +5,17 @@
 
 * Product Page: https://www.creative-tim.com/product/nextjs-material-dashboard-pro
 * Copyright 2023 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
+* Coded by www.creative-tim.com and F4cets Team
+=========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-// NextJS Material Dashboard 2 PRO components
 import MDAvatar from "/components/MDAvatar";
-
-// @mui icons
 import Icon from "@mui/material/Icon";
-
-// Images
 import profilePicture from "/assets/images/seanofdefi.png";
 
-const routes = [
+const routes = (walletId = '') => [
   {
     type: "collapse",
     name: "SeanofDefi",
@@ -56,7 +49,7 @@ const routes = [
     name: "Dashboard",
     key: "dashboard",
     icon: <Icon fontSize="medium">dashboard</Icon>,
-    route: `/buyer/${typeof window !== "undefined" ? window.localStorage.getItem("walletId") || "HDdF91GqaHuLJZyzdFA1j4Zd34XXGXwjK6Z9yHXutuki" : "HDdF91GqaHuLJZyzdFA1j4Zd34XXGXwjK6Z9yHXutuki"}`,
+    route: `/buyer/${walletId || 'placeholder'}`,
     noCollapse: true,
     roles: ["buyer"],
   },
@@ -80,6 +73,24 @@ const routes = [
   },
   {
     type: "collapse",
+    name: "Seller Dashboard",
+    key: "seller-dashboard",
+    icon: <Icon fontSize="medium">store</Icon>,
+    route: `/seller/${walletId || 'placeholder'}`,
+    noCollapse: true,
+    roles: ["seller"],
+  },
+  {
+    type: "collapse",
+    name: "Onboarding",
+    key: "onboarding",
+    icon: <Icon fontSize="medium">settings</Icon>,
+    route: `/seller/static/onboarding`, // Updated route
+    noCollapse: true,
+    roles: ["seller"],
+  },
+  {
+    type: "collapse",
     name: "Dashboards",
     key: "dashboards",
     icon: <Icon fontSize="medium">dashboard</Icon>,
@@ -95,9 +106,9 @@ const routes = [
         route: "/dashboards/sales",
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
-  { type: "title", title: "Pages", key: "title-pages", roles: ["seller", "god"] },
+  { type: "title", title: "Pages", key: "title-pages", roles: ["god"] },
   {
     type: "collapse",
     name: "Pages",
@@ -180,12 +191,12 @@ const routes = [
         route: "/pages/charts",
       },
       {
-        name: "Notfications",
+        name: "Notifications",
         key: "notifications",
         route: "/pages/notifications",
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
   {
     type: "collapse",
@@ -214,7 +225,7 @@ const routes = [
         route: "/applications/calendar",
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
   {
     type: "collapse",
@@ -260,7 +271,7 @@ const routes = [
         ],
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
   {
     type: "collapse",
@@ -312,10 +323,10 @@ const routes = [
         ],
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
-  { type: "divider", key: "divider-1", roles: ["seller", "god"] },
-  { type: "title", title: "Docs", key: "title-docs", roles: ["seller", "god"] },
+  { type: "divider", key: "divider-1", roles: ["god"] },
+  { type: "title", title: "Docs", key: "title-docs", roles: ["god"] },
   {
     type: "collapse",
     name: "Basic",
@@ -390,12 +401,12 @@ const routes = [
         ],
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
   {
     type: "collapse",
     name: "Components",
-    key: "/components",
+    key: "components",
     icon: <Icon fontSize="medium">view_in_ar</Icon>,
     collapse: [
       {
@@ -474,7 +485,7 @@ const routes = [
         href: "https://www.creative-tim.com/learning-lab/nextjs/typography/material-dashboard/",
       },
     ],
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
   {
     type: "collapse",
@@ -483,7 +494,7 @@ const routes = [
     href: "https://github.com/creativetimofficial/ct-nextjs-material-dashboard-pro/blob/main/CHANGELOG.md",
     icon: <Icon fontSize="medium">receipt_long</Icon>,
     noCollapse: true,
-    roles: ["seller", "god"], // Hidden for buyer
+    roles: ["god"],
   },
 ];
 

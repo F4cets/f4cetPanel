@@ -11,7 +11,7 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 
@@ -73,20 +73,34 @@ function Main({ Component, pageProps }) {
   const { pathname } = useRouter();
   const { publicKey, connected } = useWallet();
   const router = useRouter();
-  const redirectRef = useRef({ hasRedirected: false });
+  const [isWalletInitialized, setIsWalletInitialized] = useState(false);
+
+  // Wait for wallet connection to stabilize
+  useEffect(() => {
+    if (connected !== undefined) {
+      console.log("Wallet connection state:", connected, "PublicKey:", publicKey?.toString());
+      setIsWalletInitialized(true);
+    }
+  }, [connected, publicKey]);
 
   // Redirect to base page if wallet is not connected, but allow /buyer/[walletId]
   useEffect(() => {
+    if (!isWalletInitialized) return; // Wait for wallet state to stabilize
+
     const currentPath = pathname;
     if (!connected || !publicKey) {
-      if (currentPath !== "/" && !currentPath.startsWith("/buyer/") && !redirectRef.current.hasRedirected) {
-        redirectRef.current.hasRedirected = true;
+      if (currentPath !== "/" && !currentPath.startsWith("/buyer/")) {
+        console.log("_app.js: Redirecting to / due to no wallet connection");
         router.replace("/");
       }
-    } else if (redirectRef.current.hasRedirected) {
-      redirectRef.current.hasRedirected = false;
     }
-  }, [connected, publicKey, router]);
+  }, [connected, publicKey, router, isWalletInitialized]);
+
+  // Debug redirect
+  useEffect(() => {
+    console.log("Current Path:", pathname);
+    console.log("Connected:", connected, "PublicKey:", publicKey?.toString());
+  }, [pathname, connected, publicKey]);
 
   // Cache for the rtl
   useMemo(() => {
@@ -148,6 +162,14 @@ function Main({ Component, pageProps }) {
     </MDBox>
   );
 
+  // Invoke routes with walletId
+  const walletId = publicKey ? publicKey.toString() : "";
+  const routeArray = routes(walletId);
+
+  if (!isWalletInitialized) {
+    return <div>Loading wallet connection...</div>;
+  }
+
   return direction === "rtl" ? (
     <CacheProvider value={rtlCache}>
       <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
@@ -159,7 +181,7 @@ function Main({ Component, pageProps }) {
               color={sidenavColor}
               brand={brandIcon}
               brandName="F4cet Dashboard PRO"
-              routes={routes}
+              routes={routeArray}
               onMouseEnter={handleOnMouseEnter}
               onMouseLeave={handleOnMouseLeave}
             />
@@ -180,7 +202,7 @@ function Main({ Component, pageProps }) {
             color={sidenavColor}
             brand={brandIcon}
             brandName="F4cet Dashboard PRO"
-            routes={routes}
+            routes={routeArray}
             onMouseEnter={handleOnMouseEnter}
             onMouseLeave={handleOnMouseLeave}
           />
