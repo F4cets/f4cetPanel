@@ -97,48 +97,31 @@ function DashboardLayout({ children }) {
           return false;
         }
 
-        const routeSegments = routePath.split("/").filter(Boolean); // Remove empty segments
+        // Handle external URLs
+        if (routePath.startsWith("http")) {
+          console.log("DashboardLayout: Skipping external route:", routePath);
+          return false; // External URLs are not validated here
+        }
+
+        const routeSegments = routePath.split("/").filter(Boolean);
         const pathSegments = currentPath.split("/").filter(Boolean);
 
-        // Debug segments
         console.log(`DashboardLayout: Comparing Route: ${routePath}, Path: ${currentPath}`);
         console.log(`Route Segments: ${routeSegments}, Path Segments: ${pathSegments}`);
 
-        // Check if the route matches the path or is a base path for the current path
+        // Allow subpaths (e.g., /affiliate-marketplace/details/[orderId])
         if (routeSegments.length > pathSegments.length) {
-          return false; // Route is longer than path, no match
+          return false;
         }
 
-        let matched = true;
-        for (let i = 0; i < routeSegments.length; i++) {
-          const routeSegment = routeSegments[i];
-          const pathSegment = pathSegments[i];
-
-          if (!pathSegment) {
-            matched = false;
-            break;
+        return routeSegments.every((seg, i) => {
+          if (seg === pathSegments[i]) return true;
+          if (seg.includes("[") && seg.includes("]") && pathSegments[i]) {
+            console.log(`DashboardLayout: Dynamic segment match - Route: ${seg}, Path: ${pathSegments[i]}`);
+            return true;
           }
-
-          if (routeSegment === pathSegment) {
-            continue; // Exact match
-          }
-
-          // Check if the route segment is dynamic (e.g., [walletId])
-          if (routeSegment.includes("[") && pathSegment) {
-            console.log(`DashboardLayout: Dynamic segment match - Route segment: ${routeSegment}, Path segment: ${pathSegment}`);
-            continue;
-          }
-
-          matched = false;
-          break;
-        }
-
-        if (matched) {
-          console.log(`DashboardLayout: Path match - Route: ${routePath}, Path: ${currentPath}`);
-          return true;
-        }
-
-        return false;
+          return false;
+        });
       };
 
       // Check if the current path matches any route or subroute
@@ -159,7 +142,7 @@ function DashboardLayout({ children }) {
         return false;
       });
 
-      // Allow specific buyer subroutes for both buyer and seller roles
+      // Allow specific buyer subroutes for both roles
       const isBuyerSubRoute = pathname === "/buyer/sell-on-f4cet";
 
       // Replace dynamic segments in the pathname for comparison

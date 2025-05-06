@@ -49,7 +49,7 @@ const routes = (walletId = '') => [
     name: "Dashboard",
     key: "dashboard",
     icon: <Icon fontSize="medium">dashboard</Icon>,
-    route: `/buyer/${walletId || 'placeholder'}`,
+    route: "/buyer/[walletId]", // Dynamic route
     noCollapse: true,
     roles: ["buyer"],
   },
@@ -61,6 +61,14 @@ const routes = (walletId = '') => [
     route: "/affiliate-marketplace/affiliate",
     noCollapse: true,
     roles: ["buyer"],
+    collapse: [
+      {
+        name: "Details",
+        key: "affiliate-details",
+        route: "/affiliate-marketplace/details/[orderId]",
+        roles: ["buyer"],
+      },
+    ],
   },
   {
     type: "collapse",
@@ -70,13 +78,21 @@ const routes = (walletId = '') => [
     route: "/affiliate-marketplace/marketplace",
     noCollapse: true,
     roles: ["buyer"],
+    collapse: [
+      {
+        name: "Details",
+        key: "marketplace-details",
+        route: "/affiliate-marketplace/details/[orderId]",
+        roles: ["buyer"],
+      },
+    ],
   },
   {
     type: "collapse",
     name: "Seller Dashboard",
     key: "seller-dashboard",
     icon: <Icon fontSize="medium">store</Icon>,
-    route: `/seller/${walletId || 'placeholder'}`,
+    route: "/seller/[walletId]", // Dynamic route
     noCollapse: true,
     roles: ["seller"],
   },
@@ -85,7 +101,7 @@ const routes = (walletId = '') => [
     name: "Onboarding",
     key: "onboarding",
     icon: <Icon fontSize="medium">settings</Icon>,
-    route: `/seller/static/onboarding`, // Updated route
+    route: "/seller/static/onboarding",
     noCollapse: true,
     roles: ["seller"],
   },
