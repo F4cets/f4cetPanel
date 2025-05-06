@@ -19,6 +19,9 @@ import MDTypography from "/components/MDTypography";
 // NextJS Material Dashboard 2 PRO context
 import { useMaterialUIController } from "/context";
 
+// User context
+import { useUser } from "/contexts/UserContext";
+
 // Solana Wallet Imports
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
@@ -28,17 +31,32 @@ import bgImage from "/assets/images/bg1.jpg";
 
 function BasePage() {
   const { publicKey, connected } = useWallet();
+  const { user } = useUser();
   const router = useRouter();
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
 
-  // Redirect to buyer-specific route when wallet connects
+  // Redirect based on user role when wallet connects
   useEffect(() => {
-    if (connected && publicKey) {
-      const walletId = publicKey.toString();
-      router.replace(`/buyer/${walletId}`);
+    if (connected && publicKey && user) {
+      console.log("BasePage: User data:", user);
+      const { role } = user;
+      switch (role) {
+        case "buyer":
+          router.replace("/dashboard/buyer");
+          break;
+        case "seller":
+          router.replace("/dashboard/seller");
+          break;
+        case "god":
+          router.replace("/dashboard/god");
+          break;
+        default:
+          console.error("BasePage: Unknown role:", role);
+          router.replace("/");
+      }
     }
-  }, [connected, publicKey, router]);
+  }, [connected, publicKey, user, router]);
 
   return (
     <MDBox
