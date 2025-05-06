@@ -6,8 +6,12 @@
 * Copyright 2023 F4cets Team
 */
 
-// Next.js imports
+// React imports
+import { useEffect } from "react";
 import { useRouter } from "next/router";
+
+// User context
+import { useUser } from "/contexts/UserContext";
 
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
@@ -19,8 +23,22 @@ import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
 
 function SellerDashboard() {
+  const { user } = useUser();
   const router = useRouter();
-  const { walletId } = router.query;
+
+  // Redirect to home if no user or walletId
+  useEffect(() => {
+    if (!user || !user.walletId) {
+      router.replace("/");
+    }
+  }, [user, router]);
+
+  // Ensure user is loaded before rendering
+  if (!user || !user.walletId) {
+    return null; // Or a loading spinner
+  }
+
+  const walletId = user.walletId;
 
   return (
     <DashboardLayout>
@@ -36,22 +54,6 @@ function SellerDashboard() {
       <Footer />
     </DashboardLayout>
   );
-}
-
-export async function getServerSideProps(context) {
-  const { walletId } = context.params;
-
-  if (!walletId) {
-    return {
-      notFound: true,
-    };
-  }
-
-  return {
-    props: {
-      walletId,
-    },
-  };
 }
 
 export default SellerDashboard;
