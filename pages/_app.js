@@ -23,6 +23,9 @@ import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adap
 import { clusterApiUrl } from '@solana/web3.js';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
+// User Context
+import { UserContextProvider } from "/contexts/UserContext";
+
 // @emotion
 import createCache from "@emotion/cache";
 
@@ -228,15 +231,17 @@ function MyApp({ Component, pageProps, emotionCache = clientSideEmotionCache }) 
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
           <MaterialUIControllerProvider>
-            <CacheProvider value={emotionCache}>
-              <Head>
-                <meta name="viewport" content="width=device-width, initial-scale=1" />
-                <link rel="shortcut icon" href={favicon.src} />
-                <link rel="apple-touch-icon" sizes="76x76" href={appleIcon.src} />
-                <title>F4cet Dashboard PRO</title>
-              </Head>
-              <Main Component={Component} pageProps={pageProps} />
-            </CacheProvider>
+            <UserContextProvider>
+              <CacheProvider value={emotionCache}>
+                <Head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1" />
+                  <link rel="shortcut icon" href={favicon.src} />
+                  <link rel="apple-touch-icon" sizes="76x76" href={appleIcon.src} />
+                  <title>F4cet Dashboard PRO</title>
+                </Head>
+                <Main Component={Component} pageProps={pageProps} />
+              </CacheProvider>
+            </UserContextProvider>
           </MaterialUIControllerProvider>
         </WalletModalProvider>
       </WalletProvider>
