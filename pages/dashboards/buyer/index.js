@@ -100,7 +100,7 @@ function BuyerDashboard() {
     rows: affiliateOrders.slice(0, 5).map(order => ({
       ...order,
       id: (
-        <Link href={`/dashboard/buyer/affiliate/details/${order.id}`}>
+        <Link href={`/dashboards/buyer/affiliate/details/${order.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
             {order.id}
           </MDTypography>
@@ -121,7 +121,7 @@ function BuyerDashboard() {
     rows: marketplaceOrders.slice(0, 5).map(order => ({
       ...order,
       id: (
-        <Link href={`/dashboard/buyer/marketplace/details/${order.id}`}>
+        <Link href={`/dashboards/buyer/marketplace/details/${order.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
             {order.id}
           </MDTypography>
@@ -132,7 +132,7 @@ function BuyerDashboard() {
 
   // Handle navigation to the sell-on-f4cet page
   const handleSellOnF4cet = () => {
-    router.push("/dashboard/buyer/sell-on-f4cet");
+    router.push("/dashboards/buyer/sell-on-f4cet");
   };
 
   // Ensure user is loaded before rendering
@@ -339,7 +339,7 @@ function BuyerDashboard() {
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboard/buyer/affiliate">
+                  <Link href="/dashboards/buyer/affiliate">
                     <MDTypography variant="button" color="info" fontWeight="medium">
                       View All Affiliate Activity
                     </MDTypography>
@@ -371,7 +371,7 @@ function BuyerDashboard() {
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboard/buyer/marketplace">
+                  <Link href="/dashboards/buyer/marketplace">
                     <MDTypography variant="button" color="info" fontWeight="medium">
                       View All Marketplace Orders
                     </MDTypography>

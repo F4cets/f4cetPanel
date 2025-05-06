@@ -75,7 +75,7 @@ function DashboardLayout({ children }) {
       roles: r.roles,
     })));
 
-    // Function to match paths with dynamic segments and subpaths
+    // Simplified function to match paths with dynamic segments and subpaths
     const matchPath = (routePath, currentPath) => {
       if (!routePath) {
         console.log("DashboardLayout: Skipping undefined routePath");
@@ -94,19 +94,14 @@ function DashboardLayout({ children }) {
       console.log(`DashboardLayout: Comparing Route: ${routePath}, Path: ${currentPath}`);
       console.log(`Route Segments: ${routeSegments}, Path Segments: ${pathSegments}`);
 
-      // Allow subpaths and dynamic segments (e.g., /dashboards/buyer/marketplace/details/[orderId])
-      if (routeSegments.length <= pathSegments.length) {
-        return routeSegments.every((seg, i) => {
-          if (seg === pathSegments[i]) return true;
-          if (seg.includes("[") && seg.includes("]") && pathSegments[i]) {
-            console.log(`DashboardLayout: Dynamic segment match - Route: ${seg}, Path: ${pathSegments[i]}`);
-            return true;
-          }
-          return false;
-        });
-      }
-
-      return false;
+      // Match as long as the current path starts with the route path, accounting for dynamic segments
+      return pathSegments.length >= routeSegments.length && routeSegments.every((seg, i) => {
+        if (seg.includes("[") && seg.includes("]") && pathSegments[i]) {
+          console.log(`DashboardLayout: Dynamic segment match - Route: ${seg}, Path: ${pathSegments[i]}`);
+          return true;
+        }
+        return seg === pathSegments[i];
+      });
     };
 
     // Check if the current path matches any route or subroute

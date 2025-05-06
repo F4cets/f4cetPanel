@@ -43,13 +43,13 @@ function BasePage() {
       const { role } = user;
       switch (role) {
         case "buyer":
-          router.replace("/dashboard/buyer");
+          router.replace("/dashboards/buyer");
           break;
         case "seller":
-          router.replace("/dashboard/seller");
+          router.replace("/dashboards/seller");
           break;
         case "god":
-          router.replace("/dashboard/god");
+          router.replace("/dashboards/god");
           break;
         default:
           console.error("BasePage: Unknown role:", role);
