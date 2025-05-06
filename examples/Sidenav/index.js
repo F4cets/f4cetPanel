@@ -15,9 +15,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import PropTypes from "prop-types";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
-import { db } from "/lib/firebase";
+
+// User context
+import { useUser } from "/contexts/UserContext";
 
 // @mui material components
 import List from "@mui/material/List";
@@ -28,6 +28,7 @@ import Icon from "@mui/material/Icon";
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
+import MDAvatar from "/components/MDAvatar";
 
 // NextJS Material Dashboard 2 PRO examples
 import SidenavCollapse from "/examples/Sidenav/SidenavCollapse";
@@ -54,36 +55,13 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   const [openNestedCollapse, setOpenNestedCollapse] = useState(false);
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } = controller;
+  const { user } = useUser();
   const { pathname } = useRouter();
-  const { publicKey } = useWallet();
-  const [userRole, setUserRole] = useState("buyer"); // Default to buyer
 
-  // Fetch user role from Firestore
+  // Debug user data
   useEffect(() => {
-    const fetchRole = async () => {
-      if (publicKey) {
-        const walletId = publicKey.toString();
-        console.log("Sidenav: Fetching role for wallet:", walletId);
-        const userDoc = await getDoc(doc(db, "users", walletId));
-        if (userDoc.exists()) {
-          const role = userDoc.data().role || "buyer";
-          setUserRole(role);
-          console.log("Sidenav: Role set to:", role, "Path:", pathname);
-        } else {
-          console.log("Sidenav: No user found for", walletId);
-          setUserRole("buyer");
-        }
-      } else {
-        console.log("Sidenav: No wallet connected");
-      }
-    };
-    fetchRole();
-  }, [publicKey]);
-
-  // Debug route access
-  useEffect(() => {
-    console.log("Sidenav: Current Path:", pathname, "Role:", userRole);
-  }, [pathname, userRole]);
+    console.log("Sidenav: User data:", user, "Path:", pathname);
+  }, [user, pathname]);
 
   let textColor = "white";
   if (transparentSidenav || (whiteSidenav && !darkMode)) {
@@ -95,8 +73,8 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   const closeSidenav = () => setMiniSidenav(dispatch, true);
 
   useEffect(() => {
-    setOpenCollapse(pathname.split("/").slice(1)[0]);
-    setOpenNestedCollapse(pathname.split("/").slice(1)[1]);
+    setOpenCollapse(pathname.split("/").slice(1)[1]); // Adjust for static paths
+    setOpenNestedCollapse(pathname.split("/").slice(1)[2]);
   }, [pathname]);
 
   useEffect(() => {
@@ -117,12 +95,12 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   }, [dispatch, transparentSidenav, whiteSidenav]);
 
   // Filter routes based on user role (sellers see buyer routes too)
-  const filteredRoutes = routes(publicKey?.toString() || "").filter((route) => {
+  const filteredRoutes = routes().filter((route) => {
     if (!route.roles) return true;
-    if (userRole === "seller") {
+    if (user?.role === "seller") {
       return route.roles.includes("buyer") || route.roles.includes("seller");
     }
-    return route.roles.includes(userRole);
+    return route.roles.includes(user?.role || "buyer");
   });
 
   // Further filter collapse items if they exist
@@ -132,10 +110,10 @@ function Sidenav({ color, brand, brandName, ...rest }) {
         ...route,
         collapse: route.collapse.filter((item) => {
           if (!item.roles) return true;
-          if (userRole === "seller") {
+          if (user?.role === "seller") {
             return item.roles.includes("buyer") || item.roles.includes("seller");
           }
-          return item.roles.includes(userRole);
+          return item.roles.includes(user?.role || "buyer");
         }),
       };
     }
@@ -156,7 +134,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
           <SidenavItem name={name} nested />
         </MuiLink>
       ) : (
-        <Link href={route} key={key} sx={{ textDecoration: "none" }}>
+        <Link href={route} key={key} passHref>
           <SidenavItem name={name} active={route === pathname} nested />
         </Link>
       )
@@ -172,7 +150,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
             key={key}
             color={color}
             name={name}
-            active={key === pathname.split("/").slice(1)[1] ? "isParent" : false}
+            active={key === pathname.split("/").slice(2)[0] ? "isParent" : false}
             open={openNestedCollapse === key}
             onClick={({ currentTarget }) =>
               openNestedCollapse === key &&
@@ -193,11 +171,11 @@ function Sidenav({ color, brand, brandName, ...rest }) {
             rel="noreferrer"
             sx={{ textDecoration: "none" }}
           >
-            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(1)[2]} />
+            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(2)[1]} />
           </MuiLink>
         ) : (
-          <Link href={route} key={key} sx={{ textDecoration: "none" }}>
-            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(1)[2]} />
+          <Link href={route} key={key} passHref>
+            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(2)[1]} />
           </Link>
         );
       }
@@ -221,7 +199,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
               <SidenavCollapse
                 name={name}
                 icon={icon}
-                active={key === pathname.split("/").slice(1)[0]}
+                active={key === pathname.split("/").slice(2)[0]}
                 noCollapse={noCollapse}
               />
             </MuiLink>
@@ -233,7 +211,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
                 name={name}
                 icon={icon}
                 noCollapse={noCollapse}
-                active={key === pathname.split("/").slice(1)[0]}
+                active={key === pathname.split("/").slice(2)[0]}
               >
                 {collapse ? renderCollapse(collapse) : null}
               </SidenavCollapse>
@@ -245,7 +223,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
               key={key}
               name={name}
               icon={icon}
-              active={key === pathname.split("/").slice(1)[0]}
+              active={key === pathname.split("/").slice(2)[0]}
               open={openCollapse === key}
               onClick={() =>
                 openCollapse === key
@@ -343,7 +321,32 @@ function Sidenav({ color, brand, brandName, ...rest }) {
           (darkMode && !transparentSidenav && whiteSidenav)
         }
       />
-      <List>{renderRoutes}</List>
+      <List>
+        {user && (
+          <SidenavCollapse
+            name={user.profile.name || "User"}
+            icon={
+              <MDAvatar
+                src={user.profile.avatar || "/assets/images/default-avatar.png"}
+                alt={user.profile.name || "User"}
+                size="sm"
+              />
+            }
+            active={pathname.startsWith("/dashboards/profile") || pathname.startsWith("/dashboards/settings")}
+            open={openCollapse === "user-profile"}
+            onClick={() =>
+              openCollapse === "user-profile"
+                ? setOpenCollapse(false)
+                : setOpenCollapse("user-profile")
+            }
+          >
+            {renderCollapse(
+              routes().find((route) => route.key === "user-profile")?.collapse || []
+            )}
+          </SidenavCollapse>
+        )}
+        {renderRoutes}
+      </List>
     </SidenavRoot>
   );
 }
