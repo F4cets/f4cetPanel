@@ -13,25 +13,25 @@
 
 import MDAvatar from "/components/MDAvatar";
 import Icon from "@mui/material/Icon";
-import profilePicture from "/assets/images/seanofdefi.png";
+import profilePicture from "/assets/images/seanofdefi.png"; // Placeholder, will be dynamic later
 
-const routes = (walletId = '') => [
+const routes = () => [
   {
     type: "collapse",
-    name: "SeanofDefi",
-    key: "Sean-of-Defi",
-    icon: <MDAvatar src={profilePicture.src} alt="SeanofDefi" size="sm" />,
+    name: "User", // Will be dynamic via UserContext later
+    key: "user-profile",
+    icon: <MDAvatar src={profilePicture.src} alt="User" size="sm" />, // Will be dynamic
     collapse: [
       {
         name: "My Profile",
         key: "my-profile",
-        route: "/pages/profile/profile-overview",
+        route: "/dashboards/profile",
         roles: ["buyer", "seller", "god"],
       },
       {
         name: "Account Settings",
         key: "account-settings",
-        route: "/account/settings",
+        route: "/dashboards/settings",
         roles: ["buyer", "seller", "god"],
       },
       {
@@ -46,17 +46,17 @@ const routes = (walletId = '') => [
   { type: "divider", key: "divider-0", roles: ["buyer", "seller", "god"] },
   {
     type: "collapse",
-    name: "Dashboard",
-    key: "dashboard",
+    name: "Buyer Dashboard",
+    key: "buyer-dashboard",
     icon: <Icon fontSize="medium">dashboard</Icon>,
-    route: "/buyer/[walletId]",
+    route: "/dashboards/buyer",
     noCollapse: true,
     roles: ["buyer"],
     collapse: [
       {
         name: "Sell on F4cet",
         key: "sell-on-f4cet",
-        route: "/buyer/[walletId]/sell-on-f4cet",
+        route: "/dashboards/buyer/sell-on-f4cet",
         roles: ["buyer"],
       },
     ],
@@ -66,14 +66,14 @@ const routes = (walletId = '') => [
     name: "Affiliate Activity",
     key: "affiliate",
     icon: <Icon fontSize="medium">currency_exchange</Icon>,
-    route: "/affiliate-marketplace/affiliate",
+    route: "/dashboards/buyer/affiliate",
     noCollapse: true,
     roles: ["buyer"],
     collapse: [
       {
         name: "Details",
         key: "affiliate-details",
-        route: "/affiliate-marketplace/details/[orderId]",
+        route: "/dashboards/buyer/affiliate/details/[orderId]",
         roles: ["buyer"],
       },
     ],
@@ -83,14 +83,14 @@ const routes = (walletId = '') => [
     name: "Marketplace Orders",
     key: "marketplace",
     icon: <Icon fontSize="medium">shopping_cart</Icon>,
-    route: "/affiliate-marketplace/marketplace",
+    route: "/dashboards/buyer/marketplace",
     noCollapse: true,
     roles: ["buyer"],
     collapse: [
       {
         name: "Details",
         key: "marketplace-details",
-        route: "/affiliate-marketplace/details/[orderId]",
+        route: "/dashboards/buyer/marketplace/details/[orderId]",
         roles: ["buyer"],
       },
     ],
@@ -100,38 +100,46 @@ const routes = (walletId = '') => [
     name: "Seller Dashboard",
     key: "seller-dashboard",
     icon: <Icon fontSize="medium">store</Icon>,
-    route: "/seller/[walletId]",
+    route: "/dashboards/seller",
     noCollapse: true,
     roles: ["seller"],
     collapse: [
       {
         name: "Onboarding",
         key: "onboarding",
-        route: "/seller/[walletId]/onboarding",
+        route: "/dashboards/seller/onboarding",
         roles: ["seller"],
       },
     ],
   },
   {
     type: "collapse",
-    name: "Dashboards",
-    key: "dashboards",
-    icon: <Icon fontSize="medium">dashboard</Icon>,
-    collapse: [
-      {
-        name: "Analytics",
-        key: "analytics",
-        route: "/dashboards/analytics",
-      },
-      {
-        name: "Sales",
-        key: "sales",
-        route: "/dashboards/sales",
-      },
-    ],
+    name: "God Dashboard",
+    key: "god-dashboard",
+    icon: <Icon fontSize="medium">admin_panel_settings</Icon>,
+    route: "/dashboards/god",
+    noCollapse: true,
     roles: ["god"],
   },
-  { type: "title", title: "Pages", key: "title-pages", roles: ["god"] },
+  { type: "title", title: "Admin", key: "title-admin", roles: ["god"] },
+  {
+    type: "collapse",
+    name: "Analytics",
+    key: "analytics",
+    icon: <Icon fontSize="medium">analytics</Icon>,
+    route: "/dashboards/god/analytics",
+    noCollapse: true,
+    roles: ["god"],
+  },
+  {
+    type: "collapse",
+    name: "User Management",
+    key: "user-management",
+    icon: <Icon fontSize="medium">people</Icon>,
+    route: "/dashboards/god/users",
+    noCollapse: true,
+    roles: ["god"],
+  },
   {
     type: "collapse",
     name: "Pages",
@@ -139,84 +147,36 @@ const routes = (walletId = '') => [
     icon: <Icon fontSize="medium">image</Icon>,
     collapse: [
       {
-        name: "Profile",
-        key: "profile",
-        collapse: [
-          {
-            name: "Profile Overview",
-            key: "profile-overview",
-            route: "/pages/profile/profile-overview",
-          },
-          {
-            name: "All Projects",
-            key: "all-projects",
-            route: "/pages/profile/all-projects",
-          },
-        ],
-      },
-      {
-        name: "Users",
-        key: "users",
-        collapse: [
-          {
-            name: "New User",
-            key: "new-user",
-            route: "/pages/users/new-user",
-          },
-        ],
-      },
-      {
-        name: "Account",
-        key: "account",
-        collapse: [
-          {
-            name: "Settings",
-            key: "settings",
-            route: "/pages/account/settings",
-          },
-          {
-            name: "Billing",
-            key: "billing",
-            route: "/pages/account/billing",
-          },
-          {
-            name: "Invoice",
-            key: "invoice",
-            route: "/pages/account/invoice",
-          },
-        ],
-      },
-      {
         name: "Projects",
         key: "projects",
         collapse: [
           {
             name: "Timeline",
             key: "timeline",
-            route: "/pages/projects/timeline",
+            route: "/dashboards/god/projects/timeline",
           },
         ],
       },
       {
         name: "Pricing Page",
         key: "pricing-page",
-        route: "/pages/pricing-page",
+        route: "/dashboards/god/pricing",
       },
-      { name: "RTL", key: "rtl", route: "/pages/rtl" },
+      { name: "RTL", key: "rtl", route: "/dashboards/god/rtl" },
       {
         name: "Widgets",
         key: "widgets",
-        route: "/pages/widgets",
+        route: "/dashboards/god/widgets",
       },
       {
         name: "Charts",
         key: "charts",
-        route: "/pages/charts",
+        route: "/dashboards/god/charts",
       },
       {
         name: "Notifications",
         key: "notifications",
-        route: "/pages/notifications",
+        route: "/dashboards/god/notifications",
       },
     ],
     roles: ["god"],
@@ -230,22 +190,22 @@ const routes = (walletId = '') => [
       {
         name: "Kanban",
         key: "kanban",
-        route: "/applications/kanban",
+        route: "/dashboards/god/kanban",
       },
       {
         name: "Wizard",
         key: "wizard",
-        route: "/applications/wizard",
+        route: "/dashboards/god/wizard",
       },
       {
         name: "Data Tables",
         key: "data-tables",
-        route: "/applications/data-tables",
+        route: "/dashboards/god/data-tables",
       },
       {
         name: "Calendar",
         key: "calendar",
-        route: "/applications/calendar",
+        route: "/dashboards/god/calendar",
       },
     ],
     roles: ["god"],
@@ -263,17 +223,17 @@ const routes = (walletId = '') => [
           {
             name: "New Product",
             key: "new-product",
-            route: "/ecommerce/products/new-product",
+            route: "/dashboards/god/ecommerce/products/new-product",
           },
           {
             name: "Edit Product",
             key: "edit-product",
-            route: "/ecommerce/products/edit-product",
+            route: "/dashboards/god/ecommerce/products/edit-product",
           },
           {
             name: "Product Page",
             key: "product-page",
-            route: "/ecommerce/products/product-page",
+            route: "/dashboards/god/ecommerce/products/product-page",
           },
         ],
       },
@@ -284,12 +244,12 @@ const routes = (walletId = '') => [
           {
             name: "Order List",
             key: "order-list",
-            route: "/ecommerce/orders/order-list",
+            route: "/dashboards/god/ecommerce/orders/order-list",
           },
           {
             name: "Order Details",
             key: "order-details",
-            route: "/ecommerce/orders/order-details",
+            route: "/dashboards/god/ecommerce/orders/order-details",
           },
         ],
       },
@@ -309,17 +269,17 @@ const routes = (walletId = '') => [
           {
             name: "Basic",
             key: "basic",
-            route: "/authentication/sign-in/basic",
+            route: "/dashboards/god/authentication/sign-in/basic",
           },
           {
             name: "Cover",
             key: "cover",
-            route: "/authentication/sign-in/cover",
+            route: "/dashboards/god/authentication/sign-in/cover",
           },
           {
             name: "Illustration",
             key: "illustration",
-            route: "/authentication/sign-in/illustration",
+            route: "/dashboards/god/authentication/sign-in/illustration",
           },
         ],
       },
@@ -330,7 +290,7 @@ const routes = (walletId = '') => [
           {
             name: "Cover",
             key: "cover",
-            route: "/authentication/sign-up/cover",
+            route: "/dashboards/god/authentication/sign-up/cover",
           },
         ],
       },
@@ -341,7 +301,7 @@ const routes = (walletId = '') => [
           {
             name: "Cover",
             key: "cover",
-            route: "/authentication/reset-password/cover",
+            route: "/dashboards/god/authentication/reset-password/cover",
           },
         ],
       },
