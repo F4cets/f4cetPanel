@@ -327,7 +327,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
             name={user.profile.name || "User"}
             icon={
               <MDAvatar
-                src={user.profile.avatar || "/assets/images/default-avatar.png"}
+                src={user.profile.avatar || "/public/assets/images/default-avatar.png"}
                 alt={user.profile.name || "User"}
                 size="sm"
               />
@@ -340,9 +340,23 @@ function Sidenav({ color, brand, brandName, ...rest }) {
                 : setOpenCollapse("user-profile")
             }
           >
-            {renderCollapse(
-              routes().find((route) => route.key === "user-profile")?.collapse || []
-            )}
+            {renderCollapse([
+              {
+                name: "My Profile",
+                key: "my-profile",
+                route: "/dashboards/profile",
+              },
+              {
+                name: "Account Settings",
+                key: "account-settings",
+                route: "/dashboards/settings",
+              },
+              {
+                name: "Logout",
+                key: "logout",
+                route: "https://www.f4cets.market/marketplace",
+              },
+            ])}
           </SidenavCollapse>
         )}
         {renderRoutes}

@@ -17,10 +17,7 @@ import profilePicture from "/assets/images/seanofdefi.png"; // Placeholder, will
 
 const routes = () => [
   {
-    type: "collapse",
-    name: "User", // Will be dynamic via UserContext later
-    key: "user-profile",
-    icon: <MDAvatar src={profilePicture.src} alt="User" size="sm" />, // Will be dynamic
+
     collapse: [
       {
         name: "My Profile",
