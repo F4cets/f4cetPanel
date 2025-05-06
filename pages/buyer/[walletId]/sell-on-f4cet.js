@@ -37,7 +37,7 @@ import Footer from "/examples/Footer";
 // Background image
 import bgImage from "/assets/images/bg1.jpg";
 
-function SellOnF4cet() {
+function SellOnF4cet({ walletId }) {
   const [solPrice, setSolPrice] = useState(null);
   const [isPricingVisible, setIsPricingVisible] = useState(false);
   const [expanded, setExpanded] = useState(false); // For FAQ accordion
@@ -539,4 +539,17 @@ function SellOnF4cet() {
   );
 }
 
-export default SellOnF4cet;
+export async function getServerSideProps({ params }) {
+  console.log("getServerSideProps: Params:", params);
+  const { walletId } = params;
+  if (!walletId) {
+    return {
+      notFound: true,
+    };
+  }
+  return {
+    props: {
+      walletId,
+    },
+  };
+}

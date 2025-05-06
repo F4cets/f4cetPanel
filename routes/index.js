@@ -49,9 +49,17 @@ const routes = (walletId = '') => [
     name: "Dashboard",
     key: "dashboard",
     icon: <Icon fontSize="medium">dashboard</Icon>,
-    route: "/buyer/[walletId]", // Dynamic route
+    route: "/buyer/[walletId]",
     noCollapse: true,
     roles: ["buyer"],
+    collapse: [
+      {
+        name: "Sell on F4cet",
+        key: "sell-on-f4cet",
+        route: "/buyer/[walletId]/sell-on-f4cet",
+        roles: ["buyer"],
+      },
+    ],
   },
   {
     type: "collapse",
@@ -92,18 +100,17 @@ const routes = (walletId = '') => [
     name: "Seller Dashboard",
     key: "seller-dashboard",
     icon: <Icon fontSize="medium">store</Icon>,
-    route: "/seller/[walletId]", // Dynamic route
+    route: "/seller/[walletId]",
     noCollapse: true,
     roles: ["seller"],
-  },
-  {
-    type: "collapse",
-    name: "Onboarding",
-    key: "onboarding",
-    icon: <Icon fontSize="medium">settings</Icon>,
-    route: "/seller/static/onboarding",
-    noCollapse: true,
-    roles: ["seller"],
+    collapse: [
+      {
+        name: "Onboarding",
+        key: "onboarding",
+        route: "/seller/[walletId]/onboarding",
+        roles: ["seller"],
+      },
+    ],
   },
   {
     type: "collapse",

@@ -162,14 +162,15 @@ export default function SellerOnboarding({ walletId }) {
 
 export async function getServerSideProps({ params }) {
   console.log("getServerSideProps: Params:", params);
-  if (!params || !params.walletId) {
+  const { walletId } = params;
+  if (!walletId) {
     return {
       notFound: true,
     };
   }
   return {
     props: {
-      walletId: params.walletId,
+      walletId,
     },
   };
 }

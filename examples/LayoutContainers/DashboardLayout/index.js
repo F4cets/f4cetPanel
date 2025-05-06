@@ -109,19 +109,19 @@ function DashboardLayout({ children }) {
         console.log(`DashboardLayout: Comparing Route: ${routePath}, Path: ${currentPath}`);
         console.log(`Route Segments: ${routeSegments}, Path Segments: ${pathSegments}`);
 
-        // Allow subpaths (e.g., /affiliate-marketplace/details/[orderId])
-        if (routeSegments.length > pathSegments.length) {
-          return false;
+        // Allow subpaths (e.g., /seller/[walletId]/onboarding matches /seller/[walletId])
+        if (routeSegments.length <= pathSegments.length) {
+          return routeSegments.every((seg, i) => {
+            if (seg === pathSegments[i]) return true;
+            if (seg.includes("[") && seg.includes("]") && pathSegments[i]) {
+              console.log(`DashboardLayout: Dynamic segment match - Route: ${seg}, Path: ${pathSegments[i]}`);
+              return true;
+            }
+            return false;
+          });
         }
 
-        return routeSegments.every((seg, i) => {
-          if (seg === pathSegments[i]) return true;
-          if (seg.includes("[") && seg.includes("]") && pathSegments[i]) {
-            console.log(`DashboardLayout: Dynamic segment match - Route: ${seg}, Path: ${pathSegments[i]}`);
-            return true;
-          }
-          return false;
-        });
+        return false;
       };
 
       // Check if the current path matches any route or subroute
