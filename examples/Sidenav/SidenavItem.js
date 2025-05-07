@@ -35,10 +35,13 @@ import {
 // NextJS Material Dashboard 2 PRO contexts
 import { useMaterialUIController } from "/context";
 
-function SidenavItem({ color, name, active, nested, children, open, ...rest }) {
+function SidenavItem({ color, name, active, nested, children, open, icon, ...rest }) {
   const [controller] = useMaterialUIController();
   const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } =
     controller;
+
+  // Debug the icon prop
+  console.log(`SidenavItem: ${name}, Icon: ${icon ? 'Present' : 'Missing'}`, icon);
 
   return (
     <>
@@ -69,7 +72,14 @@ function SidenavItem({ color, name, active, nested, children, open, ...rest }) {
             })
           }
         >
-          <ListItemText primary={name} />
+          <MDBox display="flex" alignItems="center">
+            {icon && (
+              <MDBox mr={1} display="flex" alignItems="center">
+                {icon}
+              </MDBox>
+            )}
+            <ListItemText primary={name} />
+          </MDBox>
           {children && (
             <Icon
               component="i"
@@ -104,6 +114,7 @@ SidenavItem.defaultProps = {
   nested: false,
   children: false,
   open: false,
+  icon: null, // Default to null if no icon is provided
 };
 
 // Typechecking props for the SidenavItem
@@ -122,6 +133,7 @@ SidenavItem.propTypes = {
   nested: PropTypes.bool,
   children: PropTypes.node,
   open: PropTypes.bool,
+  icon: PropTypes.node, // Add icon prop type
 };
 
 export default SidenavItem;

@@ -57,6 +57,7 @@ function Sidenav({ color, brand, brandName, ...rest }) {
   const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } = controller;
   const { user } = useUser();
   const { pathname } = useRouter();
+  const router = useRouter();
 
   // Debug user data
   useEffect(() => {
@@ -120,10 +121,23 @@ function Sidenav({ color, brand, brandName, ...rest }) {
     return route;
   });
 
-  // Render all the nested collapse items from the routes.js
+  // Render all the nested collapse items for the dropdown
   const renderNestedCollapse = (collapse) =>
-    collapse.map(({ name, route, key, href }) =>
-      href ? (
+    collapse.map(({ name, route, key, href, icon }) => {
+      console.log(`renderNestedCollapse: ${name}, Icon: ${icon ? 'Present' : 'Missing'}`, icon); // Debug log
+      if (key === "logout" && href) {
+        // Handle logout to navigate in the same tab
+        return (
+          <SidenavItem
+            key={key}
+            name={name}
+            icon={icon} // Pass the icon to SidenavItem
+            onClick={() => router.push(href)} // Same-tab navigation
+            nested
+          />
+        );
+      }
+      return href ? (
         <MuiLink
           key={key}
           href={href}
@@ -131,18 +145,19 @@ function Sidenav({ color, brand, brandName, ...rest }) {
           rel="noreferrer"
           sx={{ textDecoration: "none" }}
         >
-          <SidenavItem name={name} nested />
+          <SidenavItem name={name} icon={icon} nested />
         </MuiLink>
       ) : (
         <Link href={route} key={key} passHref>
-          <SidenavItem name={name} active={route === pathname} nested />
+          <SidenavItem name={name} icon={icon} active={route === pathname} nested />
         </Link>
-      )
-    );
+      );
+    });
 
   // Render the all the collapses from the routes.js
   const renderCollapse = (collapses) =>
-    collapses.map(({ name, collapse, route, href, key }) => {
+    collapses.map(({ name, collapse, route, href, key, icon }) => {
+      console.log(`renderCollapse: Processing ${name}, Collapse:`, collapse, `Icon: ${icon ? 'Present' : 'Missing'}`, icon); // Debug log
       let returnValue;
       if (collapse) {
         returnValue = (
@@ -171,11 +186,23 @@ function Sidenav({ color, brand, brandName, ...rest }) {
             rel="noreferrer"
             sx={{ textDecoration: "none" }}
           >
-            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(2)[1]} />
+            <SidenavItem
+              color={color}
+              name={name}
+              icon={icon} // Pass the icon for non-collapsible items
+              active={key === pathname.split("/").slice(2)[1]}
+              nested
+            />
           </MuiLink>
         ) : (
           <Link href={route} key={key} passHref>
-            <SidenavItem color={color} name={name} active={key === pathname.split("/").slice(2)[1]} />
+            <SidenavItem
+              color={color}
+              name={name}
+              icon={icon} // Pass the icon for non-collapsible items
+              active={key === pathname.split("/").slice(2)[1]}
+              nested
+            />
           </Link>
         );
       }
@@ -345,16 +372,19 @@ function Sidenav({ color, brand, brandName, ...rest }) {
                 name: "My Profile",
                 key: "my-profile",
                 route: "/dashboards/profile",
+                icon: <Icon fontSize="small">person</Icon>,
               },
               {
                 name: "Account Settings",
                 key: "account-settings",
                 route: "/dashboards/settings",
+                icon: <Icon fontSize="small">settings</Icon>,
               },
               {
                 name: "Logout",
                 key: "logout",
                 route: "https://www.f4cets.market/marketplace",
+                icon: <Icon fontSize="small">logout</Icon>,
               },
             ])}
           </SidenavCollapse>

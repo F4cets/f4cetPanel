@@ -75,6 +75,7 @@ function itemContent(theme, ownerState) {
     transparentSidenav,
     whiteSidenav,
     darkMode,
+    nested,
   } = ownerState;
 
   const { white, dark } = palette;
@@ -87,7 +88,7 @@ function itemContent(theme, ownerState) {
     justifyContent: "space-between",
     width: "100%",
     padding: `${pxToRem(12)} ${pxToRem(16)}`,
-    marginLeft: pxToRem(18),
+    marginLeft: nested ? pxToRem(0) : pxToRem(18), // Remove extra margin for nested items to align icons
     userSelect: "none",
     position: "relative",
 
@@ -104,25 +105,6 @@ function itemContent(theme, ownerState) {
         easing: transitions.easing.easeInOut,
         duration: transitions.duration.standard,
       }),
-    },
-
-    "&::before": {
-      content: `"${name[0]}"`,
-      color:
-        ((transparentSidenav && !darkMode) || whiteSidenav) &&
-        (active === "isParent" || !active)
-          ? dark.main
-          : white.main,
-      fontWeight: fontWeightRegular,
-      display: "flex",
-      alignItems: "center",
-      position: "absolute",
-      top: "50%",
-      transform: "translateY(-50%)",
-      left: pxToRem(-15),
-      opacity: 1,
-      borderRadius: "50%",
-      fontSize: size.sm,
     },
   };
 }
