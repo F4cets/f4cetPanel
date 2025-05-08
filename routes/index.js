@@ -94,6 +94,15 @@ const routes = () => [
   },
   {
     type: "collapse",
+    name: "Seller Onboarding",
+    key: "onboarding",
+    icon: <Icon fontSize="medium">storefront</Icon>,
+    route: "/dashboards/onboarding",
+    noCollapse: true,
+    roles: ["seller"],
+  },
+  {
+    type: "collapse",
     name: "Seller Dashboard",
     key: "seller-dashboard",
     icon: <Icon fontSize="medium">store</Icon>,
