@@ -22,6 +22,7 @@ import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import Checkbox from "@mui/material/Checkbox";
 import Icon from "@mui/material/Icon";
+import IconButton from "@mui/material/IconButton"; // Added for delete button
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -115,6 +116,16 @@ export default function SellerOnboarding() {
       } else if (field === "backgroundImage") {
         setBackgroundPreview(URL.createObjectURL(file));
       }
+    }
+  };
+
+  // Handle image deletion
+  const handleDeleteImage = (field) => {
+    setForm((prev) => ({ ...prev, [field]: null }));
+    if (field === "thumbnailImage") {
+      setThumbnailPreview(null);
+    } else if (field === "backgroundImage") {
+      setBackgroundPreview(null);
     }
   };
 
@@ -279,7 +290,7 @@ export default function SellerOnboarding() {
                 borderRadius: "16px", 
                 boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
                 backdropFilter: "blur(10px)",
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
+                backgroundColor: "rgba(255, 255, 0.8)",
                 overflow: "hidden"
               }}>
                 <MDBox p={{ xs: 2, md: 3 }}>
@@ -333,7 +344,7 @@ export default function SellerOnboarding() {
                     letterSpacing: "0.5px"
                   }}
                 >
-                  Create Your F4cet Seller Profile
+                  Create Your F4cet Store Profile
                 </MDTypography>
                 {error && (
                   <MDTypography 
@@ -367,17 +378,40 @@ export default function SellerOnboarding() {
                       {thumbnailPreview && (
                         <MDBox mb={3} display="flex" justifyContent="center">
                           <MDBox
-                            component="img"
-                            src={thumbnailPreview}
                             sx={{
+                              position: "relative",
                               width: { xs: "150px", md: "200px" },
-                              height: { xs: "150px", md: "200px" }, // 4:3 aspect ratio
-                              borderRadius: "12px",
-                              border: "2px solid #e0e0e0",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                              objectFit: "cover",
+                              height: { xs: "150px", md: "200px" },
                             }}
-                          />
+                          >
+                            <MDBox
+                              component="img"
+                              src={thumbnailPreview}
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "12px",
+                                border: "2px solid #e0e0e0",
+                                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <IconButton
+                              onClick={() => handleDeleteImage("thumbnailImage")}
+                              sx={{
+                                position: "absolute",
+                                top: "-10px",
+                                right: "-10px",
+                                backgroundColor: "#d32f2f",
+                                color: "#fff",
+                                "&:hover": {
+                                  backgroundColor: "#b71c1c",
+                                },
+                              }}
+                            >
+                              <Icon>close</Icon>
+                            </IconButton>
+                          </MDBox>
                         </MDBox>
                       )}
                       <MDBox
@@ -410,7 +444,7 @@ export default function SellerOnboarding() {
                         <MDTypography 
                           variant="body2" 
                           sx={{ 
-                            color: dragActiveThumbnail ? "#3f51b5" : "#344767", // Dark text, primary on drag
+                            color: dragActiveThumbnail ? "#3f51b5" : "#344767",
                             mb: 1 
                           }}
                         >
@@ -419,7 +453,7 @@ export default function SellerOnboarding() {
                         <MDTypography 
                           variant="caption" 
                           sx={{ 
-                            color: "#344767", // Dark text
+                            color: "#344767",
                             display: "block", 
                             mb: 1 
                           }}
@@ -439,7 +473,7 @@ export default function SellerOnboarding() {
                           variant="h6" 
                           sx={{ 
                             fontWeight: 600, 
-                            color: "#344767", // Dark text
+                            color: "#344767",
                             textAlign: "center"
                           }}
                         >
@@ -451,17 +485,40 @@ export default function SellerOnboarding() {
                       {backgroundPreview && (
                         <MDBox mb={3} display="flex" justifyContent="center">
                           <MDBox
-                            component="img"
-                            src={backgroundPreview}
                             sx={{
+                              position: "relative",
                               width: { xs: "250px", md: "400px" },
-                              height: { xs: "140px", md: "200px" }, // 16:9 aspect ratio
-                              borderRadius: "12px",
-                              border: "2px solid #e0e0e0",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                              objectFit: "cover",
+                              height: { xs: "140px", md: "200px" },
                             }}
-                          />
+                          >
+                            <MDBox
+                              component="img"
+                              src={backgroundPreview}
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                borderRadius: "12px",
+                                border: "2px solid #e0e0e0",
+                                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <IconButton
+                              onClick={() => handleDeleteImage("backgroundImage")}
+                              sx={{
+                                position: "absolute",
+                                top: "-10px",
+                                right: "-10px",
+                                backgroundColor: "#d32f2f",
+                                color: "#fff",
+                                "&:hover": {
+                                  backgroundColor: "#b71c1c",
+                                },
+                              }}
+                            >
+                              <Icon>close</Icon>
+                            </IconButton>
+                          </MDBox>
                         </MDBox>
                       )}
                       <MDBox
@@ -494,7 +551,7 @@ export default function SellerOnboarding() {
                         <MDTypography 
                           variant="body2" 
                           sx={{ 
-                            color: dragActiveBackground ? "#3f51b5" : "#344767", // Dark text, primary on drag
+                            color: dragActiveBackground ? "#3f51b5" : "#344767",
                             mb: 1 
                           }}
                         >
@@ -503,7 +560,7 @@ export default function SellerOnboarding() {
                         <MDTypography 
                           variant="caption" 
                           sx={{ 
-                            color: "#344767", // Dark text
+                            color: "#344767",
                             display: "block", 
                             mb: 1 
                           }}
@@ -523,7 +580,7 @@ export default function SellerOnboarding() {
                           variant="h6" 
                           sx={{ 
                             fontWeight: 600, 
-                            color: "#344767", // Dark text
+                            color: "#344767",
                             textAlign: "center"
                           }}
                         >
@@ -552,13 +609,13 @@ export default function SellerOnboarding() {
                             },
                             "& .MuiInputBase-input": {
                               padding: { xs: "12px", md: "14px" },
-                              color: "#344767", // Dark text for input
+                              color: "#344767",
                             },
                             "& .MuiInputLabel-root": {
-                              color: "#344767 !important", // Dark label
+                              color: "#344767 !important",
                             },
                             "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important", // Dark label when focused
+                              color: "#344767 !important",
                             },
                             "& .MuiOutlinedInput-root": {
                               "& fieldset": {
@@ -591,16 +648,16 @@ export default function SellerOnboarding() {
                             },
                             "& .MuiInputBase-input": {
                               padding: { xs: "12px", md: "14px" },
-                              color: "#344767", // Dark text for input
+                              color: "#344767",
                             },
                             "& .MuiInputLabel-root": {
-                              color: "#344767 !important", // Dark label
+                              color: "#344767 !important",
                             },
                             "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important", // Dark label when focused
+                              color: "#344767 !important",
                             },
                             "& .MuiInputBase-input::placeholder": {
-                              color: "#757575", // Darker gray for placeholder
+                              color: "#757575",
                               opacity: 1,
                             },
                             "& .MuiOutlinedInput-root": {
@@ -639,16 +696,16 @@ export default function SellerOnboarding() {
                             },
                             "& .MuiInputBase-input": {
                               padding: { xs: "12px", md: "14px" },
-                              color: "#344767", // Dark text for input
+                              color: "#344767",
                             },
                             "& .MuiInputLabel-root": {
-                              color: "#344767 !important", // Dark label
+                              color: "#344767 !important",
                             },
                             "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important", // Dark label when focused
+                              color: "#344767 !important",
                             },
                             "& .MuiInputBase-input::placeholder": {
-                              color: "#757575", // Darker gray for placeholder
+                              color: "#757575",
                               opacity: 1,
                             },
                             "& .MuiOutlinedInput-root": {
@@ -683,13 +740,13 @@ export default function SellerOnboarding() {
                             },
                             "& .MuiInputBase-input": {
                               padding: { xs: "12px", md: "14px" },
-                              color: "#344767", // Dark text for input
+                              color: "#344767",
                             },
                             "& .MuiInputLabel-root": {
-                              color: "#344767 !important", // Dark label
+                              color: "#344767 !important",
                             },
                             "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important", // Dark label when focused
+                              color: "#344767 !important",
                             },
                             "& .MuiOutlinedInput-root": {
                               "& fieldset": {
@@ -712,7 +769,7 @@ export default function SellerOnboarding() {
                       variant="h6" 
                       sx={{ 
                         fontWeight: 600, 
-                        color: "#344767", // Dark text
+                        color: "#344767",
                         mb: 1.5,
                         letterSpacing: "0.5px"
                       }}

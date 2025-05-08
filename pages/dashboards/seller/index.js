@@ -195,7 +195,7 @@ function SellerDashboard() {
     router.push("/dashboards/seller/editinv");
   };
   const handleViewEscrow = () => {
-    router.push("/dashboards/seller/viewescrow");
+    router.push("/dashboards/seller/escrow");
   };
   const handleOnboarding = () => {
     router.push("/dashboards/onboarding");
