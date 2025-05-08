@@ -322,7 +322,7 @@ function BuyerDashboard() {
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
-                  Recent Affiliate Activity (Last 5)
+                  Affiliate Activity (Last 5)
                 </MDTypography>
                 <DataTable
                   table={affiliateTableData}
@@ -354,7 +354,7 @@ function BuyerDashboard() {
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h5" color="dark" mb={2}>
-                  Recent Marketplace Orders (Last 5)
+                  Marketplace Orders (Last 5)
                 </MDTypography>
                 <DataTable
                   table={marketplaceTableData}
