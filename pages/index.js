@@ -11,7 +11,7 @@ import { useEffect } from "react";
 
 // Next.js components
 import { useRouter } from "next/router";
-import Image from "next/image"; // Added for optimized images
+import Image from "next/image";
 
 // Framer Motion for animations
 import { motion } from "framer-motion";
@@ -34,7 +34,6 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import bgImage from "/assets/images/bg1.jpg";
 
 // Solflare logo and QR code images
-// Ensure these files exist in f4cetPanel/public/assets/images/
 import solflareLogo from "/assets/images/solflare-logo.png";
 import solflareQRCode from "/assets/images/solflare-m.png";
 
@@ -105,6 +104,9 @@ function BasePage() {
           boxShadow: darkMode
             ? "0px 4px 20px rgba(0, 0, 0, 0.5)"
             : "0px 4px 20px rgba(0, 0, 0, 0.1)",
+          maxWidth: { xs: "90%", md: "500px" }, // Constrain width
+          maxHeight: { xs: "90%", md: "auto" }, // Constrain height
+          margin: "20px", // Show purple background
         }}
       >
         <MDTypography variant="h4" color="white" mb={2}>
@@ -146,13 +148,16 @@ function BasePage() {
               href="https://chromewebstore.google.com/detail/solflare-wallet/bhhhlbepdkbapadjdnnojkbgioiodbic"
               target="_blank"
               rel="noopener noreferrer"
+              sx={{
+                maxWidth: { xs: "100px", md: "250px" }, // Constrain logo size
+              }}
             >
               <Image
                 src={solflareLogo}
                 alt="Solflare Logo"
-                width={250} // Adjusted for md breakpoint
-                height={62} // Adjusted based on typical logo aspect ratio
-                style={{ width: "100%", height: "auto", marginBottom: "8px" }}
+                width={100} // Match xs size
+                height={25} // Adjusted aspect ratio (100/250 * 62)
+                style={{ width: "100%", height: "auto" }}
                 sizes="(max-width: 600px) 100px, 250px"
               />
             </MDBox>
@@ -170,14 +175,20 @@ function BasePage() {
             <MDTypography variant="body2" color="white" mb={1}>
               Scan the QR code to download the Solflare App to your mobile device.
             </MDTypography>
-            <Image
-              src={solflareQRCode}
-              alt="Solflare QR Code"
-              width={150} // Adjusted for md breakpoint
-              height={150} // QR codes are typically square
-              style={{ width: "100%", height: "auto" }}
-              sizes="(max-width: 600px) 100px, 150px"
-            />
+            <MDBox
+              sx={{
+                maxWidth: { xs: "100px", md: "150px" }, // Constrain QR code size
+              }}
+            >
+              <Image
+                src={solflareQRCode}
+                alt="Solflare QR Code"
+                width={100} // Match xs size
+                height={100} // Square aspect ratio
+                style={{ width: "100%", height: "auto" }}
+                sizes="(max-width: 600px) 100px, 150px"
+              />
+            </MDBox>
           </MDBox>
         </MDBox>
       </MDBox>
