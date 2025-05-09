@@ -116,7 +116,7 @@ function BasePage() {
         </MDBox>
         <MDBox mt={2}>
           <MDTypography variant="body2" color="white" mb={2}>
-            don't have a wallet?{" "}
+            do not have a wallet?{" "}
             <MDTypography
               variant="body2"
               color="white"
