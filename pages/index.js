@@ -11,6 +11,7 @@ import { useEffect } from "react";
 
 // Next.js components
 import { useRouter } from "next/router";
+import Image from "next/image";
 
 // Framer Motion for animations
 import { motion } from "framer-motion";
@@ -33,8 +34,8 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import bgImage from "/assets/images/bg1.jpg";
 
 // Solflare logo and QR code images
-import solflareLogo from "/assets/images/Solflare-logo.png";
-import solflareQRCode from "/assets/images/Solflare-m.png";
+import solflareLogo from "/assets/images/solflare-logo.png";
+import solflareQRCode from "/assets/images/solflare-m.png";
 
 function BasePage() {
   const { publicKey, connected } = useWallet();
@@ -88,8 +89,8 @@ function BasePage() {
       justifyContent="center"
       alignItems="center"
       minHeight="100vh"
-      sx={({ palette: { primary, dark } }) => ({
-        backgroundColor: darkMode ? dark.main : primary.main, // Use theme's primary color (purple)
+      sx={({ palette: { dark } }) => ({
+        backgroundColor: darkMode ? dark.main : "#6a1b9a", // Custom purple
       })}
     >
       <MDBox
@@ -103,6 +104,9 @@ function BasePage() {
           boxShadow: darkMode
             ? "0px 4px 20px rgba(0, 0, 0, 0.5)"
             : "0px 4px 20px rgba(0, 0, 0, 0.1)",
+          maxWidth: { xs: "90%", md: "500px" },
+          maxHeight: { xs: "90%", md: "auto" },
+          margin: "20px",
         }}
       >
         <MDTypography variant="h4" color="white" mb={2}>
@@ -144,16 +148,18 @@ function BasePage() {
               href="https://chromewebstore.google.com/detail/solflare-wallet/bhhhlbepdkbapadjdnnojkbgioiodbic"
               target="_blank"
               rel="noopener noreferrer"
+              sx={{
+                maxWidth: { xs: "100px", md: "250px" },
+                mx: "auto", // Center the logo
+              }}
             >
-              <MDBox
-                component="img"
-                src={solflareLogo.src}
+              <Image
+                src={solflareLogo}
                 alt="Solflare Logo"
-                sx={{
-                  width: { xs: "100px", md: "250px" },
-                  height: "auto",
-                  mb: 1,
-                }}
+                width={100}
+                height={25}
+                style={{ width: "100%", height: "auto" }}
+                sizes="(max-width: 600px) 100px, 250px"
               />
             </MDBox>
           </motion.div>
@@ -171,14 +177,20 @@ function BasePage() {
               Scan the QR code to download the Solflare App to your mobile device.
             </MDTypography>
             <MDBox
-              component="img"
-              src={solflareQRCode.src}
-              alt="Solflare QR Code"
               sx={{
-                width: { xs: "100px", md: "150px" },
-                height: "auto",
+                maxWidth: { xs: "100px", md: "150px" },
+                mx: "auto", // Center the QR code
               }}
-            />
+            >
+              <Image
+                src={solflareQRCode}
+                alt="Solflare QR Code"
+                width={100}
+                height={100}
+                style={{ width: "100%", height: "auto" }}
+                sizes="(max-width: 600px) 100px, 150px"
+              />
+            </MDBox>
           </MDBox>
         </MDBox>
       </MDBox>
