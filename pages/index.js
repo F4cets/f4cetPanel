@@ -33,8 +33,8 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import bgImage from "/assets/images/bg1.jpg";
 
 // Solflare logo and QR code images
-import solflareLogo from "/assets/images/Solflare-logo.png";
-import solflareQRCode from "/assets/images/Solflare-m.png";
+import solflareLogo from "/assets/images/solflare-logo.png";
+import solflareQRCode from "/assets/images/solflare-m.png";
 
 function BasePage() {
   const { publicKey, connected } = useWallet();
