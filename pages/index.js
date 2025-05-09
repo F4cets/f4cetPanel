@@ -11,6 +11,7 @@ import { useEffect } from "react";
 
 // Next.js components
 import { useRouter } from "next/router";
+import Image from "next/image"; // Added for optimized images
 
 // Framer Motion for animations
 import { motion } from "framer-motion";
@@ -33,6 +34,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import bgImage from "/assets/images/bg1.jpg";
 
 // Solflare logo and QR code images
+// Ensure these files exist in f4cetPanel/public/assets/images/
 import solflareLogo from "/assets/images/solflare-logo.png";
 import solflareQRCode from "/assets/images/solflare-m.png";
 
@@ -88,8 +90,8 @@ function BasePage() {
       justifyContent="center"
       alignItems="center"
       minHeight="100vh"
-      sx={({ palette: { primary, dark } }) => ({
-        backgroundColor: darkMode ? dark.main : primary.main, // Use theme's primary color (purple)
+      sx={({ palette: { dark } }) => ({
+        backgroundColor: darkMode ? dark.main : "#6a1b9a", // Custom purple
       })}
     >
       <MDBox
@@ -145,15 +147,13 @@ function BasePage() {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <MDBox
-                component="img"
-                src={solflareLogo.src}
+              <Image
+                src={solflareLogo}
                 alt="Solflare Logo"
-                sx={{
-                  width: { xs: "100px", md: "250px" },
-                  height: "auto",
-                  mb: 1,
-                }}
+                width={250} // Adjusted for md breakpoint
+                height={62} // Adjusted based on typical logo aspect ratio
+                style={{ width: "100%", height: "auto", marginBottom: "8px" }}
+                sizes="(max-width: 600px) 100px, 250px"
               />
             </MDBox>
           </motion.div>
@@ -170,14 +170,13 @@ function BasePage() {
             <MDTypography variant="body2" color="white" mb={1}>
               Scan the QR code to download the Solflare App to your mobile device.
             </MDTypography>
-            <MDBox
-              component="img"
-              src={solflareQRCode.src}
+            <Image
+              src={solflareQRCode}
               alt="Solflare QR Code"
-              sx={{
-                width: { xs: "100px", md: "150px" },
-                height: "auto",
-              }}
+              width={150} // Adjusted for md breakpoint
+              height={150} // QR codes are typically square
+              style={{ width: "100%", height: "auto" }}
+              sizes="(max-width: 600px) 100px, 150px"
             />
           </MDBox>
         </MDBox>
