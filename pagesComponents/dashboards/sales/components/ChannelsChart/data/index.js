@@ -14,7 +14,7 @@ Coded by www.creative-tim.com
 */
 
 const channelChartData = {
-  labels: ["Facebook", "Direct", "Organic", "Referral"],
+  labels: ["Google", "Direct", "Organic", "X.com"],
   datasets: {
     label: "Projects",
     backgroundColors: ["info", "primary", "dark", "secondary", "primary"],

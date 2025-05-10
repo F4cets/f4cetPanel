@@ -42,7 +42,7 @@ const dataTableData = {
       adsSpent: <DefaultCell>$9.500</DefaultCell>,
       refunds: (
         <RefundsCell
-          value={13}
+          value={1}
           icon={{ color: "success", name: "keyboard_arrow_up" }}
         />
       ),
@@ -59,7 +59,7 @@ const dataTableData = {
       adsSpent: <DefaultCell>$4.200</DefaultCell>,
       refunds: (
         <RefundsCell
-          value={40}
+          value={4}
           icon={{ color: "error", name: "keyboard_arrow_down" }}
         />
       ),
@@ -72,7 +72,7 @@ const dataTableData = {
       adsSpent: <DefaultCell>$9.430</DefaultCell>,
       refunds: (
         <RefundsCell
-          value={54}
+          value={1}
           icon={{ color: "success", name: "keyboard_arrow_up" }}
         />
       ),
@@ -106,7 +106,7 @@ const dataTableData = {
       adsSpent: <DefaultCell>$20.531</DefaultCell>,
       refunds: (
         <RefundsCell
-          value={121}
+          value={2}
           icon={{ color: "success", name: "keyboard_arrow_up" }}
         />
       ),

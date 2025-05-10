@@ -66,7 +66,7 @@ function ChannelsChart() {
           <Grid item xs={5}>
             <MDBox pr={1}>
               <MDBox mb={1}>
-                <MDBadgeDot color="info" size="sm" badgeContent="Facebook" />
+                <MDBadgeDot color="info" size="sm" badgeContent="Google" />
               </MDBox>
               <MDBox mb={1}>
                 <MDBadgeDot color="primary" size="sm" badgeContent="Direct" />
@@ -78,7 +78,7 @@ function ChannelsChart() {
                 <MDBadgeDot
                   color="secondary"
                   size="sm"
-                  badgeContent="Referral"
+                  badgeContent="X.com"
                 />
               </MDBox>
             </MDBox>
