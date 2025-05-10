@@ -44,28 +44,28 @@ const pendingSales = [
 ];
 
 const itemsShipped = [
-  { id: "SHIP001", date: "2025-03-20", product: "Product A", amount: 150, status: "Shipped" },
-  { id: "SHIP002", date: "2025-03-19", product: "Product B", amount: 200, status: "Shipped" },
-  { id: "SHIP003", date: "2025-03-18", product: "Product C", amount: 120, status: "Delivered" },
-  { id: "SHIP004", date: "2025-03-17", product: "Product D", amount: 180, status: "Shipped" },
-  { id: "SHIP005", date: "2025-03-16", product: "Product E", amount: 90, status: "Delivered" },
-  { id: "SHIP006", date: "2025-03-15", product: "Product F", amount: 110, status: "Shipped" },
+  { id: "SALE016", date: "2025-03-20", product: "Product A", amount: 150, status: "Shipped" },
+  { id: "SALE006", date: "2025-03-19", product: "Product B", amount: 200, status: "Shipped" },
+  { id: "SALE023", date: "2025-03-18", product: "Product C", amount: 120, status: "Delivered" },
+  { id: "SALE014", date: "2025-03-17", product: "Product D", amount: 180, status: "Shipped" },
+  { id: "SALE015", date: "2025-03-16", product: "Product E", amount: 90, status: "Delivered" },
+  { id: "SALE026", date: "2025-03-15", product: "Product F", amount: 110, status: "Shipped" },
 ];
 
 const pendingEscrow = [
-  { id: "ESC001", date: "2025-03-20", product: "Product A", amount: 150, status: "Pending" },
-  { id: "ESC002", date: "2025-03-19", product: "Product B", amount: 200, status: "Pending" },
-  { id: "ESC003", date: "2025-03-18", product: "Product C", amount: 120, status: "Pending" },
-  { id: "ESC004", date: "2025-03-17", product: "Product D", amount: 180, status: "Pending" },
-  { id: "ESC005", date: "2025-03-16", product: "Product E", amount: 90, status: "Pending" },
+  { id: "SALE036", date: "2025-03-20", product: "Product A", amount: 150, status: "Pending" },
+  { id: "SALE031", date: "2025-03-19", product: "Product B", amount: 200, status: "Pending" },
+  { id: "SALE032", date: "2025-03-18", product: "Product C", amount: 120, status: "Pending" },
+  { id: "SALE033", date: "2025-03-17", product: "Product D", amount: 180, status: "Pending" },
+  { id: "SALE027", date: "2025-03-16", product: "Product E", amount: 90, status: "Pending" },
 ];
 
 const salesPaidOut = [
-  { id: "PAY001", date: "2025-03-20", product: "Product A", amount: 150, status: "Paid" },
-  { id: "PAY002", date: "2025-03-19", product: "Product B", amount: 200, status: "Paid" },
-  { id: "PAY003", date: "2025-03-18", product: "Product C", amount: 120, status: "Paid" },
-  { id: "PAY004", date: "2025-03-17", product: "Product D", amount: 180, status: "Paid" },
-  { id: "PAY005", date: "2025-03-16", product: "Product E", amount: 90, status: "Paid" },
+  { id: "SALE035", date: "2025-03-20", product: "Product A", amount: 150, status: "Paid" },
+  { id: "SALE042", date: "2025-03-19", product: "Product B", amount: 200, status: "Paid" },
+  { id: "SALE033", date: "2025-03-18", product: "Product C", amount: 120, status: "Paid" },
+  { id: "SALE044", date: "2025-03-17", product: "Product D", amount: 180, status: "Paid" },
+  { id: "SALE012", date: "2025-03-16", product: "Product E", amount: 90, status: "Paid" },
 ];
 
 // Additional Metrics (Mock Data)
