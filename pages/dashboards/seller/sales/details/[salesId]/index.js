@@ -34,7 +34,7 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import TimelineItem from "/examples/Timeline/TimelineItem";
 
-// Dummy Data (for initial testing, replaced by Firestore data)
+// Dummy Data (for initial testing, used as fallback if Firestore fails)
 const dummySaleDetails = {
   id: "SALE001",
   itemName: "Strong Hold Hoodie",
@@ -72,16 +72,20 @@ function SalesDetails() {
           const data = {
             id: saleSnapshot.id,
             ...saleSnapshot.data(),
-            createdAt: saleSnapshot.data().createdAt.split("T")[0], // Format date
+            createdAt: saleSnapshot.data().createdAt?.split("T")[0] || "N/A", // Handle missing dates
           };
           setSaleDetails(data);
           setTrackingNumber(data.trackingNumber || "");
         } else {
-          setError("Sale not found or unauthorized.");
+          setError("Sale not found or unauthorized. Using sample data.");
+          setSaleDetails(dummySaleDetails); // Fallback to dummy data
+          setTrackingNumber(dummySaleDetails.trackingNumber || "");
         }
       } catch (err) {
         console.error("Error fetching sale:", err);
-        setError("Failed to load sale details.");
+        setError("Failed to load sale details. Using sample data.");
+        setSaleDetails(dummySaleDetails); // Fallback to dummy data
+        setTrackingNumber(dummySaleDetails.trackingNumber || "");
       }
     };
 
@@ -141,13 +145,28 @@ function SalesDetails() {
   }
 
   // Handle invalid or missing salesId
-  if (!salesId || !salesId.startsWith("SALE") || !saleDetails) {
+  if (!salesId || !salesId.startsWith("SALE")) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
           <MDTypography variant="h4" color="error">
-            {error || "Invalid Sale ID"}
+            Invalid Sale ID
+          </MDTypography>
+        </MDBox>
+        <Footer />
+      </DashboardLayout>
+    );
+  }
+
+  // Handle no saleDetails (e.g., still loading)
+  if (!saleDetails) {
+    return (
+      <DashboardLayout>
+        <DashboardNavbar />
+        <MDBox py={3}>
+          <MDTypography variant="body2" color="text">
+            Loading sale details...
           </MDTypography>
         </MDBox>
         <Footer />
@@ -164,7 +183,7 @@ function SalesDetails() {
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h4" color="dark" mb={2}>
-                  Sale Details - {saleDetails.id}
+                  Sale Details - {saleDetails.id || "N/A"}
                 </MDTypography>
                 {error && (
                   <MDTypography variant="body2" color="error" mb={2}>
@@ -178,7 +197,7 @@ function SalesDetails() {
                         Item Name
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.itemName}
+                        {saleDetails.itemName || "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -186,7 +205,7 @@ function SalesDetails() {
                         Sale Price
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.salePrice} {saleDetails.currency}
+                        {saleDetails.salePrice ? `${saleDetails.salePrice} ${saleDetails.currency || "N/A"}` : "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -194,7 +213,7 @@ function SalesDetails() {
                         Buyer Wallet
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.buyerWallet.slice(0, 6)}...{saleDetails.buyerWallet.slice(-4)}
+                        {saleDetails.buyerWallet ? `${saleDetails.buyerWallet.slice(0, 6)}...${saleDetails.buyerWallet.slice(-4)}` : "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -202,7 +221,7 @@ function SalesDetails() {
                         Status
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.status.charAt(0).toUpperCase() + saleDetails.status.slice(1)}
+                        {saleDetails.status ? (saleDetails.status.charAt(0).toUpperCase() + saleDetails.status.slice(1)) : "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -210,7 +229,7 @@ function SalesDetails() {
                         Date
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.createdAt}
+                        {saleDetails.createdAt || "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -218,7 +237,7 @@ function SalesDetails() {
                         Shipping Location
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.shippingLocation}
+                        {saleDetails.shippingLocation || "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -236,12 +255,13 @@ function SalesDetails() {
                             color: "#344767",
                           },
                         }}
+                        disabled={saleDetails.id === dummySaleDetails.id} // Disable for dummy data
                       />
                       <MDButton
                         variant="contained"
                         color="dark"
                         onClick={handleSaveTracking}
-                        disabled={isSaving || trackingNumber === saleDetails.trackingNumber}
+                        disabled={isSaving || trackingNumber === saleDetails.trackingNumber || saleDetails.id === dummySaleDetails.id}
                         sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                       >
                         {isSaving ? "Saving..." : "Save Tracking"}

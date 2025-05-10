@@ -75,6 +75,7 @@ function Inventory() {
   const [typeFilter, setTypeFilter] = useState(null); // Digital or RWI
   const [statusFilter, setStatusFilter] = useState(null); // Pending, Active, etc.
   const [inventoryData, setInventoryData] = useState([]);
+  const [error, setError] = useState(null);
 
   // Fetch inventory data from Firestore
   useEffect(() => {
@@ -90,11 +91,13 @@ function Inventory() {
         const data = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt.split("T")[0], // Format date
+          createdAt: doc.data().createdAt?.split("T")[0] || "N/A", // Handle missing dates
         }));
-        setInventoryData(data);
+        setInventoryData(data.length > 0 ? data : dummyInventoryData); // Fallback to dummy data
       } catch (err) {
         console.error("Error fetching inventory:", err);
+        setError("Failed to load inventory data. Using sample data.");
+        setInventoryData(dummyInventoryData); // Use dummy data on error
       }
     };
 
@@ -118,7 +121,7 @@ function Inventory() {
 
   // Filter data based on search, type, and status
   const filteredData = inventoryData.filter((item) => {
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (item.name?.toLowerCase().includes(searchQuery.toLowerCase())) ?? false;
     const matchesType = typeFilter ? item.type === typeFilter : true;
     const matchesStatus = statusFilter ? item.status === statusFilter : true;
     return matchesSearch && matchesType && matchesStatus;
@@ -160,31 +163,41 @@ function Inventory() {
     ],
     rows: filteredData.map((item) => ({
       ...item,
-      id: (
-        <Link href={`/dashboards/inventory/details/${item.id}`}>
+      id: item.id ? (
+        <Link href={`/dashboards/seller/inventory/details/${item.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
             {item.id}
           </MDTypography>
         </Link>
+      ) : (
+        <MDTypography variant="button" color="error">
+          Invalid ID
+        </MDTypography>
+      ),
+      name: (
+        <MDTypography variant="button" color="text">
+          {item.name || "N/A"}
+        </MDTypography>
       ),
       type: (
         <MDTypography variant="button" color="text">
-          {item.type === "digital" ? "Digital" : "RWI"}
+          {item.type === "digital" ? "Digital" : item.type === "rwi" ? "RWI" : "N/A"}
         </MDTypography>
       ),
       price: (
         <MDTypography variant="button" color="text">
-          {item.price} {item.currency}
+          {item.price ? `${item.price} ${item.currency || "N/A"}` : "N/A"}
         </MDTypography>
       ),
       quantityVariants: (
         <MDTypography variant="button" color="text">
-          {item.type === "digital" ? item.quantity : item.variants.map(v => `${v.quantity} (${v.size}, ${v.color})`).join(", ")}
+          {item.type === "digital" ? item.quantity || "N/A" : 
+            item.variants?.map(v => `${v.quantity} (${v.size}, ${v.color})`).join(", ") || "N/A"}
         </MDTypography>
       ),
       categories: (
         <MDTypography variant="button" color="text">
-          {item.categories.join(", ")}
+          {item.categories?.join(", ") || "N/A"}
         </MDTypography>
       ),
       status: (
@@ -192,14 +205,14 @@ function Inventory() {
           <Icon
             fontSize="small"
             sx={{
-              color: item.status === "pending" ? "warning.main" : "success.main",
+              color: item.status === "pending" ? "warning.main" : item.status === "active" ? "success.main" : "error.main",
               mr: 1,
             }}
           >
-            {item.status === "pending" ? "hourglass_empty" : "check_circle"}
+            {item.status === "pending" ? "hourglass_empty" : item.status === "active" ? "check_circle" : "error"}
           </Icon>
           <MDTypography variant="button" color="text">
-            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            {item.status ? (item.status.charAt(0).toUpperCase() + item.status.slice(1)) : "N/A"}
           </MDTypography>
         </MDBox>
       ),
@@ -259,29 +272,40 @@ function Inventory() {
             {renderMenu}
           </MDBox>
         </MDBox>
-        <Card
-          sx={{
-            background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-            borderRadius: "16px",
-            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
-            overflow: "hidden",
-          }}
-        >
-          <DataTable
-            table={tableData}
-            entriesPerPage={false}
-            canSearch={false}
+        {error && (
+          <MDTypography variant="body2" color="error" mb={2}>
+            {error}
+          </MDTypography>
+        )}
+        {filteredData.length === 0 ? (
+          <MDTypography variant="body2" color="text">
+            No inventory found. Try adjusting your filters or adding new listings.
+          </MDTypography>
+        ) : (
+          <Card
             sx={{
-              "& th": {
-                paddingRight: "20px !important",
-                paddingLeft: "20px !important",
-              },
-              "& .MuiTablePagination-root": {
-                display: "none !important",
-              },
+              background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+              borderRadius: "16px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
+              overflow: "hidden",
             }}
-          />
-        </Card>
+          >
+            <DataTable
+              table={tableData}
+              entriesPerPage={false}
+              canSearch={false}
+              sx={{
+                "& th": {
+                  paddingRight: "20px !important",
+                  paddingLeft: "20px !important",
+                },
+                "& .MuiTablePagination-root": {
+                  display: "none !important",
+                },
+              }}
+            />
+          </Card>
+        )}
       </MDBox>
       <Footer />
     </DashboardLayout>

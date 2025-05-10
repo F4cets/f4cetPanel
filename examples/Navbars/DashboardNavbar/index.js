@@ -28,15 +28,12 @@ import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import Icon from "@mui/material/Icon";
-import InputBase from "@mui/material/InputBase";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
-import MDInput from "/components/MDInput";
 import MDBadge from "/components/MDBadge";
 
 // NextJS Material Dashboard 2 PRO examples
-import Breadcrumbs from "/examples/Breadcrumbs";
 import NotificationItem from "/examples/Items/NotificationItem";
 
 // Custom styles for DashboardNavbar
@@ -71,7 +68,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
-  const route = useRouter().pathname.split("/").slice(1);
   const router = useRouter();
   const { publicKey, connected } = useWallet(); // Get wallet public key
 
@@ -124,17 +120,17 @@ function DashboardNavbar({ absolute, light, isMini }) {
       <NotificationItem
         icon={<Icon>currency_exchange</Icon>}
         title="Check WNDO Rewards"
-        onClick={() => handleNavigation("/affiliate-marketplace/affiliate")}
+        onClick={() => handleNavigation("/dashboards/buyer/affiliate")}
       />
       <NotificationItem
         icon={<Icon>shopping_cart</Icon>}
         title="Check Marketplace Orders"
-        onClick={() => handleNavigation("/affiliate-marketplace/marketplace")}
+        onClick={() => handleNavigation("/dashboards/buyer/marketplace")}
       />
       <NotificationItem
         icon={<Icon>star</Icon>}
         title="Sell on F4cet"
-        onClick={() => handleNavigation("/buyer/sell-on-f4cet")}
+        onClick={() => handleNavigation("/dashboards/buyer/sell-on-f4cet")}
       />
     </Menu>
   );
@@ -163,7 +159,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
     >
       <Toolbar sx={(theme) => navbarContainer(theme)}>
         <MDBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
-          <Breadcrumbs icon="home" title={route[route.length - 1]} route={route} light={light} />
           <IconButton
             sx={navbarDesktopMenu}
             onClick={handleMiniSidenav}
@@ -181,12 +176,9 @@ function DashboardNavbar({ absolute, light, isMini }) {
               <MDBox pr={1}>
                 <WalletMultiButton />
               </MDBox>
-              <MDBox pr={1}>
-                <MDInput label="Search here" />
-              </MDBox>
             </MDBox>
             <MDBox color={light ? "white" : "inherit"}>
-              <Link href="/account/settings">
+              <Link href="/dashboards/settings">
                 <IconButton sx={navbarIconButton} size="small" disableRipple>
                   <Icon sx={iconsStyle}>account_circle</Icon>
                 </IconButton>

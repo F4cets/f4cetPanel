@@ -72,7 +72,7 @@ const salesPaidOut = [
 const pendingSalesLast30Days = 31;
 const shippedNotDelivered = 5;
 const pendingEscrowTransactions = 3;
-const salesPaidOutAmount = 4500;
+const salesPaidOutAmount = 4517;
 
 function SellerDashboard() {
   const { user } = useUser();
@@ -192,7 +192,7 @@ function SellerDashboard() {
     router.push("/dashboards/seller/createinv");
   };
   const handleEditInventory = () => {
-    router.push("/dashboards/seller/editinv");
+    router.push("/dashboards/seller/inventory");
   };
   const handleViewEscrow = () => {
     router.push("/dashboards/seller/escrow");
@@ -284,7 +284,7 @@ function SellerDashboard() {
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Edit Inventory
+                        Inventory
                       </MDButton>
                     </motion.div>
                   </MDBox>

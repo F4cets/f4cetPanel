@@ -17,7 +17,6 @@ import profilePicture from "/assets/images/seanofdefi.png"; // Placeholder, will
 
 const routes = () => [
   {
-
     collapse: [
       {
         name: "My Profile",
@@ -88,7 +87,7 @@ const routes = () => [
         name: "Details",
         key: "marketplace-details",
         route: "/dashboards/buyer/marketplace/details/[orderId]",
-        roles: ["buyer"],
+        roles: ["buyer", "seller"],
       },
     ],
   },
@@ -100,7 +99,20 @@ const routes = () => [
     route: "/dashboards/seller",
     noCollapse: true,
     roles: ["seller"],
-
+    collapse: [
+      {
+        name: "Sales Dashboard",
+        key: "sales-dashboard",
+        route: "/dashboards/seller/sales/dashboard",
+        roles: ["seller"],
+      },
+      {
+        name: "Sales Details",
+        key: "sales-details",
+        route: "/dashboards/seller/sales/details/[salesId]",
+        roles: ["seller"],
+      },
+    ],
   },
   {
     type: "collapse",
@@ -125,25 +137,25 @@ const routes = () => [
     name: "Inventory",
     key: "inventory",
     icon: <Icon fontSize="medium">inventory</Icon>,
-    route: "/dashboards/seller/inventory/",
+    route: "/dashboards/seller/inventory",
     noCollapse: true,
     roles: ["seller"],
   },
   {
     type: "collapse",
     name: "Sales",
-    key: "Sales",
+    key: "sales",
     icon: <Icon fontSize="medium">receipt</Icon>,
-    route: "/dashboards/seller/sales/dashboard/",
+    route: "/dashboards/seller/sales/dashboard",
     noCollapse: true,
     roles: ["seller"],
   },
   {
     type: "collapse",
     name: "Escrow",
-    key: "Escrow",
+    key: "escrow",
     icon: <Icon fontSize="medium">lock</Icon>,
-    route: "/dashboards/seller/escrow/",
+    route: "/dashboards/seller/escrow",
     noCollapse: true,
     roles: ["seller"],
   },

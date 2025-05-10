@@ -120,8 +120,19 @@ function MarketplaceOrderDetails() {
                       <MDTypography variant="h6" color="dark">
                         Tracking Number
                       </MDTypography>
-                      <MDTypography variant="body2" color="text">
-                        {details.trackingNumber}
+                      <MDTypography
+                        variant="body2"
+                        color="info"
+                        component="a"
+                        href={`https://www.ship24.com/tracking/${details.trackingNumber}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          textDecoration: "underline",
+                          "&:hover": { color: "info.main" },
+                        }}
+                      >
+                        {details.trackingNumber || "Not Available"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
