@@ -159,6 +159,7 @@ const routes = () => [
     noCollapse: true,
     roles: ["seller"],
   },
+  { type: "title", title: "Admin", key: "title-admin", roles: ["god"] },
   {
     type: "collapse",
     name: "God Dashboard",
@@ -168,8 +169,57 @@ const routes = () => [
     noCollapse: true,
     roles: ["god"],
   },
-  { type: "title", title: "Admin", key: "title-admin", roles: ["god"] },
-  
+  {
+    type: "collapse",
+    name: "Stores",
+    key: "stores",
+    icon: <Icon fontSize="medium">store</Icon>,
+    route: "/dashboards/god/stores",
+    noCollapse: true,
+    roles: ["god"],
+    collapse: [
+      {
+        name: "Edit Store",
+        key: "edit-store",
+        route: "/dashboards/god/stores/edit/[storeId]",
+        roles: ["god"],
+      },
+    ],
+  },
+  {
+    type: "collapse",
+    name: "Affiliates",
+    key: "affiliates",
+    icon: <Icon fontSize="medium">group</Icon>,
+    route: "/dashboards/god/affiliates",
+    noCollapse: true,
+    roles: ["god"],
+    collapse: [
+      {
+        name: "Edit Affiliate",
+        key: "edit-affiliate",
+        route: "/dashboards/god/affiliates/edit/[affiliateId]",
+        roles: ["god"],
+      },
+    ],
+  },
+  {
+    type: "collapse",
+    name: "Escrow Accounts",
+    key: "escrow-accounts",
+    icon: <Icon fontSize="medium">account_balance_wallet</Icon>,
+    route: "/dashboards/god/escrow",
+    noCollapse: true,
+    roles: ["god"],
+    collapse: [
+      {
+        name: "View Escrow",
+        key: "view-escrow",
+        route: "/dashboards/god/escrow/view/[escrowId]",
+        roles: ["god"],
+      },
+    ],
+  },
 ];
 
 export default routes;
