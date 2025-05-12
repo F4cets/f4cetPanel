@@ -36,10 +36,10 @@ const dataTableData = {
   rows: [
     {
       product: (
-        <ProductCell image={nikeV22} name="Nike v22 Running" orders={8.232} />
+        <ProductCell image={nikeV22} name="Nike v22 Running" orders={8.0} />
       ),
-      value: <DefaultCell>$130.992</DefaultCell>,
-      adsSpent: <DefaultCell>$9.500</DefaultCell>,
+      value: <DefaultCell>$130.99</DefaultCell>,
+      adsSpent: <DefaultCell>$9.50</DefaultCell>,
       refunds: (
         <RefundsCell
           value={1}
@@ -52,11 +52,11 @@ const dataTableData = {
         <ProductCell
           image={businessKit}
           name="Business Kit (Mug + Notebook)"
-          orders={12.821}
+          orders={13.0}
         />
       ),
-      value: <DefaultCell>$80.250</DefaultCell>,
-      adsSpent: <DefaultCell>$4.200</DefaultCell>,
+      value: <DefaultCell>$80.25</DefaultCell>,
+      adsSpent: <DefaultCell>$4.20</DefaultCell>,
       refunds: (
         <RefundsCell
           value={4}
@@ -66,10 +66,10 @@ const dataTableData = {
     },
     {
       product: (
-        <ProductCell image={blackChair} name="Black Chair" orders={2.421} />
+        <ProductCell image={blackChair} name="Black Chair" orders={3.0} />
       ),
-      value: <DefaultCell>$40.600</DefaultCell>,
-      adsSpent: <DefaultCell>$9.430</DefaultCell>,
+      value: <DefaultCell>$40.60</DefaultCell>,
+      adsSpent: <DefaultCell>$9.43</DefaultCell>,
       refunds: (
         <RefundsCell
           value={1}
@@ -82,11 +82,11 @@ const dataTableData = {
         <ProductCell
           image={wirelessCharger}
           name="Wireless Charger"
-          orders={5.921}
+          orders={5.0}
         />
       ),
-      value: <DefaultCell>$91.300</DefaultCell>,
-      adsSpent: <DefaultCell>$7.364</DefaultCell>,
+      value: <DefaultCell>$91.30</DefaultCell>,
+      adsSpent: <DefaultCell>$7.36</DefaultCell>,
       refunds: (
         <RefundsCell
           value={5}
@@ -102,8 +102,8 @@ const dataTableData = {
           orders={921}
         />
       ),
-      value: <DefaultCell>$140.925</DefaultCell>,
-      adsSpent: <DefaultCell>$20.531</DefaultCell>,
+      value: <DefaultCell>$140.92</DefaultCell>,
+      adsSpent: <DefaultCell>$20.53</DefaultCell>,
       refunds: (
         <RefundsCell
           value={2}

@@ -17,46 +17,111 @@ import { useState } from "react";
 import Grid from "@mui/material/Grid";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Tooltip from "@mui/material/Tooltip";
-import Icon from "@mui/material/Icon";
 import Card from "@mui/material/Card";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
-import MDBadgeDot from "/components/MDBadgeDot";
-import MDButton from "/components/MDButton";
 import MDTypography from "/components/MDTypography";
-
-// NextJS Material Dashboard 2 PRO examples
+import DefaultStatisticsCard from "/examples/Cards/StatisticsCards/DefaultStatisticsCard";
+import DefaultLineChart from "/examples/Charts/LineCharts/DefaultLineChart";
+import DataTable from "/examples/Tables/DataTable";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
-import DefaultStatisticsCard from "/examples/Cards/StatisticsCards/DefaultStatisticsCard";
-import DefaultLineChart from "/examples/Charts/LineCharts/DefaultLineChart";
-import HorizontalBarChart from "/examples/Charts/BarCharts/HorizontalBarChart";
-import SalesTable from "/examples/Tables/SalesTable";
-import DataTable from "/examples/Tables/DataTable";
-
-// Sales dashboard components
-import ChannelsChart from "/pagesComponents/dashboards/sales/components/ChannelsChart";
+import MDBadgeDot from "/components/MDBadgeDot";
+import MDButton from "/components/MDButton";
+import Tooltip from "@mui/material/Tooltip";
+import Icon from "@mui/material/Icon";
 
 // Data
 import defaultLineChartData from "/pagesComponents/dashboards/sales/data/defaultLineChartData";
-import horizontalBarChartData from "/pagesComponents/dashboards/sales/data/horizontalBarChartData";
-import salesTableData from "/pagesComponents/dashboards/sales/data/salesTableData";
 import dataTableData from "/pagesComponents/dashboards/sales/data/dataTableData";
 
-function Sales() {
+// Dummy Data for New Cards
+const topSellingStoresData = {
+  columns: [
+    { Header: "Store Name", accessor: "storeName", width: "40%" },
+    { Header: "Total Sales", accessor: "totalSales", width: "30%" },
+    { Header: "Avg. Rating", accessor: "avgRating", width: "30%" },
+  ],
+  rows: [
+    {
+      storeName: "FashionHub",
+      totalSales: "$8,500",
+      avgRating: "4.8",
+    },
+    {
+      storeName: "TechTrend",
+      totalSales: "$6,200",
+      avgRating: "4.5",
+    },
+    {
+      storeName: "ArtisanCrafts",
+      totalSales: "$4,800",
+      avgRating: "4.7",
+    },
+    {
+      storeName: "EcoGoods",
+      totalSales: "$3,900",
+      avgRating: "4.3",
+    },
+  ],
+};
+
+const flaggedStoresData = {
+  columns: [
+    { Header: "Store Name", accessor: "storeName", width: "30%" },
+    { Header: "Flag Count", accessor: "flagCount", width: "20%" },
+    { Header: "Reasons", accessor: "reasons", width: "50%" },
+  ],
+  rows: [
+    {
+      storeName: "FakeGoods",
+      flagCount: "5",
+      reasons: "Suspected counterfeit products, misleading descriptions",
+    },
+    {
+      storeName: "ScamShop",
+      flagCount: "3",
+      reasons: "Non-delivery, poor customer service",
+    },
+  ],
+};
+
+const flaggedItemsData = {
+  columns: [
+    { Header: "Item Name", accessor: "itemName", width: "30%" },
+    { Header: "Store Name", accessor: "storeName", width: "20%" },
+    { Header: "Flag Count", accessor: "flagCount", width: "20%" },
+    { Header: "Reasons", accessor: "reasons", width: "30%" },
+  ],
+  rows: [
+    {
+      itemName: "Luxury Watch Replica",
+      storeName: "FakeGoods",
+      flagCount: "4",
+      reasons: "Counterfeit item",
+    },
+    {
+      itemName: "Miracle Cure E-book",
+      storeName: "ScamShop",
+      flagCount: "3",
+      reasons: "False health claims",
+    },
+  ],
+};
+
+function GodDashboard() {
   // DefaultStatisticsCard state for the dropdown value
   const [salesDropdownValue, setSalesDropdownValue] = useState("6 May - 7 May");
   const [buyersDropdownValue, setBuyersDropdownValue] = useState("6 May - 7 May");
-  const [sellersDropdownValue, setSellersDropdownValue] = useState("6 May - 7 May"); // New state for Sellers
+  const [sellersDropdownValue, setSellersDropdownValue] = useState("6 May - 7 May");
   const [revenueDropdownValue, setRevenueDropdownValue] = useState("6 May - 7 May");
 
   // DefaultStatisticsCard state for the dropdown action
   const [salesDropdown, setSalesDropdown] = useState(null);
   const [buyersDropdown, setBuyersDropdown] = useState(null);
-  const [sellersDropdown, setSellersDropdown] = useState(null); // New state for Sellers
+  const [sellersDropdown, setSellersDropdown] = useState(null);
   const [revenueDropdown, setRevenueDropdown] = useState(null);
 
   // DefaultStatisticsCard handler for the dropdown action
@@ -70,7 +135,7 @@ function Sales() {
     setBuyersDropdown(null);
     setBuyersDropdownValue(currentTarget.innerText || buyersDropdownValue);
   };
-  const openSellersDropdown = ({ currentTarget }) => setSellersDropdown(currentTarget); // New handler for Sellers
+  const openSellersDropdown = ({ currentTarget }) => setSellersDropdown(currentTarget);
   const closeSellersDropdown = ({ currentTarget }) => {
     setSellersDropdown(null);
     setSellersDropdownValue(currentTarget.innerText || sellersDropdownValue);
@@ -153,11 +218,11 @@ function Sales() {
             </Grid>
             <Grid item xs={12} sm={3}>
               <DefaultStatisticsCard
-                title="Avg. Revenue"
-                count="$5.23"
+                title="Affiliates"
+                count="323"
                 percentage={{
                   color: "success",
-                  value: "+1.31",
+                  value: "+17",
                   label: "since last month",
                 }}
                 dropdown={{
@@ -171,10 +236,7 @@ function Sales() {
         </MDBox>
         <MDBox mb={3}>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} lg={4}>
-              <ChannelsChart />
-            </Grid>
-            <Grid item xs={12} sm={6} lg={8}>
+            <Grid item xs={12}>
               <DefaultLineChart
                 title="Growth"
                 description={
@@ -215,30 +277,71 @@ function Sales() {
             </Grid>
           </Grid>
         </MDBox>
-        <MDBox mb={3}>
-          <Grid container spacing={3}>
-            <Grid item xs={12} lg={8}>
-              <HorizontalBarChart
-                title="Sales by age"
-                chart={horizontalBarChartData}
-              />
-            </Grid>
-            <Grid item xs={12} lg={4}>
-              <SalesTable title="Sales by Country" rows={salesTableData} />
-            </Grid>
-          </Grid>
-        </MDBox>
         <Grid container spacing={3}>
           <Grid item xs={12}>
             <Card>
               <MDBox pt={3} px={3}>
                 <MDTypography variant="h6" fontWeight="medium">
-                  Top Selling Products
+                  Top Selling Stores
+                </MDTypography>
+              </MDBox>
+              <MDBox py={1}>
+                <DataTable
+                  table={topSellingStoresData}
+                  entriesPerPage={false}
+                  showTotalEntries={false}
+                  isSorted={false}
+                  noEndBorder
+                />
+              </MDBox>
+            </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <MDBox pt={3} px={3}>
+                <MDTypography variant="h6" fontWeight="medium">
+                  Top Selling Items
                 </MDTypography>
               </MDBox>
               <MDBox py={1}>
                 <DataTable
                   table={dataTableData}
+                  entriesPerPage={false}
+                  showTotalEntries={false}
+                  isSorted={false}
+                  noEndBorder
+                />
+              </MDBox>
+            </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <MDBox pt={3} px={3}>
+                <MDTypography variant="h6" fontWeight="medium">
+                  Flagged Stores
+                </MDTypography>
+              </MDBox>
+              <MDBox py={1}>
+                <DataTable
+                  table={flaggedStoresData}
+                  entriesPerPage={false}
+                  showTotalEntries={false}
+                  isSorted={false}
+                  noEndBorder
+                />
+              </MDBox>
+            </Card>
+          </Grid>
+          <Grid item xs={12}>
+            <Card>
+              <MDBox pt={3} px={3}>
+                <MDTypography variant="h6" fontWeight="medium">
+                  Flagged Items
+                </MDTypography>
+              </MDBox>
+              <MDBox py={1}>
+                <DataTable
+                  table={flaggedItemsData}
                   entriesPerPage={false}
                   showTotalEntries={false}
                   isSorted={false}
@@ -254,4 +357,4 @@ function Sales() {
   );
 }
 
-export default Sales;
+export default GodDashboard;
