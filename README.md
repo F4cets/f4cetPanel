@@ -1,4 +1,6 @@
-F4cets Welcome to F4cets, a groundbreaking Solana-powered platform revolutionizing digital commerce by empowering creators, sellers, and affiliates with decentralized tools for secure, transparent, and rewarding transactions. Built with Next.js, Material-UI, and Firebase, F4cets is designed to deliver a seamless user experience while leveraging Solana’s high-speed, low-cost blockchain for payments, escrow, and NFT-based inventory management. Project Overview F4cets is a marketplace and management platform that bridges Web3 and e-commerce, enabling: Creators and Sellers: To onboard stores, manage inventory (digital goods and real-world items), and leverage Solana for secure transactions.
+F4cets 
+
+Welcome to F4cets, a groundbreaking Solana-powered platform revolutionizing digital commerce by empowering creators, sellers, and affiliates with decentralized tools for secure, transparent, and rewarding transactions. Built with Next.js, Material-UI, and Firebase, F4cets is designed to deliver a seamless user experience while leveraging Solana’s high-speed, low-cost blockchain for payments, escrow, and NFT-based inventory management. Project Overview F4cets is a marketplace and management platform that bridges Web3 and e-commerce, enabling: Creators and Sellers: To onboard stores, manage inventory (digital goods and real-world items), and leverage Solana for secure transactions.
 
 Key Features Decentralized Web3 System: Secure Solana Buyer, Seller, & Affiliate platform, built for speed.
 
