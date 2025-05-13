@@ -7,11 +7,15 @@
 */
 
 // React imports
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
 // User context
 import { useUser } from "/contexts/UserContext";
+
+// Firestore imports
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "/lib/firebase";
 
 // @mui material components
 import Card from "@mui/material/Card";
@@ -27,27 +31,12 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import TimelineItem from "/examples/Timeline/TimelineItem";
 
-// Dummy Data (Replace with Firestore data later)
-const affiliateDetails = {
-  id: "AFF001",
-  link: "Amazon",
-  clicks: 150,
-  purchases: 10,
-  pendingWndo: 50,
-  rewardedWndo: 100,
-  status: "Paid",
-  date: "2025-03-20",
-  timeline: [
-    { title: "Link Clicked", date: "2025-03-20 10:00 AM", description: "User clicked affiliate link." },
-    { title: "Purchase Made", date: "2025-03-20 10:15 AM", description: "User completed a purchase." },
-    { title: "WNDO Rewarded", date: "2025-03-21 09:00 AM", description: "50 WNDO rewarded to user." },
-  ],
-};
-
 function AffiliateOrderDetails() {
   const { user } = useUser();
   const router = useRouter();
   const { orderId } = router.query;
+  const [details, setDetails] = useState(null);
+  const [error, setError] = useState(null);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
@@ -56,19 +45,121 @@ function AffiliateOrderDetails() {
     }
   }, [user, router]);
 
+  // Fetch affiliate click details from Firestore
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (!orderId || !user || !user.walletId) return;
+
+      try {
+        // Find the affiliate containing this click
+        let clickData = null;
+        let affiliateData = null;
+        const affiliatesSnapshot = await getDocs(collection(db, "affiliates"));
+        for (const affiliateDoc of affiliatesSnapshot.docs) {
+          const affiliateId = affiliateDoc.id;
+          const clickDocRef = doc(db, `affiliates/${affiliateId}/clicks`, orderId);
+          const clickDoc = await getDoc(clickDocRef);
+          if (clickDoc.exists() && clickDoc.data().walletId === user.walletId) {
+            clickData = clickDoc.data();
+            affiliateData = affiliateDoc.data();
+            break;
+          }
+        }
+
+        if (!clickData || !affiliateData) {
+          setError("Affiliate click not found or unauthorized");
+          return;
+        }
+
+        // Calculate clicks, purchases, and WNDO
+        const clicks = 1; // Single click
+        const purchases = clickData.status === "purchased" ? 1 : 0;
+        let pendingWndo = purchases * 10; // 10 WNDO per purchase
+        let rewardedWndo = 0;
+
+        // Build timeline
+        const timeline = [];
+        const clickDate = clickData.timestamp instanceof Date ? clickData.timestamp : new Date();
+        const clickDateStr = `${clickDate.toISOString().split('T')[0]} ${clickDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+        // Add click event
+        timeline.push({
+          title: "Link Clicked",
+          date: clickDateStr,
+          description: "User clicked affiliate link.",
+        });
+
+        // Add purchase and reward events if applicable
+        if (clickData.status === "purchased" && clickData.purchaseId) {
+          const transactionDocRef = doc(db, "transactions", clickData.purchaseId);
+          const transactionDoc = await getDoc(transactionDocRef);
+          if (transactionDoc.exists()) {
+            const transactionData = transactionDoc.data();
+            const purchaseDate = transactionData.createdAt instanceof Date ? transactionData.createdAt : new Date();
+            const purchaseDateStr = `${purchaseDate.toISOString().split('T')[0]} ${purchaseDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+            timeline.push({
+              title: "Purchase Made",
+              date: purchaseDateStr,
+              description: "User completed a purchase.",
+            });
+
+            // Add rewarded event (scheduled 120 days later)
+            const rewardDate = new Date(purchaseDate);
+            rewardDate.setDate(rewardDate.getDate() + 120); // 120 days after purchase
+            const rewardDateStr = `${rewardDate.getMonth() + 1}/${rewardDate.getDate()}/${rewardDate.getFullYear()}`; // Format as MM/DD/YYYY
+
+            // Determine if reward has occurred based on current date
+            const currentDate = new Date(); // Current date: May 13, 2025 at 07:07 AM PDT
+            const hasRewardOccurred = currentDate >= rewardDate;
+
+            // Update pendingWndo and rewardedWndo based on reward occurrence
+            if (hasRewardOccurred) {
+              rewardedWndo = pendingWndo;
+              pendingWndo = 0;
+            }
+
+            timeline.push({
+              title: hasRewardOccurred ? "WNDO Rewarded" : "WNDO Scheduled to be Rewarded",
+              date: rewardDateStr,
+              description: hasRewardOccurred ? "10 WNDO rewarded to user." : `10 WNDO reward estimated scheduled.`,
+            });
+          }
+        }
+
+        // Set details
+        setDetails({
+          id: orderId,
+          link: affiliateData.name || "Unknown Affiliate",
+          clicks,
+          purchases,
+          pendingWndo,
+          rewardedWndo,
+          status: clickData.status,
+          date: clickDate.toISOString().split('T')[0],
+          timeline,
+        });
+      } catch (error) {
+        console.error("Error fetching affiliate details:", error);
+        setError("Failed to fetch affiliate details");
+      }
+    };
+
+    fetchDetails();
+  }, [orderId, user, router]);
+
   // Ensure user is loaded and authorized before rendering
   if (!user || !user.walletId || (user.role !== "buyer" && user.role !== "seller")) {
     return null; // Or a loading spinner
   }
 
-  // Validate orderId (placeholder for future Firestore fetch)
-  if (!orderId || !orderId.startsWith("AFF")) {
+  // Handle errors or invalid orderId
+  if (error || !orderId) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
           <MDTypography variant="h4" color="error">
-            Invalid Affiliate Order ID
+            {error || "Invalid Affiliate Order ID"}
           </MDTypography>
         </MDBox>
         <Footer />
@@ -76,8 +167,20 @@ function AffiliateOrderDetails() {
     );
   }
 
-  // Placeholder: Use dummy data (replace with Firestore fetch later)
-  const details = affiliateDetails;
+  // Wait for details to load
+  if (!details) {
+    return (
+      <DashboardLayout>
+        <DashboardNavbar />
+        <MDBox py={3}>
+          <MDTypography variant="h4" color="text">
+            Loading...
+          </MDTypography>
+        </MDBox>
+        <Footer />
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

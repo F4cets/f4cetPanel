@@ -35,38 +35,6 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import TimelineItem from "/examples/Timeline/TimelineItem";
 
-// Dummy Data (for initial testing, used as fallback if Firestore fails)
-const dummyMarketplaceDetails = {
-  id: "MKT001",
-  buyerId: "testBuyerWallet123",
-  sellerId: "testSellerWallet456",
-  product: "Dog Bed",
-  type: "rwi",
-  amount: 150,
-  currency: "SOL",
-  status: "Delivered",
-  date: "2025-03-20",
-  shippingAddress: "1234 Main St., Portland OR 97103, United States",
-  trackingNumber: "TRK123456789",
-  buyerConfirmed: false,
-  sellerRating: null,
-  timeline: [
-    { title: "Order Placed", date: "2025-03-20 10:00 AM", description: "Order placed successfully." },
-    { title: "Order Shipped", date: "2025-03-21 08:00 AM", description: "Order shipped with tracking number TRK123456789." },
-    { title: "Order Delivered", date: "2025-03-23 03:00 PM", description: "Order delivered to customer." },
-  ],
-};
-
-const dummyMessages = [
-  {
-    orderId: "MKT001",
-    senderId: "testBuyerWallet123",
-    receiverId: "testSellerWallet456",
-    message: "did you receive the item?",
-    timestamp: "2025-03-20T10:05:00Z",
-  },
-];
-
 function MarketplaceOrderDetails() {
   const { user } = useUser();
   const router = useRouter();
@@ -89,26 +57,90 @@ function MarketplaceOrderDetails() {
       if (!user || !user.walletId || !orderId) return;
 
       try {
-        const orderDoc = doc(db, "orders", orderId);
-        const orderSnapshot = await getDoc(orderDoc);
+        const orderDocRef = doc(db, "transactions", orderId);
+        const orderSnapshot = await getDoc(orderDocRef);
         if (orderSnapshot.exists() && orderSnapshot.data().buyerId === user.walletId) {
+          const orderData = orderSnapshot.data();
+
+          // Fetch product names
+          let productNames = [];
+          if (Array.isArray(orderData.productIds)) {
+            for (const productId of orderData.productIds) {
+              const productDocRef = doc(db, "products", productId);
+              const productDoc = await getDoc(productDocRef);
+              if (productDoc.exists()) {
+                const productData = productDoc.data();
+                productNames.push(productData.name || productId);
+              } else {
+                productNames.push(productId);
+              }
+            }
+          }
+
+          // Fetch seller name (if available)
+          let sellerName = orderData.sellerId;
+          const sellerDocRef = doc(db, "users", orderData.sellerId);
+          const sellerDoc = await getDoc(sellerDocRef);
+          if (sellerDoc.exists()) {
+            const sellerData = sellerDoc.data();
+            sellerName = sellerData.name || sellerName;
+          }
+
+          // Build timeline dynamically
+          const timeline = [];
+          if (orderData.createdAt) {
+            const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
+            timeline.push({
+              title: "Order Placed",
+              date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: "Order placed successfully.",
+            });
+          }
+          if (orderData.shippingConfirmedAt) {
+            const shippedDate = orderData.shippingConfirmedAt.toDate ? orderData.shippingConfirmedAt.toDate() : new Date(orderData.shippingConfirmedAt);
+            timeline.push({
+              title: "Order Shipped",
+              date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: `Order shipped with tracking number ${orderData.trackingNumber || 'Not Available'}.`,
+            });
+          }
+          if (orderData.deliveryConfirmedAt) {
+            const deliveredDate = orderData.deliveryConfirmedAt.toDate ? orderData.deliveryConfirmedAt.toDate() : new Date(orderData.deliveryConfirmedAt);
+            timeline.push({
+              title: "Order Delivered",
+              date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: "Order delivered to customer.",
+            });
+          }
+
+          const createdDateForDisplay = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
           const data = {
             id: orderSnapshot.id,
-            ...orderSnapshot.data(),
-            date: orderSnapshot.data().date?.split("T")[0] || "N/A",
+            buyerId: orderData.buyerId,
+            sellerId: orderData.sellerId,
+            seller: sellerName,
+            product: productNames.join(", ") || "Unknown Product",
+            type: orderData.type || "rwi",
+            amount: orderData.amount || 0,
+            currency: orderData.currency || "USDC",
+            status: orderData.shippingStatus || "Unknown",
+            date: createdDateForDisplay.toISOString().split('T')[0],
+            shippingAddress: orderData.shippingAddress || "N/A",
+            trackingNumber: orderData.trackingNumber || "Not Available",
+            buyerConfirmed: orderData.buyerConfirmed || false,
+            sellerRating: orderData.sellerRating || null,
+            timeline: timeline.length > 0 ? timeline : [],
           };
           setOrderDetails(data);
           setRating(data.sellerRating || null);
         } else {
-          setError("Order not found or unauthorized. Using sample data.");
-          setOrderDetails(dummyMarketplaceDetails);
-          setRating(dummyMarketplaceDetails.sellerRating);
+          setError("Order not found or unauthorized.");
+          setOrderDetails(null);
         }
       } catch (err) {
         console.error("Error fetching order:", err);
-        setError("Failed to load order details due to permissions or missing data. Using sample data.");
-        setOrderDetails(dummyMarketplaceDetails);
-        setRating(dummyMarketplaceDetails.sellerRating);
+        setError("Failed to load order details: " + err.message);
+        setOrderDetails(null);
       }
     };
 
@@ -125,11 +157,11 @@ function MarketplaceOrderDetails() {
           id: doc.id,
           ...doc.data(),
         }));
-        setMessages(data.length > 0 ? data : dummyMessages);
+        setMessages(data);
       } catch (err) {
         console.error("Error fetching messages:", err);
-        setError("Failed to load messages due to permissions or missing data. Using sample messages.");
-        setMessages(dummyMessages);
+        setError("Failed to load messages: " + err.message);
+        setMessages([]);
       }
     };
 
@@ -146,7 +178,7 @@ function MarketplaceOrderDetails() {
 
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!orderDetails || !newMessage.trim() || isSending || orderDetails.id === dummyMarketplaceDetails.id) return;
+    if (!orderDetails || !newMessage.trim() || isSending) return;
 
     setIsSending(true);
     setError(null);
@@ -160,8 +192,8 @@ function MarketplaceOrderDetails() {
         message: newMessage.trim(),
         timestamp: new Date().toISOString(),
       };
-      await addDoc(collection(db, "messages"), messageData);
-      setMessages([...messages, messageData]);
+      const docRef = await addDoc(collection(db, "messages"), messageData);
+      setMessages([...messages, { id: docRef.id, ...messageData }]);
       setNewMessage("");
       setSuccess("Message sent successfully!");
     } catch (err) {
@@ -174,27 +206,27 @@ function MarketplaceOrderDetails() {
 
   // Handle confirming receipt (RWI only)
   const handleConfirmReceipt = async () => {
-    if (!orderDetails || isConfirming || orderDetails.buyerConfirmed || orderDetails.id === dummyMarketplaceDetails.id) return;
+    if (!orderDetails || isConfirming || orderDetails.buyerConfirmed) return;
 
     setIsConfirming(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const orderDoc = doc(db, "orders", orderId);
+      const orderDocRef = doc(db, "transactions", orderId);
       const updatedData = {
         buyerConfirmed: true,
-        status: "Confirmed",
+        shippingStatus: "Confirmed",
         timeline: [
           ...(orderDetails.timeline || []),
           {
             title: "Receipt Confirmed",
-            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             description: "Buyer confirmed receipt of the item.",
           },
         ],
       };
-      await updateDoc(orderDoc, updatedData);
+      await updateDoc(orderDocRef, updatedData);
       setOrderDetails({
         ...orderDetails,
         ...updatedData,
@@ -210,7 +242,7 @@ function MarketplaceOrderDetails() {
 
   // Handle flagging an issue
   const handleFlagIssue = async () => {
-    if (!orderDetails || !issueDescription.trim() || isFlagging || orderDetails.id === dummyMarketplaceDetails.id) return;
+    if (!orderDetails || !issueDescription.trim() || isFlagging) return;
 
     setIsFlagging(true);
     setError(null);
@@ -238,26 +270,26 @@ function MarketplaceOrderDetails() {
 
   // Handle rating the seller
   const handleRateSeller = async (newRating) => {
-    if (!orderDetails || isSaving || orderDetails.id === dummyMarketplaceDetails.id) return;
+    if (!orderDetails || isSaving) return;
 
     setIsSaving(true);
     setError(null);
     setSuccess(null);
 
     try {
-      const orderDoc = doc(db, "orders", orderId);
+      const orderDocRef = doc(db, "transactions", orderId);
       const updatedData = {
         sellerRating: newRating,
         timeline: [
           ...(orderDetails.timeline || []),
           {
             title: "Seller Rated",
-            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString(),
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             description: `Buyer rated seller ${newRating} stars.`,
           },
         ],
       };
-      await updateDoc(orderDoc, updatedData);
+      await updateDoc(orderDocRef, updatedData);
       setOrderDetails({
         ...orderDetails,
         ...updatedData,
@@ -278,7 +310,7 @@ function MarketplaceOrderDetails() {
   }
 
   // Handle invalid or missing orderId
-  if (!orderId || !orderId.startsWith("MKT")) {
+  if (!orderId) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
@@ -292,14 +324,14 @@ function MarketplaceOrderDetails() {
     );
   }
 
-  // Handle no orderDetails (e.g., still loading)
+  // Handle no orderDetails (e.g., still loading or error)
   if (!orderDetails) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
-          <MDTypography variant="body2" color="text">
-            Loading order details...
+          <MDTypography variant="h4" color="error">
+            {error || "Loading order details..."}
           </MDTypography>
         </MDBox>
         <Footer />
@@ -439,7 +471,7 @@ function MarketplaceOrderDetails() {
                             onClick={handleConfirmReceipt}
                             color="success"
                             variant="gradient"
-                            disabled={isConfirming || orderDetails.id === dummyMarketplaceDetails.id}
+                            disabled={isConfirming}
                             sx={{ width: { xs: "100%", sm: "auto" } }}
                           >
                             {isConfirming ? "Confirming..." : "Confirm Receipt"}
@@ -454,7 +486,7 @@ function MarketplaceOrderDetails() {
                         <Rating
                           value={rating}
                           onChange={(event, newValue) => handleRateSeller(newValue)}
-                          disabled={isSaving || orderDetails.id === dummyMarketplaceDetails.id || rating !== null}
+                          disabled={isSaving || rating !== null}
                           sx={{
                             fontSize: "2rem", // Larger stars
                             "& .MuiRating-iconEmpty": {
@@ -478,11 +510,11 @@ function MarketplaceOrderDetails() {
                           fullWidth
                           multiline
                           rows={3}
-                          disabled={isSending || orderDetails.id === dummyMarketplaceDetails.id}
+                          disabled={isSending}
                           sx={{
                             "& .MuiInputBase-input": {
                               padding: { xs: "10px", md: "12px" },
-                              color: "#344767",
+                              color: "#FFFFFF", // Changed to white
                             },
                           }}
                         />
@@ -490,7 +522,7 @@ function MarketplaceOrderDetails() {
                           onClick={handleSendMessage}
                           color="primary"
                           variant="gradient"
-                          disabled={isSending || !newMessage.trim() || orderDetails.id === dummyMarketplaceDetails.id}
+                          disabled={isSending || !newMessage.trim()}
                           sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                         >
                           {isSending ? "Sending..." : "Send Message"}
@@ -526,11 +558,11 @@ function MarketplaceOrderDetails() {
                           fullWidth
                           multiline
                           rows={2}
-                          disabled={isFlagging || orderDetails.id === dummyMarketplaceDetails.id}
+                          disabled={isFlagging}
                           sx={{
                             "& .MuiInputBase-input": {
                               padding: { xs: "10px", md: "12px" },
-                              color: "#344767",
+                              color: "#FFFFFF", // Changed to white
                             },
                           }}
                         />
@@ -538,7 +570,7 @@ function MarketplaceOrderDetails() {
                           onClick={handleFlagIssue}
                           color="error"
                           variant="gradient"
-                          disabled={isFlagging || !issueDescription.trim() || orderDetails.id === dummyMarketplaceDetails.id}
+                          disabled={isFlagging || !issueDescription.trim()}
                           sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                         >
                           {isFlagging ? "Flagging..." : "Flag Issue"}

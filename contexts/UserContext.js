@@ -8,7 +8,7 @@
 
 import { createContext, useContext, useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 const UserContext = createContext(null);
@@ -23,7 +23,8 @@ export function UserContextProvider({ children }) {
         const walletId = publicKey.toString();
         console.log("UserContext: Fetching user data for wallet:", walletId);
         try {
-          const userDoc = await getDoc(doc(db, "users", walletId));
+          const userDocRef = doc(db, "users", walletId);
+          const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const data = userDoc.data();
             setUser({
@@ -37,7 +38,24 @@ export function UserContextProvider({ children }) {
             });
             console.log("UserContext: User data fetched:", { walletId, role: data.role });
           } else {
-            console.log("UserContext: No user found, defaulting to buyer");
+            console.log("UserContext: No user found, creating new user with role: buyer");
+            // Create a new user document if none exists
+            const newUser = {
+              walletId,
+              role: "buyer",
+              email: "",
+              name: "User",
+              avatar: "/assets/images/default-avatar.png",
+              avatarUrl: "",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              storeIds: [],
+              escrowIds: [],
+              affiliateClicks: [],
+              purchases: [],
+              rewards: 0,
+            };
+            await setDoc(userDocRef, newUser);
             setUser({
               walletId,
               role: "buyer",
@@ -47,9 +65,10 @@ export function UserContextProvider({ children }) {
                 email: "",
               },
             });
+            console.log("UserContext: New user created:", { walletId, role: "buyer" });
           }
         } catch (error) {
-          console.error("UserContext: Error fetching user data:", error);
+          console.error("UserContext: Error fetching or creating user data:", error);
           setUser(null);
         }
       } else {

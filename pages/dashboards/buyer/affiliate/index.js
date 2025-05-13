@@ -14,6 +14,10 @@ import Link from "next/link";
 // User context
 import { useUser } from "/contexts/UserContext";
 
+// Firestore imports
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "/lib/firebase";
+
 // @mui material components
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
@@ -33,34 +37,76 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import DataTable from "/examples/Tables/DataTable";
 
-// Dummy Data (Replace with Firestore data later)
-const affiliateData = [
-  { id: "AFF001", link: "Amazon", clicks: 150, purchases: 10, pendingWndo: 50, rewardedWndo: 100, status: "Paid", date: "2025-03-20" },
-  { id: "AFF002", link: "Walmart", clicks: 200, purchases: 15, pendingWndo: 30, rewardedWndo: 80, status: "Paid", date: "2025-03-19" },
-  { id: "AFF003", link: "eBay", clicks: 120, purchases: 8, pendingWndo: 20, rewardedWndo: 60, status: "Refunded", date: "2025-03-18" },
-  { id: "AFF004", link: "Target", clicks: 180, purchases: 12, pendingWndo: 40, rewardedWndo: 90, status: "Paid", date: "2025-03-17" },
-  { id: "AFF005", link: "Best Buy", clicks: 90, purchases: 5, pendingWndo: 10, rewardedWndo: 50, status: "Canceled", date: "2025-03-16" },
-  { id: "AFF006", link: "Amazon", clicks: 110, purchases: 7, pendingWndo: 15, rewardedWndo: 70, status: "Paid", date: "2025-03-15" },
-  { id: "AFF007", link: "Walmart", clicks: 130, purchases: 9, pendingWndo: 25, rewardedWndo: 65, status: "Paid", date: "2025-03-14" },
-  { id: "AFF008", link: "eBay", clicks: 160, purchases: 11, pendingWndo: 35, rewardedWndo: 85, status: "Refunded", date: "2025-03-13" },
-  { id: "AFF009", link: "Target", clicks: 140, purchases: 10, pendingWndo: 30, rewardedWndo: 75, status: "Paid", date: "2025-03-12" },
-  { id: "AFF010", link: "Best Buy", clicks: 100, purchases: 6, pendingWndo: 20, rewardedWndo: 55, status: "Canceled", date: "2025-03-11" },
-  { id: "AFF011", link: "Amazon", clicks: 170, purchases: 13, pendingWndo: 45, rewardedWndo: 95, status: "Paid", date: "2025-03-10" },
-  { id: "AFF012", link: "Walmart", clicks: 190, purchases: 14, pendingWndo: 50, rewardedWndo: 100, status: "Paid", date: "2025-03-09" },
-];
-
 function AffiliateActivity() {
   const { user } = useUser();
   const router = useRouter();
   const [menu, setMenu] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(null);
+  const [affiliateData, setAffiliateData] = useState([]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || (user.role !== "buyer" && user.role !== "seller")) {
       router.replace("/");
     }
+  }, [user, router]);
+
+  // Fetch affiliate click data from Firestore
+  useEffect(() => {
+    const fetchAffiliateData = async () => {
+      if (!user || !user.walletId) return;
+
+      const walletId = user.walletId;
+      const affiliateActivity = [];
+
+      try {
+        // Fetch all affiliates
+        const affiliatesSnapshot = await getDocs(collection(db, "affiliates"));
+        for (const affiliateDoc of affiliatesSnapshot.docs) {
+          const affiliateId = affiliateDoc.id;
+          const affiliateData = affiliateDoc.data();
+
+          // Fetch clicks for this affiliate where walletId matches
+          const clicksQuery = query(
+            collection(db, `affiliates/${affiliateId}/clicks`),
+            where("walletId", "==", walletId)
+          );
+          const clicksSnapshot = await getDocs(clicksQuery);
+
+          let clicksCount = 0;
+          let purchasesCount = 0;
+          let pendingWndo = 0;
+
+          clicksSnapshot.forEach(clickDoc => {
+            const clickData = clickDoc.data();
+            const clickDate = clickData.timestamp instanceof Date ? clickData.timestamp : new Date();
+            clicksCount += 1;
+            if (clickData.status === "purchased") {
+              purchasesCount += 1;
+              pendingWndo += clickData.purchaseId ? 10 : 0; // 10 WNDO per purchase
+            }
+
+            affiliateActivity.push({
+              id: clickDoc.id,
+              link: affiliateData.name || affiliateId,
+              clicks: clicksCount,
+              purchases: purchasesCount,
+              pendingWndo: pendingWndo,
+              rewardedWndo: 0, // Placeholder
+              status: clickData.status,
+              date: clickDate.toISOString().split('T')[0],
+            });
+          });
+        }
+
+        setAffiliateData(affiliateActivity);
+      } catch (error) {
+        console.error("Error fetching affiliate data:", error);
+      }
+    };
+
+    fetchAffiliateData();
   }, [user, router]);
 
   // Ensure user is loaded and authorized before rendering
@@ -90,9 +136,8 @@ function AffiliateActivity() {
       onClose={closeMenu}
       keepMounted
     >
-      <MenuItem onClick={() => { setStatusFilter("Paid"); closeMenu(); }}>Status: Paid</MenuItem>
-      <MenuItem onClick={() => { setStatusFilter("Refunded"); closeMenu(); }}>Status: Refunded</MenuItem>
-      <MenuItem onClick={() => { setStatusFilter("Canceled"); closeMenu(); }}>Status: Canceled</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("purchased"); closeMenu(); }}>Status: Purchased</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("clicked"); closeMenu(); }}>Status: Clicked</MenuItem>
       <Divider sx={{ margin: "0.5rem 0" }} />
       <MenuItem onClick={() => { setStatusFilter(null); closeMenu(); }}>
         <MDTypography variant="button" color="error" fontWeight="regular">
@@ -127,11 +172,11 @@ function AffiliateActivity() {
           <Icon
             fontSize="small"
             sx={{
-              color: item.status === "Paid" ? "success.main" : item.status === "Refunded" ? "info.main" : "error.main",
+              color: item.status === "purchased" ? "success.main" : "info.main",
               mr: 1,
             }}
           >
-            {item.status === "Paid" ? "check_circle" : item.status === "Refunded" ? "refresh" : "cancel"}
+            {item.status === "purchased" ? "check_circle" : "touch_app"}
           </Icon>
           <MDTypography variant="button" color="text">
             {item.status}

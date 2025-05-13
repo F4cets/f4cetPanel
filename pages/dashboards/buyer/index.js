@@ -17,6 +17,10 @@ import { motion } from "framer-motion";
 // User context
 import { useUser } from "/contexts/UserContext";
 
+// Firestore imports
+import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from "firebase/firestore";
+import { db } from "/lib/firebase";
+
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -33,40 +37,156 @@ import DataTable from "/examples/Tables/DataTable";
 // @mui icons
 import Icon from "@mui/material/Icon";
 
-// Mock Data (Replace with Firestore data later)
-const affiliateOrders = [
-  { id: "AFF001", date: "2025-03-20", clicks: 150, purchases: 10, pendingWndo: 50, rewardedWndo: 100, status: "Active" },
-  { id: "AFF002", date: "2025-03-19", clicks: 200, purchases: 15, pendingWndo: 30, rewardedWndo: 80, status: "Active" },
-  { id: "AFF003", date: "2025-03-18", clicks: 120, purchases: 8, pendingWndo: 20, rewardedWndo: 60, status: "Completed" },
-  { id: "AFF004", date: "2025-03-17", clicks: 180, purchases: 12, pendingWndo: 40, rewardedWndo: 90, status: "Active" },
-  { id: "AFF005", date: "2025-03-16", clicks: 90, purchases: 5, pendingWndo: 10, rewardedWndo: 50, status: "Completed" },
-  { id: "AFF006", date: "2025-03-15", clicks: 110, purchases: 7, pendingWndo: 15, rewardedWndo: 70, status: "Active" },
-];
-
-const marketplaceOrders = [
-  { id: "MKT001", date: "2025-03-20", product: "Product A", amount: 150, status: "Delivered" },
-  { id: "MKT002", date: "2025-03-19", product: "Product B", amount: 200, status: "Shipped" },
-  { id: "MKT003", date: "2025-03-18", product: "Product C", amount: 120, status: "Received" },
-  { id: "MKT004", date: "2025-03-17", product: "Product D", amount: 180, status: "Delivered" },
-  { id: "MKT005", date: "2025-03-16", product: "Product E", amount: 90, status: "Shipped" },
-  { id: "MKT006", date: "2025-03-15", product: "Product F", amount: 110, status: "Received" },
-];
-
-// Additional Metrics (Mock Data)
-const affiliateClicksLast30Days = 1250;
-const pendingWndoRewards = 150;
-const marketplacePurchasesLast30Days = 5; // Number of purchases
-const marketplacePurchaseAmountLast30Days = 2450; // Dollar amount
-
 function BuyerDashboard() {
   const { user } = useUser();
   const router = useRouter();
+  const [affiliateClicksLast30Days, setAffiliateClicksLast30Days] = useState(0);
+  const [pendingWndoRewards, setPendingWndoRewards] = useState(0);
+  const [marketplacePurchasesLast30Days, setMarketplacePurchasesLast30Days] = useState(0);
+  const [marketplacePurchaseAmountLast30Days, setMarketplacePurchaseAmountLast30Days] = useState(0);
+  const [affiliateActivity, setAffiliateActivity] = useState([]);
+  const [marketplaceOrders, setMarketplaceOrders] = useState([]);
+  const [isFetching, setIsFetching] = useState(false); // Prevent multiple simultaneous fetches
 
   // Redirect to home if no user or walletId
   useEffect(() => {
     if (!user || !user.walletId) {
       router.replace("/");
     }
+  }, [user, router]);
+
+  // Fetch dynamic data from Firestore
+  useEffect(() => {
+    const fetchBuyerData = async () => {
+      if (!user || !user.walletId || isFetching) return;
+
+      setIsFetching(true); // Prevent concurrent fetches
+      const walletId = user.walletId;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      try {
+        // Fetch user data
+        const userDocRef = doc(db, "users", walletId);
+        const userDoc = await getDoc(userDocRef);
+        if (!userDoc.exists()) return;
+
+        const userData = userDoc.data();
+
+        // Ensure affiliateClicks array exists
+        let clicks = userData.affiliateClicks || [];
+
+        // Fetch all affiliate clicks to aggregate activity and update users/{walletId}/affiliateClicks
+        const affiliatesSnapshot = await getDocs(collection(db, "affiliates"));
+        const affiliateActivityData = [];
+        const seenClickIds = new Set(clicks.map(click => click.clickId).filter(id => id)); // Track existing click IDs
+
+        for (const affiliateDoc of affiliatesSnapshot.docs) {
+          const affiliateId = affiliateDoc.id;
+          const clicksQuery = query(
+            collection(db, `affiliates/${affiliateId}/clicks`),
+            where("walletId", "==", walletId)
+          );
+          const clicksSnapshot = await getDocs(clicksQuery);
+          const clicksData = clicksSnapshot.docs.map(doc => ({
+            ...doc.data(),
+            affiliateId,
+            id: doc.id,
+          }));
+
+          // Update users/{walletId}/affiliateClicks with new clicks
+          for (const click of clicksData) {
+            if (!seenClickIds.has(click.id)) {
+              const clickEntry = {
+                clickId: click.id,
+                affiliateId,
+                timestamp: click.timestamp instanceof Date ? click.timestamp : new Date(),
+                purchaseId: click.purchaseId || "",
+              };
+              await updateDoc(userDocRef, {
+                affiliateClicks: arrayUnion(clickEntry),
+              });
+              clicks.push(clickEntry); // Update local array to reflect the new entry
+              seenClickIds.add(click.id);
+            }
+
+            const clickDate = click.timestamp instanceof Date ? click.timestamp : new Date();
+            if (clickDate >= thirtyDaysAgo) {
+              const existingActivity = affiliateActivityData.find(activity => activity.affiliateId === affiliateId);
+              if (existingActivity) {
+                existingActivity.clicks += 1;
+                if (click.status === "purchased") {
+                  existingActivity.purchases += 1;
+                  existingActivity.pendingWndo += click.purchaseId ? 10 : 0; // Example: 10 WNDO per purchase
+                }
+              } else {
+                affiliateActivityData.push({
+                  id: click.id,
+                  date: clickDate.toISOString().split('T')[0],
+                  affiliateId,
+                  clicks: 1,
+                  purchases: click.status === "purchased" ? 1 : 0,
+                  pendingWndo: click.status === "purchased" ? 10 : 0,
+                  rewardedWndo: 0, // Placeholder
+                  status: click.status,
+                });
+              }
+            }
+          }
+        }
+        setAffiliateActivity(affiliateActivityData);
+        setPendingWndoRewards(affiliateActivityData.reduce((sum, activity) => sum + activity.pendingWndo, 0));
+
+        // Affiliate Clicks (Last 30 Days)
+        const recentClicks = clicks.filter(click => {
+          const clickDate = click.timestamp instanceof Date ? click.timestamp : new Date();
+          return clickDate >= thirtyDaysAgo;
+        });
+        setAffiliateClicksLast30Days(recentClicks.length);
+
+        // Marketplace Purchases
+        const purchaseIds = userData.purchases || [];
+        const transactions = [];
+        let purchaseCount = 0;
+        let purchaseAmount = 0;
+
+        console.log("Purchase IDs:", purchaseIds);
+
+        for (const purchaseId of purchaseIds) {
+          const transactionDocRef = doc(db, "transactions", purchaseId);
+          const transactionDoc = await getDoc(transactionDocRef);
+          if (transactionDoc.exists()) {
+            const transactionData = transactionDoc.data();
+            console.log(`Transaction ${purchaseId} data:`, transactionData);
+
+            if (transactionData.type === "rwi" && transactionData.buyerId === walletId) {
+              const purchaseDate = transactionData.createdAt.toDate ? transactionData.createdAt.toDate() : new Date();
+              if (purchaseDate >= thirtyDaysAgo) {
+                purchaseCount += 1;
+                purchaseAmount += transactionData.amount || 0;
+              }
+              transactions.push({
+                id: purchaseId,
+                date: purchaseDate.toISOString().split('T')[0],
+                product: transactionData.productIds.join(", "), // Simplified, fetch product names later
+                amount: transactionData.amount,
+                status: transactionData.shippingStatus,
+              });
+            }
+          }
+        }
+        setMarketplacePurchasesLast30Days(purchaseCount);
+        setMarketplacePurchaseAmountLast30Days(purchaseAmount);
+        setMarketplaceOrders(transactions);
+        console.log("Final marketplace orders:", transactions);
+      } catch (error) {
+        console.error("Error fetching buyer data:", error);
+      } finally {
+        setIsFetching(false); // Reset fetching state
+      }
+    };
+
+    fetchBuyerData();
   }, [user, router]);
 
   // Animation variants for the button
@@ -86,7 +206,7 @@ function BuyerDashboard() {
     },
   };
 
-  // Affiliate Order List (Recent 5)
+  // Affiliate Activity Table
   const affiliateTableData = {
     columns: [
       { Header: "Order ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
@@ -97,7 +217,7 @@ function BuyerDashboard() {
       { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "15%", sx: { paddingRight: "20px" } },
       { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
     ],
-    rows: affiliateOrders.slice(0, 5).map(order => ({
+    rows: affiliateActivity.slice(0, 5).map(order => ({
       ...order,
       id: (
         <Link href={`/dashboards/buyer/affiliate/details/${order.id}`}>
@@ -109,7 +229,7 @@ function BuyerDashboard() {
     })),
   };
 
-  // Marketplace Order List (Recent 5)
+  // Marketplace Orders Table
   const marketplaceTableData = {
     columns: [
       { Header: "Order ID", accessor: "id", width: "20%", sx: { paddingRight: "20px" } },
@@ -146,11 +266,7 @@ function BuyerDashboard() {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        <MDBox
-          maxWidth="1200px"
-          mx="auto"
-          mb={3}
-        >
+        <MDBox maxWidth="1200px" mx="auto" mb={3}>
           <MDBox
             display="flex"
             flexDirection={{ xs: "column", sm: "row" }}
@@ -161,11 +277,7 @@ function BuyerDashboard() {
             <MDTypography variant="h4" color="dark">
               {walletId ? walletId.slice(0, 6) + "..." + walletId.slice(-4) : "User"} -- User Dashboard
             </MDTypography>
-            <motion.div
-              variants={buttonVariants}
-              initial="rest"
-              whileHover="hover"
-            >
+            <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
               <MDButton
                 onClick={handleSellOnF4cet}
                 variant="gradient"
@@ -317,7 +429,7 @@ function BuyerDashboard() {
 
         {/* Order Lists Section */}
         <Grid container spacing={3}>
-          {/* Affiliate Order List */}
+          {/* Affiliate Activity List */}
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>

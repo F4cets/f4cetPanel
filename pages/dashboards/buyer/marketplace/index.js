@@ -14,6 +14,10 @@ import Link from "next/link";
 // User context
 import { useUser } from "/contexts/UserContext";
 
+// Firestore imports
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "/lib/firebase";
+
 // @mui material components
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
@@ -33,34 +37,92 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import DataTable from "/examples/Tables/DataTable";
 
-// Dummy Data (Replace with Firestore data later)
-const marketplaceData = [
-  { id: "MKT001", product: "Dog Bed", seller: "Seller123", amount: "150 SOL", status: "Paid", date: "2025-03-20" },
-  { id: "MKT002", product: "Vase", seller: "Seller456", amount: "200 SOL", status: "Paid", date: "2025-03-19" },
-  { id: "MKT003", product: "Painting", seller: "Seller789", amount: "120 SOL", status: "Refunded", date: "2025-03-18" },
-  { id: "MKT004", product: "Necklace", seller: "Seller101", amount: "180 SOL", status: "Paid", date: "2025-03-17" },
-  { id: "MKT005", product: "Sculpture", seller: "Seller202", amount: "90 SOL", status: "Canceled", date: "2025-03-16" },
-  { id: "MKT006", product: "Lamp", seller: "Seller303", amount: "110 SOL", status: "Paid", date: "2025-03-15" },
-  { id: "MKT007", product: "Chair", seller: "Seller404", amount: "130 SOL", status: "Paid", date: "2025-03-14" },
-  { id: "MKT008", product: "Table", seller: "Seller505", amount: "160 SOL", status: "Refunded", date: "2025-03-13" },
-  { id: "MKT009", product: "Mirror", seller: "Seller606", amount: "140 SOL", status: "Paid", date: "2025-03-12" },
-  { id: "MKT010", product: "Rug", seller: "Seller707", amount: "100 SOL", status: "Canceled", date: "2025-03-11" },
-  { id: "MKT011", product: "Bookshelf", seller: "Seller808", amount: "170 SOL", status: "Paid", date: "2025-03-10" },
-  { id: "MKT012", product: "Couch", seller: "Seller909", amount: "190 SOL", status: "Paid", date: "2025-03-09" },
-];
-
 function MarketplaceOrders() {
   const { user } = useUser();
   const router = useRouter();
   const [menu, setMenu] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(null);
+  const [marketplaceData, setMarketplaceData] = useState([]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || (user.role !== "buyer" && user.role !== "seller")) {
       router.replace("/");
     }
+  }, [user, router]);
+
+  // Fetch marketplace orders from Firestore
+  useEffect(() => {
+    const fetchMarketplaceData = async () => {
+      if (!user || !user.walletId) return;
+
+      const walletId = user.walletId;
+      const orders = [];
+
+      try {
+        // Fetch user data to get their purchases
+        const userDocRef = doc(db, "users", walletId);
+        const userDoc = await getDoc(userDocRef);
+        if (!userDoc.exists()) return;
+
+        const userData = userDoc.data();
+        const purchaseIds = userData.purchases || [];
+
+        // Fetch each transaction
+        for (const purchaseId of purchaseIds) {
+          const transactionDocRef = doc(db, "transactions", purchaseId);
+          const transactionDoc = await getDoc(transactionDocRef);
+          if (transactionDoc.exists()) {
+            const transactionData = transactionDoc.data();
+            if (transactionData.type === "rwi" && transactionData.buyerId === walletId) {
+              // Fetch product names
+              let productNames = [];
+              if (Array.isArray(transactionData.productIds)) {
+                for (const productId of transactionData.productIds) {
+                  const productDocRef = doc(db, "products", productId);
+                  const productDoc = await getDoc(productDocRef);
+                  if (productDoc.exists()) {
+                    const productData = productDoc.data();
+                    productNames.push(productData.name || productId);
+                  } else {
+                    productNames.push(productId);
+                  }
+                }
+              }
+
+              // Fetch seller name (if available)
+              let sellerName = transactionData.sellerId;
+              const sellerDocRef = doc(db, "users", transactionData.sellerId);
+              const sellerDoc = await getDoc(sellerDocRef);
+              if (sellerDoc.exists()) {
+                const sellerData = sellerDoc.data();
+                sellerName = sellerData.name || sellerName;
+              }
+
+              // Format date
+              const transactionDate = transactionData.createdAt.toDate ? transactionData.createdAt.toDate() : new Date();
+              const dateStr = transactionDate.toISOString().split('T')[0];
+
+              orders.push({
+                id: purchaseId,
+                product: productNames.join(", ") || "Unknown Product",
+                seller: sellerName,
+                amount: `${transactionData.amount || 0} ${transactionData.currency || "USDC"}`,
+                status: transactionData.shippingStatus || "Unknown",
+                date: dateStr,
+              });
+            }
+          }
+        }
+
+        setMarketplaceData(orders);
+      } catch (error) {
+        console.error("Error fetching marketplace orders:", error);
+      }
+    };
+
+    fetchMarketplaceData();
   }, [user, router]);
 
   // Ensure user is loaded and authorized before rendering
@@ -91,9 +153,9 @@ function MarketplaceOrders() {
       onClose={closeMenu}
       keepMounted
     >
-      <MenuItem onClick={() => { setStatusFilter("Paid"); closeMenu(); }}>Status: Paid</MenuItem>
-      <MenuItem onClick={() => { setStatusFilter("Refunded"); closeMenu(); }}>Status: Refunded</MenuItem>
-      <MenuItem onClick={() => { setStatusFilter("Canceled"); closeMenu(); }}>Status: Canceled</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("Delivered"); closeMenu(); }}>Status: Delivered</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("Shipped"); closeMenu(); }}>Status: Shipped</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("pending"); closeMenu(); }}>Status: Pending</MenuItem>
       <Divider sx={{ margin: "0.5rem 0" }} />
       <MenuItem onClick={() => { setStatusFilter(null); closeMenu(); }}>
         <MDTypography variant="button" color="error" fontWeight="regular">
@@ -126,11 +188,11 @@ function MarketplaceOrders() {
           <Icon
             fontSize="small"
             sx={{
-              color: item.status === "Paid" ? "success.main" : item.status === "Refunded" ? "info.main" : "error.main",
+              color: item.status === "Delivered" ? "success.main" : item.status === "Shipped" ? "info.main" : "error.main",
               mr: 1,
             }}
           >
-            {item.status === "Paid" ? "check_circle" : item.status === "Refunded" ? "refresh" : "cancel"}
+            {item.status === "Delivered" ? "check_circle" : item.status === "Shipped" ? "local_shipping" : "pending"}
           </Icon>
           <MDTypography variant="button" color="text">
             {item.status}
