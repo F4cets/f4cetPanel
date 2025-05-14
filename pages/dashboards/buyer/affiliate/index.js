@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useUser } from "/contexts/UserContext";
 
 // Firestore imports
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { getFirestore, collection, getDocs, query } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // @mui material components
@@ -61,46 +61,26 @@ function AffiliateActivity() {
       const affiliateActivity = [];
 
       try {
-        // Fetch all affiliates
-        const affiliatesSnapshot = await getDocs(collection(db, "affiliates"));
-        for (const affiliateDoc of affiliatesSnapshot.docs) {
-          const affiliateId = affiliateDoc.id;
-          const affiliateData = affiliateDoc.data();
+        // Fetch clicks from users/{walletId}/affiliateClicks
+        const clicksQuery = query(collection(db, `users/${walletId}/affiliateClicks`));
+        const clicksSnapshot = await getDocs(clicksQuery);
 
-          // Fetch clicks for this affiliate where walletId matches
-          const clicksQuery = query(
-            collection(db, `affiliates/${affiliateId}/clicks`),
-            where("walletId", "==", walletId)
-          );
-          const clicksSnapshot = await getDocs(clicksQuery);
-
-          let clicksCount = 0;
-          let purchasesCount = 0;
-          let pendingWndo = 0;
-
-          clicksSnapshot.forEach(clickDoc => {
-            const clickData = clickDoc.data();
-            const clickDate = clickData.timestamp instanceof Date ? clickData.timestamp : new Date();
-            clicksCount += 1;
-            if (clickData.status === "purchased") {
-              purchasesCount += 1;
-              pendingWndo += clickData.purchaseId ? 10 : 0; // 10 WNDO per purchase
-            }
-
-            affiliateActivity.push({
-              id: clickDoc.id,
-              link: affiliateData.name || affiliateId,
-              clicks: clicksCount,
-              purchases: purchasesCount,
-              pendingWndo: pendingWndo,
-              rewardedWndo: 0, // Placeholder
-              status: clickData.status,
-              date: clickDate.toISOString().split('T')[0],
-            });
+        clicksSnapshot.forEach(doc => {
+          const clickData = doc.data();
+          const clickDate = clickData.timestamp ? new Date(clickData.timestamp) : new Date();
+          affiliateActivity.push({
+            id: doc.id,
+            affiliateName: clickData.affiliateName,
+            clicks: 1,
+            purchases: 0, // Placeholder
+            pendingWndo: 0, // Placeholder
+            status: "clicked", // Default, update with purchase linking later
+            date: clickDate.toISOString().split('T')[0],
           });
-        }
+        });
 
         setAffiliateData(affiliateActivity);
+        console.log("Fetched affiliate activity:", affiliateActivity);
       } catch (error) {
         console.error("Error fetching affiliate data:", error);
       }
@@ -111,7 +91,7 @@ function AffiliateActivity() {
 
   // Ensure user is loaded and authorized before rendering
   if (!user || !user.walletId || (user.role !== "buyer" && user.role !== "seller")) {
-    return null; // Or a loading spinner
+    return null;
   }
 
   const openMenu = (event) => setMenu(event.currentTarget);
@@ -119,10 +99,9 @@ function AffiliateActivity() {
 
   // Filter data based on search and status
   const filteredData = affiliateData.filter((item) => {
-    const matchesSearch = (
-      item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.link.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const matchesSearch = searchQuery.trim()
+      ? item.affiliateName.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
     const matchesStatus = statusFilter ? item.status === statusFilter : true;
     return matchesSearch && matchesStatus;
   });
@@ -149,21 +128,19 @@ function AffiliateActivity() {
 
   const tableData = {
     columns: [
-      { Header: "Order ID", accessor: "id", width: "15%" },
-      { Header: "Link", accessor: "link", width: "15%" },
-      { Header: "Clicks", accessor: "clicks", width: "10%" },
-      { Header: "Purchases", accessor: "purchases", width: "10%" },
+      { Header: "Affiliate Name", accessor: "affiliateName", width: "20%" },
+      { Header: "Date", accessor: "date", width: "15%" },
+      { Header: "Clicks", accessor: "clicks", width: "15%" },
+      { Header: "Purchases", accessor: "purchases", width: "15%" },
       { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%" },
-      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "15%" },
-      { Header: "Status", accessor: "status", width: "10%" },
-      { Header: "Date", accessor: "date", width: "10%" },
+      { Header: "Status", accessor: "status", width: "20%" },
     ],
     rows: filteredData.map((item) => ({
       ...item,
-      id: (
+      affiliateName: (
         <Link href={`/dashboards/buyer/affiliate/details/${item.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
-            {item.id}
+            {item.affiliateName}
           </MDTypography>
         </Link>
       ),
@@ -192,25 +169,25 @@ function AffiliateActivity() {
       <MDBox my={3}>
         <MDBox
           display="flex"
-          flexDirection={{ xs: "column", sm: "row" }} // Stack on mobile, row on larger screens
+          flexDirection={{ xs: "column", sm: "row" }}
           justifyContent={{ xs: "flex-start", sm: "space-between" }}
           alignItems={{ xs: "flex-start", sm: "center" }}
           mb={2}
-          gap={{ xs: 2, sm: 0 }} // Add gap when stacked on mobile
+          gap={{ xs: 2, sm: 0 }}
         >
           <MDTypography variant="h4" color="dark" mb={{ xs: 1, sm: 0 }}>
             Affiliate Activity
           </MDTypography>
           <MDBox
             display="flex"
-            flexDirection={{ xs: "column", sm: "row" }} // Stack search and filter on mobile
+            flexDirection={{ xs: "column", sm: "row" }}
             alignItems={{ xs: "flex-start", sm: "center" }}
             gap={{ xs: 1, sm: 2 }}
             width={{ xs: "100%", sm: "auto" }}
           >
             <MDBox width={{ xs: "100%", sm: "200px" }}>
               <MDInput
-                placeholder="Search by ID or Link..."
+                placeholder="Search by Affiliate Name..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 fullWidth

@@ -18,7 +18,7 @@ import { motion } from "framer-motion";
 import { useUser } from "/contexts/UserContext";
 
 // Firestore imports
-import { getFirestore, doc, getDoc, collection, getDocs, query, where, updateDoc, arrayUnion } from "firebase/firestore";
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // NextJS Material Dashboard 2 PRO examples
@@ -46,7 +46,7 @@ function BuyerDashboard() {
   const [marketplacePurchaseAmountLast30Days, setMarketplacePurchaseAmountLast30Days] = useState(0);
   const [affiliateActivity, setAffiliateActivity] = useState([]);
   const [marketplaceOrders, setMarketplaceOrders] = useState([]);
-  const [isFetching, setIsFetching] = useState(false); // Prevent multiple simultaneous fetches
+  const [isFetching, setIsFetching] = useState(false);
 
   // Redirect to home if no user or walletId
   useEffect(() => {
@@ -60,7 +60,7 @@ function BuyerDashboard() {
     const fetchBuyerData = async () => {
       if (!user || !user.walletId || isFetching) return;
 
-      setIsFetching(true); // Prevent concurrent fetches
+      setIsFetching(true);
       const walletId = user.walletId;
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -73,76 +73,44 @@ function BuyerDashboard() {
 
         const userData = userDoc.data();
 
-        // Ensure affiliateClicks array exists
-        let clicks = userData.affiliateClicks || [];
+        // Fetch affiliate clicks from subcollection
+        const clicksQuery = query(collection(db, `users/${walletId}/affiliateClicks`));
+        const clicksSnapshot = await getDocs(clicksQuery);
+        const clicks = clicksSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp ? new Date(doc.data().timestamp) : new Date(),
+        }));
 
-        // Fetch all affiliate clicks to aggregate activity and update users/{walletId}/affiliateClicks
-        const affiliatesSnapshot = await getDocs(collection(db, "affiliates"));
+        // Affiliate Clicks (Last 30 Days)
+        const recentClicks = clicks.filter(click => click.timestamp >= thirtyDaysAgo);
+        setAffiliateClicksLast30Days(recentClicks.length);
+
+        // Affiliate Activity
         const affiliateActivityData = [];
-        const seenClickIds = new Set(clicks.map(click => click.clickId).filter(id => id)); // Track existing click IDs
-
-        for (const affiliateDoc of affiliatesSnapshot.docs) {
-          const affiliateId = affiliateDoc.id;
-          const clicksQuery = query(
-            collection(db, `affiliates/${affiliateId}/clicks`),
-            where("walletId", "==", walletId)
-          );
-          const clicksSnapshot = await getDocs(clicksQuery);
-          const clicksData = clicksSnapshot.docs.map(doc => ({
-            ...doc.data(),
-            affiliateId,
-            id: doc.id,
-          }));
-
-          // Update users/{walletId}/affiliateClicks with new clicks
-          for (const click of clicksData) {
-            if (!seenClickIds.has(click.id)) {
-              const clickEntry = {
-                clickId: click.id,
-                affiliateId,
-                timestamp: click.timestamp instanceof Date ? click.timestamp : new Date(),
-                purchaseId: click.purchaseId || "",
-              };
-              await updateDoc(userDocRef, {
-                affiliateClicks: arrayUnion(clickEntry),
+        for (const click of clicks) {
+          const clickDate = click.timestamp;
+          if (clickDate >= thirtyDaysAgo) {
+            const existingActivity = affiliateActivityData.find(activity => activity.affiliateName === click.affiliateName);
+            if (existingActivity) {
+              existingActivity.clicks += 1;
+              existingActivity.purchases = 0; // Placeholder
+              existingActivity.pendingWndo = 0; // Placeholder
+            } else {
+              affiliateActivityData.push({
+                id: click.id,
+                affiliateName: click.affiliateName,
+                date: clickDate.toISOString().split('T')[0],
+                clicks: 1,
+                purchases: 0, // Placeholder
+                pendingWndo: 0, // Placeholder
+                status: "clicked",
               });
-              clicks.push(clickEntry); // Update local array to reflect the new entry
-              seenClickIds.add(click.id);
-            }
-
-            const clickDate = click.timestamp instanceof Date ? click.timestamp : new Date();
-            if (clickDate >= thirtyDaysAgo) {
-              const existingActivity = affiliateActivityData.find(activity => activity.affiliateId === affiliateId);
-              if (existingActivity) {
-                existingActivity.clicks += 1;
-                if (click.status === "purchased") {
-                  existingActivity.purchases += 1;
-                  existingActivity.pendingWndo += click.purchaseId ? 10 : 0; // Example: 10 WNDO per purchase
-                }
-              } else {
-                affiliateActivityData.push({
-                  id: click.id,
-                  date: clickDate.toISOString().split('T')[0],
-                  affiliateId,
-                  clicks: 1,
-                  purchases: click.status === "purchased" ? 1 : 0,
-                  pendingWndo: click.status === "purchased" ? 10 : 0,
-                  rewardedWndo: 0, // Placeholder
-                  status: click.status,
-                });
-              }
             }
           }
         }
         setAffiliateActivity(affiliateActivityData);
-        setPendingWndoRewards(affiliateActivityData.reduce((sum, activity) => sum + activity.pendingWndo, 0));
-
-        // Affiliate Clicks (Last 30 Days)
-        const recentClicks = clicks.filter(click => {
-          const clickDate = click.timestamp instanceof Date ? click.timestamp : new Date();
-          return clickDate >= thirtyDaysAgo;
-        });
-        setAffiliateClicksLast30Days(recentClicks.length);
+        setPendingWndoRewards(0); // Placeholder until purchase linking
 
         // Marketplace Purchases
         const purchaseIds = userData.purchases || [];
@@ -168,7 +136,7 @@ function BuyerDashboard() {
               transactions.push({
                 id: purchaseId,
                 date: purchaseDate.toISOString().split('T')[0],
-                product: transactionData.productIds.join(", "), // Simplified, fetch product names later
+                product: transactionData.productIds.join(", "),
                 amount: transactionData.amount,
                 status: transactionData.shippingStatus,
               });
@@ -182,7 +150,7 @@ function BuyerDashboard() {
       } catch (error) {
         console.error("Error fetching buyer data:", error);
       } finally {
-        setIsFetching(false); // Reset fetching state
+        setIsFetching(false);
       }
     };
 
@@ -197,8 +165,8 @@ function BuyerDashboard() {
       transition: { duration: 0.3 },
     },
     hover: {
-      scale: 1.1, // Pop effect
-      rotate: [0, 5, -5, 5, 0], // Shake effect
+      scale: 1.1,
+      rotate: [0, 5, -5, 5, 0],
       transition: {
         scale: { duration: 0.2 },
         rotate: { repeat: 1, duration: 0.5 },
@@ -209,20 +177,19 @@ function BuyerDashboard() {
   // Affiliate Activity Table
   const affiliateTableData = {
     columns: [
-      { Header: "Order ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Affiliate Name", accessor: "affiliateName", width: "20%", sx: { paddingRight: "20px" } },
       { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
       { Header: "Clicks", accessor: "clicks", width: "15%", sx: { paddingRight: "20px" } },
       { Header: "Purchases", accessor: "purchases", width: "15%", sx: { paddingRight: "20px" } },
       { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Rewarded WNDO", accessor: "rewardedWndo", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
+      { Header: "Status", accessor: "status", width: "20%", sx: { paddingRight: "20px" } },
     ],
-    rows: affiliateActivity.slice(0, 5).map(order => ({
-      ...order,
-      id: (
-        <Link href={`/dashboards/buyer/affiliate/details/${order.id}`}>
+    rows: affiliateActivity.slice(0, 5).map(activity => ({
+      ...activity,
+      affiliateName: (
+        <Link href={`/dashboards/buyer/affiliate/details/${activity.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
-            {order.id}
+            {activity.affiliateName}
           </MDTypography>
         </Link>
       ),
@@ -257,7 +224,7 @@ function BuyerDashboard() {
 
   // Ensure user is loaded before rendering
   if (!user || !user.walletId) {
-    return null; // Or a loading spinner
+    return null;
   }
 
   const walletId = user.walletId;
