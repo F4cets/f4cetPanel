@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, collection, getDocs, addDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -22,10 +22,6 @@ import { useUser } from "/contexts/UserContext";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
 import Icon from "@mui/material/Icon";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogActions from "@mui/material/DialogActions";
 import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
@@ -52,45 +48,6 @@ const categories = [
   "Sporting Goods", "Toys & Games"
 ];
 
-// Dummy Data
-const dummyStore = {
-  id: "store123",
-  storeName: "FashionHub",
-  walletId: "sellerWallet456",
-  shortDescription: "Trendy clothing and accessories",
-  shopEmail: "contact@fashionhub.com",
-  subheading: "Free shipping on orders over 2 SOL!",
-  categories: ["Clothing", "Accessories"],
-  thumbnailUrl: "",
-  backgroundUrl: "",
-  removed: false,
-  flagCount: 0,
-  flagReasons: [],
-};
-
-const dummyItems = {
-  columns: [
-    { Header: "Item Name", accessor: "name", width: "40%" },
-    { Header: "Price", accessor: "price", width: "20%" },
-    { Header: "Type", accessor: "type", width: "20%" },
-    { Header: "Status", accessor: "status", width: "20%" },
-  ],
-  rows: [
-    {
-      name: "Strong Hold Hoodie",
-      price: "$50 USDC",
-      type: "RWI",
-      status: "Active",
-    },
-    {
-      name: "Leather Jacket",
-      price: "$120 USDC",
-      type: "RWI",
-      status: "Active",
-    },
-  ],
-};
-
 function StoreEdit() {
   const { user } = useUser();
   const router = useRouter();
@@ -111,11 +68,8 @@ function StoreEdit() {
   const [backgroundPreview, setBackgroundPreview] = useState(null);
   const [dragActiveThumbnail, setDragActiveThumbnail] = useState(false);
   const [dragActiveBackground, setDragActiveBackground] = useState(false);
-  const [openItemModal, setOpenItemModal] = useState(false);
-  const [itemForm, setItemForm] = useState({ name: "", price: "", type: "rwi" });
   const [isSaving, setIsSaving] = useState(false);
   const [isFlagging, setIsFlagging] = useState(false);
-  const [isAddingItem, setIsAddingItem] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -134,49 +88,23 @@ function StoreEdit() {
           };
           setStore(data);
           setForm({
-            storeName: data.storeName || "",
-            walletId: data.walletId || "",
-            shortDescription: data.shortDescription || "",
-            shopEmail: data.shopEmail || "",
+            storeName: data.name || "",
+            walletId: data.sellerId || "",
+            shortDescription: data.description || "",
+            shopEmail: data.businessInfo?.sellerEmail || "",
             subheading: data.subheading || "",
             categories: data.categories || [],
             thumbnailImage: null,
             backgroundImage: null,
           });
           setThumbnailPreview(data.thumbnailUrl || null);
-          setBackgroundPreview(data.backgroundUrl || null);
+          setBackgroundPreview(data.bannerUrl || null);
         } else {
-          setError("Store not found. Using sample data.");
-          setStore(dummyStore);
-          setForm({
-            storeName: dummyStore.storeName,
-            walletId: dummyStore.walletId,
-            shortDescription: dummyStore.shortDescription,
-            shopEmail: dummyStore.shopEmail,
-            subheading: dummyStore.subheading,
-            categories: dummyStore.categories,
-            thumbnailImage: null,
-            backgroundImage: null,
-          });
-          setThumbnailPreview(dummyStore.thumbnailUrl);
-          setBackgroundPreview(dummyStore.backgroundUrl);
+          setError("Store not found.");
         }
       } catch (err) {
         console.error("Error fetching store:", err);
-        setError("Failed to load store details. Using sample data.");
-        setStore(dummyStore);
-        setForm({
-          storeName: dummyStore.storeName,
-          walletId: dummyStore.walletId,
-          shortDescription: dummyStore.shortDescription,
-          shopEmail: dummyStore.shopEmail,
-          subheading: dummyStore.subheading,
-          categories: dummyStore.categories,
-          thumbnailImage: null,
-          backgroundImage: null,
-        });
-        setThumbnailPreview(dummyStore.thumbnailUrl);
-        setBackgroundPreview(dummyStore.backgroundUrl);
+        setError("Failed to load store details.");
       }
     };
 
@@ -184,25 +112,34 @@ function StoreEdit() {
       if (!user || !user.walletId || !storeId) return;
 
       try {
-        const itemsCollection = collection(db, `stores/${storeId}/items`);
-        const itemsSnapshot = await getDocs(itemsCollection);
-        const itemsData = itemsSnapshot.docs.map(doc => ({
+        const productsQuery = query(
+          collection(db, "products"),
+          where("storeId", "==", storeId),
+          where("isActive", "==", true)
+        );
+        const productsSnapshot = await getDocs(productsQuery);
+        const productsData = productsSnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
         }));
         setItems({
-          columns: dummyItems.columns,
-          rows: itemsData.length > 0 ? itemsData.map(item => ({
+          columns: [
+            { Header: "Item Name", accessor: "name", width: "40%" },
+            { Header: "Price", accessor: "price", width: "20%" },
+            { Header: "Type", accessor: "type", width: "20%" },
+            { Header: "Status", accessor: "status", width: "20%" },
+          ],
+          rows: productsData.length > 0 ? productsData.map(item => ({
+            id: item.id,
             name: item.name || "Unnamed Item",
-            price: `${item.price || 0} ${item.currency || "USDC"}`,
+            price: `${item.price || 0} USDC`,
             type: item.type?.toUpperCase() || "UNKNOWN",
-            status: item.removed ? "Removed" : "Active",
-          })) : dummyItems.rows,
+            status: item.isActive ? "Active" : "Pending",
+          })) : [],
         });
       } catch (err) {
-        console.error("Error fetching items:", err);
-        setError("Failed to load items. Using sample data.");
-        setItems(dummyItems);
+        console.error("Error fetching products:", err);
+        setError("Failed to load products: " + err.message);
       }
     };
 
@@ -283,7 +220,7 @@ function StoreEdit() {
 
   // Handle saving store changes
   const handleSave = async () => {
-    if (!store || isSaving || store.id === dummyStore.id) return;
+    if (!store || isSaving) return;
 
     setIsSaving(true);
     setError(null);
@@ -300,32 +237,42 @@ function StoreEdit() {
 
       // Upload thumbnail if changed
       if (form.thumbnailImage) {
-        const thumbnailRef = ref(storage, `stores/${storeId}/thumbnail-${form.thumbnailImage.name}`);
+        const extension = form.thumbnailImage.name.split('.').pop();
+        const thumbnailRef = ref(storage, `stores/${storeId}/thumbnail.${extension}`);
+        console.log("Uploading thumbnail to:", thumbnailRef.fullPath);
         await uploadBytes(thumbnailRef, form.thumbnailImage);
         updatedForm.thumbnailUrl = await getDownloadURL(thumbnailRef);
+        console.log("Thumbnail uploaded, URL:", updatedForm.thumbnailUrl);
       } else {
         updatedForm.thumbnailUrl = store.thumbnailUrl || "";
       }
 
       // Upload background if changed
       if (form.backgroundImage) {
-        const backgroundRef = ref(storage, `stores/${storeId}/banner-${form.backgroundImage.name}`);
+        const extension = form.backgroundImage.name.split('.').pop();
+        const backgroundRef = ref(storage, `stores/${storeId}/banner.${extension}`);
+        console.log("Uploading banner to:", backgroundRef.fullPath);
         await uploadBytes(backgroundRef, form.backgroundImage);
         updatedForm.backgroundUrl = await getDownloadURL(backgroundRef);
+        console.log("Banner uploaded, URL:", updatedForm.backgroundUrl);
       } else {
-        updatedForm.backgroundUrl = store.backgroundUrl || "";
+        updatedForm.backgroundUrl = store.bannerUrl || "";
       }
 
       const storeDoc = doc(db, "stores", storeId);
       await updateDoc(storeDoc, {
-        storeName: updatedForm.storeName,
-        walletId: updatedForm.walletId,
-        shortDescription: updatedForm.shortDescription,
-        shopEmail: updatedForm.shopEmail,
+        name: updatedForm.storeName,
+        sellerId: updatedForm.walletId,
+        description: updatedForm.shortDescription,
+        businessInfo: {
+          ...store.businessInfo,
+          sellerEmail: updatedForm.shopEmail,
+        },
         subheading: updatedForm.subheading,
         categories: updatedForm.categories,
         thumbnailUrl: updatedForm.thumbnailUrl,
-        backgroundUrl: updatedForm.backgroundUrl,
+        bannerUrl: updatedForm.backgroundUrl,
+        updatedAt: new Date().toISOString(),
       });
       setStore({ ...store, ...updatedForm });
       setSuccess("Store updated successfully!");
@@ -339,7 +286,7 @@ function StoreEdit() {
 
   // Handle flagging store
   const handleFlagStore = async () => {
-    if (!store || isFlagging || store.id === dummyStore.id) return;
+    if (!store || isFlagging) return;
 
     setIsFlagging(true);
     setError(null);
@@ -348,9 +295,10 @@ function StoreEdit() {
     try {
       const storeDoc = doc(db, "stores", storeId);
       await updateDoc(storeDoc, {
-        removed: true,
+        isActive: false,
+        updatedAt: new Date().toISOString(),
       });
-      setStore({ ...store, removed: true });
+      setStore({ ...store, isActive: false });
       setSuccess("Store flagged for removal successfully!");
     } catch (err) {
       console.error("Error flagging store:", err);
@@ -360,60 +308,14 @@ function StoreEdit() {
     }
   };
 
-  // Handle item modal
-  const handleOpenItemModal = () => setOpenItemModal(true);
-  const handleCloseItemModal = () => {
-    setOpenItemModal(false);
-    setItemForm({ name: "", price: "", type: "rwi" });
-    setError(null);
+  // Navigate to create product
+  const handleCreateProduct = () => {
+    router.push("/dashboards/god/products/edit/new");
   };
 
-  const handleItemFormChange = (field, value) => {
-    setItemForm(prev => ({ ...prev, [field]: value }));
-  };
-
-  const handleAddItem = async () => {
-    if (!itemForm.name || !itemForm.price || isAddingItem || store.id === dummyStore.id) {
-      setError("Item name and price are required.");
-      return;
-    }
-
-    setIsAddingItem(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const newItem = {
-        name: itemForm.name,
-        price: parseFloat(itemForm.price),
-        currency: "USDC",
-        type: itemForm.type,
-        removed: false,
-        flagCount: 0,
-        flagReasons: [],
-      };
-      const itemsCollection = collection(db, `stores/${storeId}/items`);
-      await addDoc(itemsCollection, newItem);
-      setItems({
-        ...items,
-        rows: [
-          ...items.rows,
-          {
-            name: newItem.name,
-            price: `${newItem.price} ${newItem.currency}`,
-            type: newItem.type.toUpperCase(),
-            status: "Active",
-          },
-        ],
-      });
-      setSuccess("Item added successfully!");
-      handleCloseItemModal();
-    } catch (err) {
-      console.error("Error adding item:", err);
-      setError("Failed to add item: " + err.message);
-    } finally {
-      setIsAddingItem(false);
-    }
+  // Handle row click to edit product
+  const handleRowClick = (row) => {
+    router.push(`/dashboards/god/products/edit/${row.id}`);
   };
 
   // Ensure user is loaded and authorized before rendering
@@ -459,7 +361,7 @@ function StoreEdit() {
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h4" color="dark" mb={2}>
+                <MDTypography variant="h4" sx={{ color: "#212121" }} mb={2}>
                   Edit Store - {store.id}
                 </MDTypography>
                 {error && (
@@ -476,7 +378,7 @@ function StoreEdit() {
                   <Grid item xs={12} md={6}>
                     <Grid container spacing={3}>
                       <Grid item xs={12}>
-                        {thumbnailPreview && (
+                        {thumbnailPreview ? (
                           <MDBox mb={3} display="flex" justifyContent="center">
                             <MDBox
                               sx={{
@@ -505,86 +407,71 @@ function StoreEdit() {
                                   right: "-10px",
                                   backgroundColor: "#d32f2f",
                                   color: "#fff",
-                                  "&:hover": {
-                                    backgroundColor: "#b71c1c",
-                                  },
+                                  "&:hover": { backgroundColor: "#b71c1c" },
                                 }}
                               >
                                 <Icon>close</Icon>
                               </IconButton>
                             </MDBox>
                           </MDBox>
+                        ) : (
+                          <MDBox
+                            mb={1}
+                            sx={{
+                              border: `2px dashed ${dragActiveThumbnail ? "#3f51b5" : "#bdbdbd"}`,
+                              borderRadius: "12px",
+                              padding: { xs: "16px", md: "20px" },
+                              textAlign: "center",
+                              backgroundColor: dragActiveThumbnail ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
+                              transition: "all 0.3s ease",
+                              cursor: "pointer",
+                              "&:hover": { transform: "scale(1.02)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)" },
+                              width: { xs: "150px", md: "250px" },
+                              height: { xs: "112px", md: "100px" },
+                              margin: "0 auto",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "center",
+                            }}
+                            onDragEnter={(e) => handleDragEnter(e, "thumbnail")}
+                            onDragLeave={(e) => handleDragLeave(e, "thumbnail")}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, "thumbnail")}
+                            onClick={() => document.getElementById("thumbnailInput").click()}
+                          >
+                            <MDTypography
+                              variant="body2"
+                              sx={{ color: dragActiveThumbnail ? "#3f51b5" : "#344767", mb: 1 }}
+                            >
+                              Drag & Drop or Click to Upload
+                            </MDTypography>
+                            <MDTypography
+                              variant="caption"
+                              sx={{ color: "#344767", display: "block", mb: 1 }}
+                            >
+                              (Supports PNG, JPG, up to 5MB)
+                            </MDTypography>
+                            <MDInput
+                              id="thumbnailInput"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleFileChange(e.target.files[0], "thumbnailImage")}
+                              sx={{ display: "none" }}
+                              disabled={isSaving}
+                            />
+                          </MDBox>
                         )}
-                        <MDBox
-                          mb={1}
-                          sx={{
-                            border: `2px dashed ${dragActiveThumbnail ? "#3f51b5" : "#bdbdbd"}`,
-                            borderRadius: "12px",
-                            padding: { xs: "16px", md: "20px" },
-                            textAlign: "center",
-                            backgroundColor: dragActiveThumbnail ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
-                            transition: "all 0.3s ease",
-                            cursor: "pointer",
-                            "&:hover": {
-                              transform: "scale(1.02)",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                            },
-                            width: { xs: "150px", md: "250px" },
-                            height: { xs: "112px", md: "100px" },
-                            margin: "0 auto",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                          }}
-                          onDragEnter={(e) => handleDragEnter(e, "thumbnail")}
-                          onDragLeave={(e) => handleDragLeave(e, "thumbnail")}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, "thumbnail")}
-                          onClick={() => document.getElementById("thumbnailInput").click()}
-                        >
-                          <MDTypography
-                            variant="body2"
-                            sx={{
-                              color: dragActiveThumbnail ? "#3f51b5" : "#344767",
-                              mb: 1,
-                            }}
-                          >
-                            Drag & Drop or Click to Upload
-                          </MDTypography>
-                          <MDTypography
-                            variant="caption"
-                            sx={{
-                              color: "#344767",
-                              display: "block",
-                              mb: 1,
-                            }}
-                          >
-                            (Supports PNG, JPG, up to 5MB)
-                          </MDTypography>
-                          <MDInput
-                            id="thumbnailInput"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleFileChange(e.target.files[0], "thumbnailImage")}
-                            sx={{ display: "none" }}
-                            disabled={isSaving || store.id === dummyStore.id}
-                          />
-                        </MDBox>
                         <MDBox mb={2}>
                           <MDTypography
                             variant="h6"
-                            sx={{
-                              fontWeight: 600,
-                              color: "#344767",
-                              textAlign: "center",
-                            }}
+                            sx={{ fontWeight: 600, color: "#212121", textAlign: "center" }}
                           >
                             Store Thumbnail
                           </MDTypography>
                         </MDBox>
                       </Grid>
                       <Grid item xs={12}>
-                        {backgroundPreview && (
+                        {backgroundPreview ? (
                           <MDBox mb={3} display="flex" justifyContent="center">
                             <MDBox
                               sx={{
@@ -613,79 +500,64 @@ function StoreEdit() {
                                   right: "-10px",
                                   backgroundColor: "#d32f2f",
                                   color: "#fff",
-                                  "&:hover": {
-                                    backgroundColor: "#b71c1c",
-                                  },
+                                  "&:hover": { backgroundColor: "#b71c1c" },
                                 }}
                               >
                                 <Icon>close</Icon>
                               </IconButton>
                             </MDBox>
                           </MDBox>
+                        ) : (
+                          <MDBox
+                            mb={1}
+                            sx={{
+                              border: `2px dashed ${dragActiveBackground ? "#3f51b5" : "#bdbdbd"}`,
+                              borderRadius: "12px",
+                              padding: { xs: "16px", md: "20px" },
+                              textAlign: "center",
+                              backgroundColor: dragActiveBackground ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
+                              transition: "all 0.3s ease",
+                              cursor: "pointer",
+                              "&:hover": { transform: "scale(1.02)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)" },
+                              width: { xs: "150px", md: "250px" },
+                              height: { xs: "112px", md: "100px" },
+                              margin: "0 auto",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "center",
+                            }}
+                            onDragEnter={(e) => handleDragEnter(e, "background")}
+                            onDragLeave={(e) => handleDragLeave(e, "background")}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, "background")}
+                            onClick={() => document.getElementById("backgroundInput").click()}
+                          >
+                            <MDTypography
+                              variant="body2"
+                              sx={{ color: dragActiveBackground ? "#3f51b5" : "#344767", mb: 1 }}
+                            >
+                              Drag & Drop or Click to Upload
+                            </MDTypography>
+                            <MDTypography
+                              variant="caption"
+                              sx={{ color: "#344767", display: "block", mb: 1 }}
+                            >
+                              (Supports PNG, JPG, up to 5MB)
+                            </MDTypography>
+                            <MDInput
+                              id="backgroundInput"
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handleFileChange(e.target.files[0], "backgroundImage")}
+                              sx={{ display: "none" }}
+                              disabled={isSaving}
+                            />
+                          </MDBox>
                         )}
-                        <MDBox
-                          mb={1}
-                          sx={{
-                            border: `2px dashed ${dragActiveBackground ? "#3f51b5" : "#bdbdbd"}`,
-                            borderRadius: "12px",
-                            padding: { xs: "16px", md: "20px" },
-                            textAlign: "center",
-                            backgroundColor: dragActiveBackground ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
-                            transition: "all 0.3s ease",
-                            cursor: "pointer",
-                            "&:hover": {
-                              transform: "scale(1.02)",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                            },
-                            width: { xs: "150px", md: "250px" },
-                            height: { xs: "112px", md: "100px" },
-                            margin: "0 auto",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                          }}
-                          onDragEnter={(e) => handleDragEnter(e, "background")}
-                          onDragLeave={(e) => handleDragLeave(e, "background")}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, "background")}
-                          onClick={() => document.getElementById("backgroundInput").click()}
-                        >
-                          <MDTypography
-                            variant="body2"
-                            sx={{
-                              color: dragActiveBackground ? "#3f51b5" : "#344767",
-                              mb: 1,
-                            }}
-                          >
-                            Drag & Drop or Click to Upload
-                          </MDTypography>
-                          <MDTypography
-                            variant="caption"
-                            sx={{
-                              color: "#344767",
-                              display: "block",
-                              mb: 1,
-                            }}
-                          >
-                            (Supports PNG, JPG, up to 5MB)
-                          </MDTypography>
-                          <MDInput
-                            id="backgroundInput"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleFileChange(e.target.files[0], "backgroundImage")}
-                            sx={{ display: "none" }}
-                            disabled={isSaving || store.id === dummyStore.id}
-                          />
-                        </MDBox>
                         <MDBox mb={2}>
                           <MDTypography
                             variant="h6"
-                            sx={{
-                              fontWeight: 600,
-                              color: "#344767",
-                              textAlign: "center",
-                            }}
+                            sx={{ fontWeight: 600, color: "#212121", textAlign: "center" }}
                           >
                             Store Banner Image
                           </MDTypography>
@@ -694,7 +566,7 @@ function StoreEdit() {
                     </Grid>
                     <Divider sx={{ mb: 2, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }}>
                         Store Name
                       </MDTypography>
                       <MDInput
@@ -702,17 +574,19 @@ function StoreEdit() {
                         onChange={(e) => handleFormChange("storeName", e.target.value)}
                         fullWidth
                         required
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121' },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                            "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                            "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
                           },
                         }}
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }}>
                         Subheading
                       </MDTypography>
                       <MDInput
@@ -720,17 +594,19 @@ function StoreEdit() {
                         onChange={(e) => handleFormChange("subheading", e.target.value)}
                         fullWidth
                         placeholder="e.g., Free shipping on orders over 2 SOL! Use code F4CETS10"
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121' },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                            "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                            "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
                           },
                         }}
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }}>
                         Short Description
                       </MDTypography>
                       <MDInput
@@ -741,17 +617,19 @@ function StoreEdit() {
                         rows={4}
                         required
                         placeholder="Company slogan - keep it to 1 sentence"
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121' },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                            "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                            "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
                           },
                         }}
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }}>
                         Shop Email
                       </MDTypography>
                       <MDInput
@@ -760,17 +638,19 @@ function StoreEdit() {
                         fullWidth
                         type="email"
                         required
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121' },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                            "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                            "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
                           },
                         }}
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }}>
                         Wallet ID
                       </MDTypography>
                       <MDInput
@@ -778,11 +658,13 @@ function StoreEdit() {
                         onChange={(e) => handleFormChange("walletId", e.target.value)}
                         fullWidth
                         required
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121' },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                            "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                            "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
                           },
                         }}
                       />
@@ -790,7 +672,7 @@ function StoreEdit() {
                     <MDBox mb={2}>
                       <MDTypography
                         variant="h6"
-                        sx={{ fontWeight: 600, color: "#344767", mb: 1.5, letterSpacing: "0.5px" }}
+                        sx={{ fontWeight: 600, color: "#212121", mb: 1.5, textAlign: "left" }}
                       >
                         Categories
                       </MDTypography>
@@ -814,9 +696,7 @@ function StoreEdit() {
                               padding: "8px 12px",
                               borderRadius: "8px",
                               transition: "background-color 0.3s ease",
-                              "&:hover": {
-                                backgroundColor: "rgba(255, 255, 255, 0.1)",
-                              },
+                              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
                               backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
                             }}
                           >
@@ -824,7 +704,7 @@ function StoreEdit() {
                               <Checkbox
                                 checked={form.categories.includes(category)}
                                 onChange={() => handleCategoryChange(category)}
-                                disabled={isSaving || store.id === dummyStore.id}
+                                disabled={isSaving}
                                 sx={{
                                   color: "#fff",
                                   "&.Mui-checked": { color: "#fff" },
@@ -834,10 +714,7 @@ function StoreEdit() {
                               />
                               <MDTypography
                                 variant="body2"
-                                sx={{
-                                  color: "#fff",
-                                  fontSize: { xs: "0.875rem", md: "1rem" },
-                                }}
+                                sx={{ color: "#fff", fontSize: { xs: "0.875rem", md: "1rem" } }}
                               >
                                 {category}
                               </MDTypography>
@@ -852,13 +729,8 @@ function StoreEdit() {
                                   color: "#fff",
                                   borderRadius: "16px",
                                   height: "24px",
-                                  "& .MuiChip-label": {
-                                    padding: "0 8px",
-                                    fontSize: "0.75rem",
-                                  },
-                                  "&:hover": {
-                                    backgroundColor: "rgba(255, 255, 255, 0.3)",
-                                  },
+                                  "& .MuiChip-label": { padding: "0 8px", fontSize: "0.75rem" },
+                                  "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
                                 }}
                               />
                             )}
@@ -871,7 +743,7 @@ function StoreEdit() {
                         variant="gradient"
                         color="dark"
                         onClick={handleSave}
-                        disabled={isSaving || store.id === dummyStore.id}
+                        disabled={isSaving}
                         sx={{ width: { xs: "100%", sm: "auto" } }}
                       >
                         {isSaving ? "Saving..." : "Save Changes"}
@@ -880,16 +752,16 @@ function StoreEdit() {
                         variant="gradient"
                         color="error"
                         onClick={handleFlagStore}
-                        disabled={isFlagging || store.removed || store.id === dummyStore.id}
+                        disabled={isFlagging || !store.isActive}
                         sx={{ width: { xs: "100%", sm: "auto" } }}
                       >
-                        {isFlagging ? "Flagging..." : store.removed ? "Store Flagged" : "Flag Store"}
+                        {isFlagging ? "Flagging..." : !store.isActive ? "Store Flagged" : "Flag Store"}
                       </MDButton>
                     </MDBox>
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <MDBox>
-                      <MDTypography variant="h6" color="dark" mb={2}>
+                      <MDTypography variant="h6" sx={{ color: "#212121", mb: 2 }}>
                         Store Items
                       </MDTypography>
                       <DataTable
@@ -898,12 +770,12 @@ function StoreEdit() {
                         showTotalEntries={false}
                         isSorted={false}
                         noEndBorder
+                        onRowClick={handleRowClick}
                       />
                       <MDButton
                         variant="outlined"
                         color="dark"
-                        onClick={handleOpenItemModal}
-                        disabled={store.id === dummyStore.id}
+                        onClick={handleCreateProduct}
                         sx={{ mt: 2, width: { xs: "100%", sm: "auto" } }}
                       >
                         <Icon sx={{ mr: 1 }}>add</Icon> Add New Item
@@ -915,71 +787,6 @@ function StoreEdit() {
             </Card>
           </Grid>
         </Grid>
-        <Dialog open={openItemModal} onClose={handleCloseItemModal}>
-          <DialogTitle>Add New Item</DialogTitle>
-          <DialogContent>
-            {error && (
-              <MDTypography variant="body2" color="error" mb={2}>
-                {error}
-              </MDTypography>
-            )}
-            <MDBox mb={2}>
-              <MDInput
-                label="Item Name"
-                value={itemForm.name}
-                onChange={(e) => handleItemFormChange("name", e.target.value)}
-                fullWidth
-                sx={{
-                  "& .MuiInputBase-input": {
-                    padding: { xs: "10px", md: "12px" },
-                    color: "#344767",
-                  },
-                }}
-              />
-            </MDBox>
-            <MDBox mb={2}>
-              <MDInput
-                label="Price (USDC)"
-                type="number"
-                value={itemForm.price}
-                onChange={(e) => handleItemFormChange("price", e.target.value)}
-                fullWidth
-                sx={{
-                  "& .MuiInputBase-input": {
-                    padding: { xs: "10px", md: "12px" },
-                    color: "#344767",
-                  },
-                }}
-              />
-            </MDBox>
-            <MDBox mb={2}>
-              <MDInput
-                label="Type (RWI or Digital)"
-                value={itemForm.type}
-                onChange={(e) => handleItemFormChange("type", e.target.value)}
-                fullWidth
-                sx={{
-                  "& .MuiInputBase-input": {
-                    padding: { xs: "10px", md: "12px" },
-                    color: "#344767",
-                  },
-                }}
-              />
-            </MDBox>
-          </DialogContent>
-          <DialogActions>
-            <MDButton onClick={handleCloseItemModal} color="secondary">
-              Cancel
-            </MDButton>
-            <MDButton
-              onClick={handleAddItem}
-              color="primary"
-              disabled={isAddingItem}
-            >
-              {isAddingItem ? "Adding..." : "Add Item"}
-            </MDButton>
-          </DialogActions>
-        </Dialog>
       </MDBox>
       <Footer />
     </DashboardLayout>

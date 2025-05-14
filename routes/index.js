@@ -188,6 +188,23 @@ const routes = () => [
   },
   {
     type: "collapse",
+    name: "Products",
+    key: "products",
+    icon: <Icon fontSize="medium">inventory_2</Icon>,
+    route: "/dashboards/god/products",
+    noCollapse: true,
+    roles: ["god"],
+    collapse: [
+      {
+        name: "Edit Product",
+        key: "edit-product",
+        route: "/dashboards/god/products/edit/[productId]",
+        roles: ["god"],
+      },
+    ],
+  },
+  {
+    type: "collapse",
     name: "Affiliates",
     key: "affiliates",
     icon: <Icon fontSize="medium">group</Icon>,
