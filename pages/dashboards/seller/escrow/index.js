@@ -402,7 +402,7 @@ function SellerEscrow() {
                         ${totalPendingAmount.toFixed(2)}
                       </MDTypography>
                       <MDTypography variant="caption" color="text">
-                        In Escrow (Net of 4% Fee)
+                        In Escrow
                       </MDTypography>
                     </MDBox>
                   </MDBox>
