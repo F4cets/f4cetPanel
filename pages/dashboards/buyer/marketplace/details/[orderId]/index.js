@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // User context
@@ -138,40 +138,57 @@ function MarketplaceOrderDetails() {
           setOrderDetails(null);
         }
       } catch (err) {
-        console.error("Error fetching order:", err);
+        console.error("OrderDetails: Error fetching order:", err);
         setError("Failed to load order details: " + err.message);
         setOrderDetails(null);
       }
     };
 
-    const fetchMessages = async () => {
+    const fetchMessages = () => {
       if (!user || !user.walletId || !orderId) return;
 
       try {
+        console.log("OrderDetails: Setting up real-time listener for messages:", orderId);
         const q = query(
           collection(db, "messages"),
           where("orderId", "==", orderId)
         );
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setMessages(data);
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const data = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          // Sort messages by timestamp in descending order (newest first)
+          data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setMessages(data);
+        }, (err) => {
+          console.error("OrderDetails: Error in messages listener:", err);
+          setError("Failed to load messages: " + err.message);
+          setMessages([]);
+        });
+        return unsubscribe;
       } catch (err) {
-        console.error("Error fetching messages:", err);
+        console.error("OrderDetails: Error setting up messages listener:", err);
         setError("Failed to load messages: " + err.message);
         setMessages([]);
       }
     };
 
     fetchOrder();
-    fetchMessages();
+    // Set up real-time messages listener and clean up
+    const unsubscribeMessages = fetchMessages();
+    return () => {
+      if (unsubscribeMessages) {
+        console.log("OrderDetails: Cleaning up messages listener for order:", orderId);
+        unsubscribeMessages();
+      }
+    };
   }, [user, orderId]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || (user.role !== "buyer" && user.role !== "seller")) {
+      console.log("OrderDetails: Unauthorized access, redirecting to home");
       router.replace("/");
     }
   }, [user, router]);
@@ -193,11 +210,10 @@ function MarketplaceOrderDetails() {
         timestamp: new Date().toISOString(),
       };
       const docRef = await addDoc(collection(db, "messages"), messageData);
-      setMessages([...messages, { id: docRef.id, ...messageData }]);
       setNewMessage("");
       setSuccess("Message sent successfully!");
     } catch (err) {
-      console.error("Error sending message:", err);
+      console.error("OrderDetails: Error sending message:", err);
       setError("Failed to send message: " + err.message);
     } finally {
       setIsSending(false);
@@ -233,7 +249,7 @@ function MarketplaceOrderDetails() {
       });
       setSuccess("Receipt confirmed! Funds will be released from escrow.");
     } catch (err) {
-      console.error("Error confirming receipt:", err);
+      console.error("OrderDetails: Error confirming receipt:", err);
       setError("Failed to confirm receipt: " + err.message);
     } finally {
       setIsConfirming(false);
@@ -261,7 +277,7 @@ function MarketplaceOrderDetails() {
       setIssueDescription("");
       setSuccess("Issue flagged successfully! Seller has been notified.");
     } catch (err) {
-      console.error("Error flagging issue:", err);
+      console.error("OrderDetails: Error flagging issue:", err);
       setError("Failed to flag issue: " + err.message);
     } finally {
       setIsFlagging(false);
@@ -297,7 +313,7 @@ function MarketplaceOrderDetails() {
       setRating(newRating);
       setSuccess("Seller rating submitted successfully!");
     } catch (err) {
-      console.error("Error rating seller:", err);
+      console.error("OrderDetails: Error rating seller:", err);
       setError("Failed to submit rating: " + err.message);
     } finally {
       setIsSaving(false);
@@ -488,13 +504,9 @@ function MarketplaceOrderDetails() {
                           onChange={(event, newValue) => handleRateSeller(newValue)}
                           disabled={isSaving || rating !== null}
                           sx={{
-                            fontSize: "2rem", // Larger stars
-                            "& .MuiRating-iconEmpty": {
-                              color: "#FFFFFF", // White fill for unselected stars
-                            },
-                            "& .MuiRating-iconFilled": {
-                              color: "#FFD700", // Gold fill for selected stars
-                            },
+                            fontSize: "2rem",
+                            "& .MuiRating-iconEmpty": { color: "#FFFFFF" },
+                            "& .MuiRating-iconFilled": { color: "#FFD700" },
                           }}
                         />
                       </MDBox>
@@ -512,10 +524,7 @@ function MarketplaceOrderDetails() {
                           rows={3}
                           disabled={isSending}
                           sx={{
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "10px", md: "12px" },
-                              color: "#FFFFFF", // Changed to white
-                            },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
                           }}
                         />
                         <MDButton
@@ -560,10 +569,7 @@ function MarketplaceOrderDetails() {
                           rows={2}
                           disabled={isFlagging}
                           sx={{
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "10px", md: "12px" },
-                              color: "#FFFFFF", // Changed to white
-                            },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
                           }}
                         />
                         <MDButton

@@ -33,28 +33,6 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import TimelineItem from "/examples/Timeline/TimelineItem";
 
-// Dummy Data (for initial testing, used as fallback if Firestore fails)
-const dummyInventoryDetails = {
-  id: "INV001",
-  type: "rwi",
-  name: "Handmade Vase",
-  description: "A beautifully crafted ceramic vase.",
-  price: 10,
-  currency: "USDC",
-  quantity: 0, // For digital
-  shippingLocation: "New York, USA", // For RWI
-  categories: ["Art & Collectibles"],
-  variants: [{ size: "Medium", color: "Blue", quantity: 5 }], // For RWI
-  images: ["https://images.kirklands.com/is/image/Kirklands/299950?$tProduct$"],
-  status: "pending",
-  removed: false,
-  createdAt: "2025-03-20",
-  timeline: [
-    { title: "Item Listed", date: "2025-03-20 09:00 AM", description: "Handmade Vase listed for sale." },
-    { title: "Stock Updated", date: "2025-03-21 10:00 AM", description: "Quantity updated to 5 units." },
-  ],
-};
-
 function InventoryDetails() {
   const { user } = useUser();
   const router = useRouter();
@@ -72,26 +50,26 @@ function InventoryDetails() {
       if (!user || !user.walletId || !invId) return;
 
       try {
-        const invDoc = doc(db, "listings", invId);
+        console.log("InventoryDetails: Fetching product:", invId, "for seller:", user.walletId);
+        const invDoc = doc(db, "products", invId);
         const invSnapshot = await getDoc(invDoc);
         if (invSnapshot.exists() && invSnapshot.data().sellerId === user.walletId) {
           const data = {
             id: invSnapshot.id,
             ...invSnapshot.data(),
-            createdAt: invSnapshot.data().createdAt?.split("T")[0] || "N/A",
+            createdAt: invSnapshot.data().createdAt?.toDate().toISOString().split("T")[0] || "N/A",
+            timeline: invSnapshot.data().timeline || [], // Preserve timeline if exists
           };
+          console.log("InventoryDetails: Fetched product:", data);
           setInventoryDetails(data);
           setPrice(data.price || "");
         } else {
-          setError("Inventory item not found or unauthorized. Using sample data.");
-          setInventoryDetails(dummyInventoryDetails);
-          setPrice(dummyInventoryDetails.price);
+          console.log("InventoryDetails: Product not found or unauthorized");
+          setError("Inventory item not found or unauthorized.");
         }
       } catch (err) {
-        console.error("Error fetching inventory:", err);
-        setError("Failed to load inventory details. Using sample data.");
-        setInventoryDetails(dummyInventoryDetails);
-        setPrice(dummyInventoryDetails.price);
+        console.error("InventoryDetails: Error fetching product:", err);
+        setError("Failed to load inventory details: " + err.message);
       }
     };
 
@@ -101,6 +79,7 @@ function InventoryDetails() {
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
+      console.log("InventoryDetails: Unauthorized access, redirecting to home");
       router.replace("/");
     }
   }, [user, router]);
@@ -120,7 +99,8 @@ function InventoryDetails() {
     }
 
     try {
-      const invDoc = doc(db, "listings", invId);
+      console.log("InventoryDetails: Updating price for product:", invId);
+      const invDoc = doc(db, "products", invId);
       const updatedData = {
         price: parseFloat(price),
         timeline: [
@@ -138,9 +118,10 @@ function InventoryDetails() {
         ...inventoryDetails,
         ...updatedData,
       });
+      console.log("InventoryDetails: Price updated successfully");
       setSuccess("Price updated successfully!");
     } catch (err) {
-      console.error("Error updating price:", err);
+      console.error("InventoryDetails: Error updating price:", err);
       setError("Failed to save price: " + err.message);
     } finally {
       setIsSaving(false);
@@ -156,15 +137,16 @@ function InventoryDetails() {
     setSuccess(null);
 
     try {
-      const invDoc = doc(db, "listings", invId);
+      console.log("InventoryDetails: Flagging product as inactive:", invId);
+      const invDoc = doc(db, "products", invId);
       const updatedData = {
-        removed: true,
+        isActive: false,
         timeline: [
           ...(inventoryDetails.timeline || []),
           {
             title: "Listing Removed",
             date: new Date().toISOString(),
-            description: "Listing flagged as removed, no longer visible on marketplace.",
+            description: "Listing flagged as inactive, no longer visible on marketplace.",
           },
         ],
       };
@@ -174,9 +156,10 @@ function InventoryDetails() {
         ...inventoryDetails,
         ...updatedData,
       });
-      setSuccess("Listing flagged as removed successfully!");
+      console.log("InventoryDetails: Product flagged as inactive successfully");
+      setSuccess("Listing flagged as inactive successfully!");
     } catch (err) {
-      console.error("Error removing listing:", err);
+      console.error("InventoryDetails: Error flagging product as inactive:", err);
       setError("Failed to remove listing: " + err.message);
     } finally {
       setIsRemoving(false);
@@ -199,7 +182,7 @@ function InventoryDetails() {
   }
 
   // Handle invalid or missing invId
-  if (!invId || !invId.startsWith("INV")) {
+  if (!invId) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
@@ -213,15 +196,21 @@ function InventoryDetails() {
     );
   }
 
-  // Handle no inventoryDetails (e.g., still loading)
+  // Handle no inventoryDetails or error
   if (!inventoryDetails) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
-          <MDTypography variant="body2" color="text">
-            Loading inventory details...
-          </MDTypography>
+          {error ? (
+            <MDTypography variant="body2" color="error">
+              {error}
+            </MDTypography>
+          ) : (
+            <MDTypography variant="body2" color="text">
+              Loading inventory details...
+            </MDTypography>
+          )}
         </MDBox>
         <Footer />
       </DashboardLayout>
@@ -276,11 +265,10 @@ function InventoryDetails() {
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
                         fullWidth
-                        disabled={inventoryDetails.id === dummyInventoryDetails.id}
                         sx={{
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                            color: "white", // Changed to white for dark background
                           },
                         }}
                       />
@@ -336,7 +324,7 @@ function InventoryDetails() {
                         Images (Non-Editable)
                       </MDTypography>
                       <MDBox display="flex" flexWrap="wrap" gap={1}>
-                        {inventoryDetails.images?.map((url, index) => (
+                        {inventoryDetails.imageUrls?.map((url, index) => (
                           <MDBox
                             key={index}
                             component="img"
@@ -360,7 +348,7 @@ function InventoryDetails() {
                           onClick={handleSave}
                           color="primary"
                           variant="gradient"
-                          disabled={isSaving || inventoryDetails.id === dummyInventoryDetails.id}
+                          disabled={isSaving}
                           sx={{ padding: { xs: "8px 24px", md: "10px 32px" } }}
                         >
                           {isSaving ? "Saving..." : "Save"}
@@ -415,7 +403,7 @@ function InventoryDetails() {
                     onClick={handleRemove}
                     color="error"
                     variant="gradient"
-                    disabled={isRemoving || inventoryDetails.id === dummyInventoryDetails.id || inventoryDetails.removed}
+                    disabled={isRemoving || !inventoryDetails.isActive}
                     sx={{ padding: { xs: "8px 24px", md: "10px 32px" } }}
                   >
                     {isRemoving ? "Removing..." : "Remove Listing"}

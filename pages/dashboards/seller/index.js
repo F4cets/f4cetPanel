@@ -17,6 +17,10 @@ import { motion } from "framer-motion";
 // User context
 import { useUser } from "/contexts/UserContext";
 
+// Firestore imports
+import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { db } from "/lib/firebase";
+
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -33,50 +37,19 @@ import DataTable from "/examples/Tables/DataTable";
 // @mui icons
 import Icon from "@mui/material/Icon";
 
-// Mock Data (Replace with Firestore data later)
-const pendingSales = [
-  { id: "SALE001", date: "2025-03-20", clicks: 150, purchases: 10, pendingAmount: 50, status: "Pending" },
-  { id: "SALE002", date: "2025-03-19", clicks: 200, purchases: 15, pendingAmount: 30, status: "Pending" },
-  { id: "SALE003", date: "2025-03-18", clicks: 120, purchases: 8, pendingAmount: 20, status: "Pending" },
-  { id: "SALE004", date: "2025-03-17", clicks: 180, purchases: 12, pendingAmount: 40, status: "Pending" },
-  { id: "SALE005", date: "2025-03-16", clicks: 90, purchases: 5, pendingAmount: 10, status: "Pending" },
-  { id: "SALE006", date: "2025-03-15", clicks: 110, purchases: 7, pendingAmount: 15, status: "Pending" },
-];
-
-const itemsShipped = [
-  { id: "SALE016", date: "2025-03-20", product: "Product A", amount: 150, status: "Shipped" },
-  { id: "SALE006", date: "2025-03-19", product: "Product B", amount: 200, status: "Shipped" },
-  { id: "SALE023", date: "2025-03-18", product: "Product C", amount: 120, status: "Delivered" },
-  { id: "SALE014", date: "2025-03-17", product: "Product D", amount: 180, status: "Shipped" },
-  { id: "SALE015", date: "2025-03-16", product: "Product E", amount: 90, status: "Delivered" },
-  { id: "SALE026", date: "2025-03-15", product: "Product F", amount: 110, status: "Shipped" },
-];
-
-const pendingEscrow = [
-  { id: "SALE036", date: "2025-03-20", product: "Product A", amount: 150, status: "Pending" },
-  { id: "SALE031", date: "2025-03-19", product: "Product B", amount: 200, status: "Pending" },
-  { id: "SALE032", date: "2025-03-18", product: "Product C", amount: 120, status: "Pending" },
-  { id: "SALE033", date: "2025-03-17", product: "Product D", amount: 180, status: "Pending" },
-  { id: "SALE027", date: "2025-03-16", product: "Product E", amount: 90, status: "Pending" },
-];
-
-const salesPaidOut = [
-  { id: "SALE035", date: "2025-03-20", product: "Product A", amount: 150, status: "Paid" },
-  { id: "SALE042", date: "2025-03-19", product: "Product B", amount: 200, status: "Paid" },
-  { id: "SALE033", date: "2025-03-18", product: "Product C", amount: 120, status: "Paid" },
-  { id: "SALE044", date: "2025-03-17", product: "Product D", amount: 180, status: "Paid" },
-  { id: "SALE012", date: "2025-03-16", product: "Product E", amount: 90, status: "Paid" },
-];
-
-// Additional Metrics (Mock Data)
-const pendingSalesLast30Days = 31;
-const shippedNotDelivered = 5;
-const pendingEscrowTransactions = 3;
-const salesPaidOutAmount = 4517;
-
 function SellerDashboard() {
   const { user } = useUser();
   const router = useRouter();
+  const [pendingSalesLast30Days, setPendingSalesLast30Days] = useState(0);
+  const [shippedNotDelivered, setShippedNotDelivered] = useState(0);
+  const [pendingEscrowTransactions, setPendingEscrowTransactions] = useState(0);
+  const [pendingEscrowAmount, setPendingEscrowAmount] = useState(0); // New state for net escrow amount
+  const [salesPaidOutAmount, setSalesPaidOutAmount] = useState(0);
+  const [pendingSales, setPendingSales] = useState([]);
+  const [itemsShipped, setItemsShipped] = useState([]);
+  const [pendingEscrow, setPendingEscrow] = useState([]);
+  const [salesPaidOut, setSalesPaidOut] = useState([]);
+  const [isFetching, setIsFetching] = useState(false);
 
   // Redirect to home if no user or walletId
   useEffect(() => {
@@ -85,24 +58,135 @@ function SellerDashboard() {
     }
   }, [user, router]);
 
+  // Fetch dynamic data from Firestore
+  useEffect(() => {
+    const fetchSellerData = async () => {
+      if (!user || !user.walletId || isFetching) return;
+      setIsFetching(true);
+      const walletId = user.walletId;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      try {
+        // Fetch user data
+        const userDocRef = doc(db, "users", walletId);
+        const userDoc = await getDoc(userDocRef);
+        if (!userDoc.exists()) return;
+
+        const userData = userDoc.data();
+        const storeIds = userData.storeIds || [];
+
+        // Fetch transactions for the seller's stores
+        let pendingSalesData = [];
+        let itemsShippedData = [];
+        let pendingEscrowData = [];
+        let salesPaidOutData = [];
+        let pendingSalesCount = 0;
+        let shippedNotDeliveredCount = 0;
+        let pendingEscrowCount = 0;
+        let pendingEscrowNetAmount = 0;
+        let paidOutAmount = 0;
+
+        for (const storeId of storeIds) {
+          const transactionsQuery = query(
+            collection(db, "transactions"),
+            where("sellerId", "==", walletId),
+            where("storeId", "==", storeId)
+          );
+          const transactionsSnapshot = await getDocs(transactionsQuery);
+
+          for (const txDoc of transactionsSnapshot.docs) {
+            const txData = txDoc.data();
+            const txDate = txData.createdAt.toDate ? txData.createdAt.toDate() : new Date();
+            const productIds = txData.productIds || [];
+
+            // Fetch product names
+            const productNames = [];
+            for (const productId of productIds) {
+              const productDocRef = doc(db, "products", productId);
+              const productDoc = await getDoc(productDocRef);
+              if (productDoc.exists()) {
+                productNames.push(productDoc.data().name);
+              }
+            }
+
+            // Calculate net amount (minus 4% F4cet fee)
+            const netAmount = txData.amount * 0.96;
+
+            const txEntry = {
+              id: txDoc.id,
+              date: txDate.toISOString().split('T')[0],
+              product: productNames.join(", ") || "Unknown",
+              amount: txData.amount || 0,
+              netAmount: netAmount || 0, // Store net amount for escrow
+              status: txData.shippingStatus || "Unknown",
+              clicks: 0, // Placeholder, adjust if tracking clicks
+              purchases: 1, // Each transaction is a purchase
+              pendingAmount: txData.amount || 0,
+            };
+
+            // Categorize transactions
+            if (txData.shippingStatus === "Pending") {
+              pendingSalesData.push(txEntry);
+              if (txDate >= thirtyDaysAgo) {
+                pendingSalesCount += 1;
+              }
+            } else if (txData.shippingStatus === "Shipped" || txData.shippingStatus === "Delivered") {
+              itemsShippedData.push(txEntry);
+              if (txData.shippingStatus === "Shipped" && txDate >= thirtyDaysAgo) {
+                shippedNotDeliveredCount += 1;
+              }
+              // Include Delivered in shipped count for card
+              if (txDate >= thirtyDaysAgo) {
+                shippedNotDeliveredCount += txData.shippingStatus === "Delivered" ? 1 : 0;
+              }
+            }
+            if (!txData.buyerConfirmed) {
+              pendingEscrowData.push({ ...txEntry, amount: netAmount }); // Use net amount for escrow
+              if (txDate >= thirtyDaysAgo) {
+                pendingEscrowCount += 1;
+                pendingEscrowNetAmount += netAmount;
+              }
+            } else if (txData.buyerConfirmed) {
+              salesPaidOutData.push(txEntry);
+              if (txDate >= thirtyDaysAgo) {
+                paidOutAmount += txData.amount || 0;
+              }
+            }
+          }
+        }
+
+        // Update state
+        setPendingSales(pendingSalesData);
+        setItemsShipped(itemsShippedData);
+        setPendingEscrow(pendingEscrowData);
+        setSalesPaidOut(salesPaidOutData);
+        setPendingSalesLast30Days(pendingSalesCount);
+        setShippedNotDelivered(shippedNotDeliveredCount);
+        setPendingEscrowTransactions(pendingEscrowCount);
+        setPendingEscrowAmount(pendingEscrowNetAmount);
+        setSalesPaidOutAmount(paidOutAmount);
+      } catch (error) {
+        console.error("Error fetching seller data:", error);
+      } finally {
+        setIsFetching(false);
+      }
+    };
+
+    fetchSellerData();
+  }, [user, isFetching]);
+
   // Animation variants for buttons
   const buttonVariants = {
-    rest: {
-      scale: 1,
-      rotate: 0,
-      transition: { duration: 0.3 },
-    },
+    rest: { scale: 1, rotate: 0, transition: { duration: 0.3 } },
     hover: {
       scale: 1.1,
       rotate: [0, 5, -5, 5, 0],
-      transition: {
-        scale: { duration: 0.2 },
-        rotate: { repeat: 1, duration: 0.5 },
-      },
+      transition: { scale: { duration: 0.2 }, rotate: { repeat: 1, duration: 0.5 } },
     },
   };
 
-  // Pending Sales Table (Recent 5)
+  // Pending Shipment Table (Recent 5)
   const pendingSalesTableData = {
     columns: [
       { Header: "Sale ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
@@ -163,6 +247,12 @@ function SellerDashboard() {
           </MDTypography>
         </Link>
       ),
+      amount: (
+        <MDTypography variant="button" color="text">
+          {transaction.netAmount.toFixed(2)}
+        </MDTypography>
+      ),
+      status: "Pending", // Reflect buyerConfirmed: false
     })),
   };
 
@@ -184,22 +274,15 @@ function SellerDashboard() {
           </MDTypography>
         </Link>
       ),
+      status: "Paid", // Reflect buyerConfirmed: true
     })),
   };
 
   // Navigation Handlers
-  const handleCreateInventory = () => {
-    router.push("/dashboards/seller/createinv");
-  };
-  const handleEditInventory = () => {
-    router.push("/dashboards/seller/inventory");
-  };
-  const handleViewEscrow = () => {
-    router.push("/dashboards/seller/escrow");
-  };
-  const handleOnboarding = () => {
-    router.push("/dashboards/onboarding");
-  };
+  const handleCreateInventory = () => router.push("/dashboards/seller/createinv");
+  const handleEditInventory = () => router.push("/dashboards/seller/inventory");
+  const handleViewEscrow = () => router.push("/dashboards/seller/escrow");
+  const handleOnboarding = () => router.push("/dashboards/onboarding");
 
   // Ensure user is loaded before rendering
   if (!user || !user.walletId) {
@@ -234,7 +317,6 @@ function SellerDashboard() {
               textAlign={{ xs: "center", sm: "inherit" }}
             >
               <Grid container spacing={1} justifyContent="center">
-                {/* First Row: Create Inventory and Edit Inventory */}
                 <Grid item xs={12} sm="auto">
                   <MDBox display="flex" gap={1} justifyContent="center">
                     <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
@@ -251,9 +333,7 @@ function SellerDashboard() {
                           borderRadius: "8px",
                           boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                           background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": {
-                            background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                          },
+                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
                           width: { xs: "100%", sm: "auto" },
                           maxWidth: { xs: "300px", sm: "auto" },
                           whiteSpace: "nowrap",
@@ -276,9 +356,7 @@ function SellerDashboard() {
                           borderRadius: "8px",
                           boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                           background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": {
-                            background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                          },
+                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
                           width: { xs: "100%", sm: "auto" },
                           maxWidth: { xs: "300px", sm: "auto" },
                           whiteSpace: "nowrap",
@@ -289,7 +367,6 @@ function SellerDashboard() {
                     </motion.div>
                   </MDBox>
                 </Grid>
-                {/* Second Row: View Escrow and Onboarding/Settings */}
                 <Grid item xs={12} sm="auto">
                   <MDBox display="flex" gap={1} justifyContent="center">
                     <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
@@ -306,9 +383,7 @@ function SellerDashboard() {
                           borderRadius: "8px",
                           boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                           background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": {
-                            background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                          },
+                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
                           width: { xs: "100%", sm: "auto" },
                           maxWidth: { xs: "300px", sm: "auto" },
                           whiteSpace: "nowrap",
@@ -331,9 +406,7 @@ function SellerDashboard() {
                           borderRadius: "8px",
                           boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                           background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": {
-                            background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                          },
+                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
                           width: { xs: "100%", sm: "auto" },
                           maxWidth: { xs: "300px", sm: "auto" },
                           whiteSpace: "nowrap",
@@ -368,15 +441,9 @@ function SellerDashboard() {
                   <Icon fontSize="medium">link</Icon>
                 </MDBox>
                 <MDBox>
-                  <MDTypography variant="h6" color="dark">
-                    Pending Sales
-                  </MDTypography>
-                  <MDTypography variant="h4" color="info">
-                    {pendingSalesLast30Days}
-                  </MDTypography>
-                  <MDTypography variant="caption" color="text">
-                    Last 30 Days
-                  </MDTypography>
+                  <MDTypography variant="h6" color="dark">Pending Shipment</MDTypography>
+                  <MDTypography variant="h4" color="info">{pendingSalesLast30Days}</MDTypography>
+                  <MDTypography variant="caption" color="text">Last 30 Days</MDTypography>
                 </MDBox>
               </MDBox>
             </Card>
@@ -398,15 +465,9 @@ function SellerDashboard() {
                   <Icon fontSize="medium">local_shipping</Icon>
                 </MDBox>
                 <MDBox>
-                  <MDTypography variant="h6" color="dark">
-                    Items Shipped
-                  </MDTypography>
-                  <MDTypography variant="h4" color="info">
-                    {shippedNotDelivered}
-                  </MDTypography>
-                  <MDTypography variant="caption" color="text">
-                    Not Delivered
-                  </MDTypography>
+                  <MDTypography variant="h6" color="dark">Items Shipped</MDTypography>
+                  <MDTypography variant="h4" color="info">{shippedNotDelivered}</MDTypography>
+                  <MDTypography variant="caption" color="text">Not Delivered</MDTypography>
                 </MDBox>
               </MDBox>
             </Card>
@@ -428,15 +489,9 @@ function SellerDashboard() {
                   <Icon fontSize="medium">lock</Icon>
                 </MDBox>
                 <MDBox>
-                  <MDTypography variant="h6" color="dark">
-                    Pending Escrow
-                  </MDTypography>
-                  <MDTypography variant="h4" color="info">
-                    {pendingEscrowTransactions}
-                  </MDTypography>
-                  <MDTypography variant="caption" color="text">
-                    Transactions
-                  </MDTypography>
+                  <MDTypography variant="h6" color="dark">Pending Escrow</MDTypography>
+                  <MDTypography variant="h4" color="info">${pendingEscrowAmount.toFixed(2)}</MDTypography>
+                  <MDTypography variant="caption" color="text">Net of 4% Fee</MDTypography>
                 </MDBox>
               </MDBox>
             </Card>
@@ -458,15 +513,9 @@ function SellerDashboard() {
                   <Icon fontSize="medium">attach_money</Icon>
                 </MDBox>
                 <MDBox>
-                  <MDTypography variant="h6" color="dark">
-                    Sales Paid Out
-                  </MDTypography>
-                  <MDTypography variant="h4" color="info">
-                    ${salesPaidOutAmount}
-                  </MDTypography>
-                  <MDTypography variant="caption" color="text">
-                    Last 30 Days
-                  </MDTypography>
+                  <MDTypography variant="h6" color="dark">Sales Paid Out</MDTypography>
+                  <MDTypography variant="h4" color="info">${salesPaidOutAmount.toFixed(2)}</MDTypography>
+                  <MDTypography variant="caption" color="text">Last 30 Days</MDTypography>
                 </MDBox>
               </MDBox>
             </Card>
@@ -475,31 +524,24 @@ function SellerDashboard() {
 
         {/* Order Lists Section */}
         <Grid container spacing={3}>
-          {/* Pending Sales List */}
+          {/* Pending Shipment List */}
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h5" color="dark" mb={2}>
-                  Pending Sales (Last 5)
-                </MDTypography>
+                <MDTypography variant="h5" color="dark" mb={2}>Pending Shipment (Last 5)</MDTypography>
                 <DataTable
                   table={pendingSalesTableData}
                   entriesPerPage={false}
                   canSearch={false}
                   sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
+                    "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                    "& .MuiTablePagination-root": { display: "none !important" },
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboards/seller/sales">
+                  <Link href="/dashboards/seller/sales/dashboard">
                     <MDTypography variant="button" color="info" fontWeight="medium">
-                      View All Pending Sales
+                      View All Sales
                     </MDTypography>
                   </Link>
                 </MDBox>
@@ -511,27 +553,20 @@ function SellerDashboard() {
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h5" color="dark" mb={2}>
-                  Items Shipped (Last 5)
-                </MDTypography>
+                <MDTypography variant="h5" color="dark" mb={2}>Items Shipped (Last 5)</MDTypography>
                 <DataTable
                   table={itemsShippedTableData}
                   entriesPerPage={false}
                   canSearch={false}
                   sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
+                    "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                    "& .MuiTablePagination-root": { display: "none !important" },
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboards/seller/sales">
+                  <Link href="/dashboards/seller/sales/dashboard">
                     <MDTypography variant="button" color="info" fontWeight="medium">
-                      View All Pending Sales
+                      View All Sales
                     </MDTypography>
                   </Link>
                 </MDBox>
@@ -543,27 +578,20 @@ function SellerDashboard() {
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h5" color="dark" mb={2}>
-                  Pending Escrow (Last 5)
-                </MDTypography>
+                <MDTypography variant="h5" color="dark" mb={2}>Pending Escrow (Last 5)</MDTypography>
                 <DataTable
                   table={pendingEscrowTableData}
                   entriesPerPage={false}
                   canSearch={false}
                   sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
+                    "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                    "& .MuiTablePagination-root": { display: "none !important" },
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboards/seller/sales">
+                  <Link href="/dashboards/seller/sales/dashboard">
                     <MDTypography variant="button" color="info" fontWeight="medium">
-                      View All Pending Sales
+                      View All Sales
                     </MDTypography>
                   </Link>
                 </MDBox>
@@ -575,27 +603,20 @@ function SellerDashboard() {
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h5" color="dark" mb={2}>
-                  Sales Paid Out (Last 5)
-                </MDTypography>
+                <MDTypography variant="h5" color="dark" mb={2}>Sales Paid Out (Last 5)</MDTypography>
                 <DataTable
                   table={salesPaidOutTableData}
                   entriesPerPage={false}
                   canSearch={false}
                   sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
+                    "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                    "& .MuiTablePagination-root": { display: "none !important" },
                   }}
                 />
                 <MDBox mt={2} textAlign="center">
-                  <Link href="/dashboards/seller/sales">
+                  <Link href="/dashboards/seller/sales/dashboard">
                     <MDTypography variant="button" color="info" fontWeight="medium">
-                      View All Pending Sales
+                      View All Sales
                     </MDTypography>
                   </Link>
                 </MDBox>

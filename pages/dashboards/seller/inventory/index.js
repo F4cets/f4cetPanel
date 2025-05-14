@@ -37,45 +37,16 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import DataTable from "/examples/Tables/DataTable";
 
-// Dummy Data (for initial testing, will be replaced by Firestore data)
-const dummyInventoryData = [
-  {
-    id: "INV001",
-    name: "Strong Hold Hoodie",
-    type: "rwi",
-    price: 50,
-    currency: "USDC",
-    shippingLocation: "New York, USA",
-    categories: ["Clothing"],
-    variants: [
-      { size: "S", color: "black", quantity: 5 },
-      { size: "M", color: "grey", quantity: 12 },
-    ],
-    status: "pending",
-    createdAt: "2025-03-20",
-  },
-  {
-    id: "INV002",
-    name: "Ebook: The Future of Web3",
-    type: "digital",
-    price: 20,
-    currency: "USDC",
-    quantity: 100,
-    categories: ["Ebooks", "Digital Goods"],
-    status: "pending",
-    createdAt: "2025-03-19",
-  },
-];
-
 function Inventory() {
   const { user } = useUser();
   const router = useRouter();
   const [menu, setMenu] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState(null); // Digital or RWI
-  const [statusFilter, setStatusFilter] = useState(null); // Pending, Active, etc.
+  const [statusFilter, setStatusFilter] = useState(null); // Active or Removed
   const [inventoryData, setInventoryData] = useState([]);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Fetch inventory data from Firestore
   useEffect(() => {
@@ -83,21 +54,25 @@ function Inventory() {
       if (!user || !user.walletId) return;
 
       try {
+        console.log("Inventory: Fetching products for seller:", user.walletId);
         const q = query(
-          collection(db, "listings"),
+          collection(db, "products"),
           where("sellerId", "==", user.walletId)
         );
         const querySnapshot = await getDocs(q);
         const data = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          createdAt: doc.data().createdAt?.split("T")[0] || "N/A", // Handle missing dates
+          createdAt: doc.data().createdAt?.toDate().toISOString().split("T")[0] || "N/A",
         }));
-        setInventoryData(data.length > 0 ? data : dummyInventoryData); // Fallback to dummy data
+        console.log("Inventory: Fetched products:", data);
+        setInventoryData(data);
+        setLoading(false);
       } catch (err) {
-        console.error("Error fetching inventory:", err);
-        setError("Failed to load inventory data. Using sample data.");
-        setInventoryData(dummyInventoryData); // Use dummy data on error
+        console.error("Inventory: Error fetching products:", err);
+        setError("Failed to load inventory data. Please try again.");
+        setInventoryData([]);
+        setLoading(false);
       }
     };
 
@@ -107,6 +82,7 @@ function Inventory() {
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
+      console.log("Inventory: Unauthorized access, redirecting to home");
       router.replace("/");
     }
   }, [user, router]);
@@ -123,7 +99,7 @@ function Inventory() {
   const filteredData = inventoryData.filter((item) => {
     const matchesSearch = (item.name?.toLowerCase().includes(searchQuery.toLowerCase())) ?? false;
     const matchesType = typeFilter ? item.type === typeFilter : true;
-    const matchesStatus = statusFilter ? item.status === statusFilter : true;
+    const matchesStatus = statusFilter ? item.isActive === (statusFilter === "active") : true;
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -139,8 +115,8 @@ function Inventory() {
       <MenuItem onClick={() => { setTypeFilter("digital"); closeMenu(); }}>Type: Digital</MenuItem>
       <MenuItem onClick={() => { setTypeFilter("rwi"); closeMenu(); }}>Type: RWI</MenuItem>
       <Divider sx={{ margin: "0.5rem 0" }} />
-      <MenuItem onClick={() => { setStatusFilter("pending"); closeMenu(); }}>Status: Pending</MenuItem>
       <MenuItem onClick={() => { setStatusFilter("active"); closeMenu(); }}>Status: Active</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("removed"); closeMenu(); }}>Status: Removed</MenuItem>
       <Divider sx={{ margin: "0.5rem 0" }} />
       <MenuItem onClick={() => { setTypeFilter(null); setStatusFilter(null); closeMenu(); }}>
         <MDTypography variant="button" color="error" fontWeight="regular">
@@ -152,42 +128,30 @@ function Inventory() {
 
   const tableData = {
     columns: [
-      { Header: "Item ID", accessor: "id", width: "15%" },
-      { Header: "Name", accessor: "name", width: "15%" },
+      { Header: "Name", accessor: "name", width: "20%" },
       { Header: "Type", accessor: "type", width: "10%" },
       { Header: "Price (USDC)", accessor: "price", width: "10%" },
-      { Header: "Quantity/Variants", accessor: "quantityVariants", width: "15%" },
-      { Header: "Categories", accessor: "categories", width: "15%" },
+      { Header: "Quantity/Variants", accessor: "quantityVariants", width: "20%" },
+      { Header: "Categories", accessor: "categories", width: "20%" },
       { Header: "Status", accessor: "status", width: "10%" },
       { Header: "Date", accessor: "createdAt", width: "10%" },
     ],
     rows: filteredData.map((item) => ({
       ...item,
-      id: item.id ? (
+      name: item.id ? (
         <Link href={`/dashboards/seller/inventory/details/${item.id}`}>
           <MDTypography variant="button" color="info" fontWeight="medium">
-            {item.id}
+            {item.name || "N/A"}
           </MDTypography>
         </Link>
       ) : (
-        <MDTypography variant="button" color="error">
-          Invalid ID
-        </MDTypography>
-      ),
-      name: (
-        <MDTypography variant="button" color="text">
-          {item.name || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="error">Invalid Name</MDTypography>
       ),
       type: (
-        <MDTypography variant="button" color="text">
-          {item.type === "digital" ? "Digital" : item.type === "rwi" ? "RWI" : "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{item.type === "digital" ? "Digital" : item.type === "rwi" ? "RWI" : "N/A"}</MDTypography>
       ),
       price: (
-        <MDTypography variant="button" color="text">
-          {item.price ? `${item.price} ${item.currency || "N/A"}` : "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{item.price ? `${item.price} USDC` : "N/A"}</MDTypography>
       ),
       quantityVariants: (
         <MDTypography variant="button" color="text">
@@ -196,24 +160,20 @@ function Inventory() {
         </MDTypography>
       ),
       categories: (
-        <MDTypography variant="button" color="text">
-          {item.categories?.join(", ") || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{item.categories?.join(", ") || "N/A"}</MDTypography>
       ),
       status: (
         <MDBox display="flex" alignItems="center">
           <Icon
             fontSize="small"
             sx={{
-              color: item.status === "pending" ? "warning.main" : item.status === "active" ? "success.main" : "error.main",
+              color: item.isActive ? "success.main" : "error.main",
               mr: 1,
             }}
           >
-            {item.status === "pending" ? "hourglass_empty" : item.status === "active" ? "check_circle" : "error"}
+            {item.isActive ? "check_circle" : "removed"}
           </Icon>
-          <MDTypography variant="button" color="text">
-            {item.status ? (item.status.charAt(0).toUpperCase() + item.status.slice(1)) : "N/A"}
-          </MDTypography>
+          <MDTypography variant="button" color="text">{item.isActive ? "Active" : "Removed"}</MDTypography>
         </MDBox>
       ),
     })),
@@ -248,16 +208,9 @@ function Inventory() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 fullWidth
                 sx={{
-                  "& .MuiInputBase-input": {
-                    padding: { xs: "10px", md: "12px" },
-                    color: "#344767",
-                  },
-                  "& .MuiInputLabel-root": {
-                    color: "#344767 !important",
-                  },
-                  "& .MuiInputLabel-root.Mui-focused": {
-                    color: "#344767 !important",
-                  },
+                  "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
+                  "& .MuiInputLabel-root": { color: "#344767 !important" },
+                  "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                 }}
               />
             </MDBox>
@@ -277,31 +230,28 @@ function Inventory() {
             {error}
           </MDTypography>
         )}
-        {filteredData.length === 0 ? (
+        {loading ? (
+          <MDTypography variant="body2" color="text">
+            Loading inventory...
+          </MDTypography>
+        ) : filteredData.length === 0 ? (
           <MDTypography variant="body2" color="text">
             No inventory found. Try adjusting your filters or adding new listings.
           </MDTypography>
         ) : (
-          <Card
-            sx={{
-              background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-              borderRadius: "16px",
-              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
-              overflow: "hidden",
-            }}
-          >
+          <Card sx={{
+            background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
+            overflow: "hidden",
+          }}>
             <DataTable
               table={tableData}
               entriesPerPage={false}
               canSearch={false}
               sx={{
-                "& th": {
-                  paddingRight: "20px !important",
-                  paddingLeft: "20px !important",
-                },
-                "& .MuiTablePagination-root": {
-                  display: "none !important",
-                },
+                "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                "& .MuiTablePagination-root": { display: "none !important" },
               }}
             />
           </Card>

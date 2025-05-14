@@ -11,7 +11,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, addDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // User context
@@ -20,8 +20,8 @@ import { useUser } from "/contexts/UserContext";
 // @mui material components
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
-import Icon from "@mui/material/Icon";
 import Rating from "@mui/material/Rating";
+import Icon from "@mui/material/Icon";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -35,49 +35,6 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import TimelineItem from "/examples/Timeline/TimelineItem";
 
-// Dummy Data (for initial testing, used as fallback if Firestore fails)
-const dummySaleDetails = {
-  id: "SALE001",
-  sellerId: "testSellerWallet456",
-  buyerId: "testBuyerWallet123",
-  itemName: "Strong Hold Hoodie",
-  type: "rwi",
-  salePrice: 50,
-  currency: "USDC",
-  buyerWallet: "buyer123...xyz",
-  status: "Delivered",
-  createdAt: "2025-03-20",
-  shippingLocation: "New York, USA",
-  trackingNumber: "123ABC",
-  buyerConfirmed: false,
-  sellerRating: null,
-  timeline: [
-    { title: "Sale Created", date: "2025-03-20 10:00 AM", description: "Sale initiated for Strong Hold Hoodie." },
-    { title: "Shipped", date: "2025-03-21 12:00 PM", description: "Item shipped with tracking 123ABC." },
-  ],
-};
-
-const dummyMessages = [
-  {
-    orderId: "SALE001",
-    senderId: "testBuyerWallet123",
-    receiverId: "testSellerWallet456",
-    message: "Is the item still in stock?",
-    timestamp: "2025-03-20T10:05:00Z",
-  },
-];
-
-const dummyNotifications = [
-  {
-    orderId: "SALE001",
-    userId: "testSellerWallet456",
-    type: "issue",
-    description: "No issues flagged.",
-    timestamp: "2025-03-23T16:00:00Z",
-    read: false,
-  },
-];
-
 function SalesDetails() {
   const { user } = useUser();
   const router = useRouter();
@@ -87,8 +44,9 @@ function SalesDetails() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [notifications, setNotifications] = useState([]);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isShipping, setIsShipping] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -98,47 +56,129 @@ function SalesDetails() {
       if (!user || !user.walletId || !salesId) return;
 
       try {
-        const saleDoc = doc(db, "sales", salesId);
-        const saleSnapshot = await getDoc(saleDoc);
+        console.log("SalesDetails: Fetching transaction:", salesId);
+        const saleDocRef = doc(db, "transactions", salesId);
+        const saleSnapshot = await getDoc(saleDocRef);
         if (saleSnapshot.exists() && saleSnapshot.data().sellerId === user.walletId) {
+          const saleData = saleSnapshot.data();
+
+          // Fetch product names
+          let productNames = [];
+          if (Array.isArray(saleData.productIds)) {
+            for (const productId of saleData.productIds) {
+              const productDocRef = doc(db, "products", productId);
+              const productDoc = await getDoc(productDocRef);
+              if (productDoc.exists()) {
+                const productData = productDoc.data();
+                productNames.push(productData.name || productId);
+              } else {
+                productNames.push(productId);
+              }
+            }
+          }
+
+          // Fetch buyer name (if available)
+          let buyerName = saleData.buyerId;
+          const buyerDocRef = doc(db, "users", saleData.buyerId);
+          const buyerDoc = await getDoc(buyerDocRef);
+          if (buyerDoc.exists()) {
+            const buyerData = buyerDoc.data();
+            buyerName = buyerData.name || buyerName;
+          }
+
+          // Build timeline dynamically
+          const timeline = [];
+          if (saleData.createdAt) {
+            const createdDate = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
+            timeline.push({
+              title: "Order Placed",
+              date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: "Order placed successfully.",
+            });
+          }
+          if (saleData.shippingConfirmedAt) {
+            const shippedDate = saleData.shippingConfirmedAt.toDate ? saleData.shippingConfirmedAt.toDate() : new Date(saleData.shippingConfirmedAt);
+            timeline.push({
+              title: "Order Shipped",
+              date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: `Order shipped with tracking number ${saleData.trackingNumber || 'Not Available'}.`,
+            });
+          }
+          if (saleData.deliveryConfirmedAt) {
+            const deliveredDate = saleData.deliveryConfirmedAt.toDate ? saleData.deliveryConfirmedAt.toDate() : new Date(saleData.deliveryConfirmedAt);
+            timeline.push({
+              title: "Order Delivered",
+              date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: "Order delivered to customer.",
+            });
+          }
+          if (saleData.buyerConfirmed) {
+            const confirmedDate = saleData.updatedAt?.toDate() || new Date();
+            timeline.push({
+              title: "Receipt Confirmed",
+              date: `${confirmedDate.toISOString().split('T')[0]} ${confirmedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+              description: "Buyer confirmed receipt of the item.",
+            });
+          }
+
+          const createdDateForDisplay = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
           const data = {
             id: saleSnapshot.id,
-            ...saleSnapshot.data(),
-            createdAt: saleSnapshot.data().createdAt?.split("T")[0] || "N/A",
+            sellerId: saleData.sellerId,
+            buyerId: saleData.buyerId,
+            buyer: buyerName,
+            itemName: productNames.join(", ") || "Unknown Product",
+            type: saleData.type || "rwi",
+            salePrice: saleData.amount || 0,
+            currency: saleData.currency || "USDC",
+            status: saleData.shippingStatus || "Pending",
+            date: createdDateForDisplay.toISOString().split('T')[0],
+            shippingAddress: saleData.shippingAddress || "N/A",
+            trackingNumber: saleData.trackingNumber || "Not Available",
+            buyerConfirmed: saleData.buyerConfirmed || false,
+            sellerRating: saleData.sellerRating || null,
+            timeline: timeline.length > 0 ? timeline : [],
           };
           setSaleDetails(data);
           setTrackingNumber(data.trackingNumber || "");
         } else {
-          setError("Sale not found or unauthorized. Using sample data.");
-          setSaleDetails(dummySaleDetails);
-          setTrackingNumber(dummySaleDetails.trackingNumber || "");
+          setError("Sale not found or unauthorized.");
+          setSaleDetails(null);
         }
       } catch (err) {
-        console.error("Error fetching sale:", err);
-        setError("Failed to load sale details. Using sample data.");
-        setSaleDetails(dummySaleDetails);
-        setTrackingNumber(dummySaleDetails.trackingNumber || "");
+        console.error("SalesDetails: Error fetching sale:", err);
+        setError("Failed to load sale details: " + err.message);
+        setSaleDetails(null);
       }
     };
 
-    const fetchMessages = async () => {
+    const fetchMessages = () => {
       if (!user || !user.walletId || !salesId) return;
 
       try {
+        console.log("SalesDetails: Setting up real-time listener for messages:", salesId);
         const q = query(
           collection(db, "messages"),
           where("orderId", "==", salesId)
         );
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setMessages(data.length > 0 ? data : dummyMessages);
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const data = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          // Sort messages by timestamp in descending order (newest first)
+          data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setMessages(data);
+        }, (err) => {
+          console.error("SalesDetails: Error in messages listener:", err);
+          setError("Failed to load messages: " + err.message);
+          setMessages([]);
+        });
+        return unsubscribe;
       } catch (err) {
-        console.error("Error fetching messages:", err);
-        setError("Failed to load messages. Using sample messages.");
-        setMessages(dummyMessages);
+        console.error("SalesDetails: Error setting up messages listener:", err);
+        setError("Failed to load messages: " + err.message);
+        setMessages([]);
       }
     };
 
@@ -146,6 +186,7 @@ function SalesDetails() {
       if (!user || !user.walletId || !salesId) return;
 
       try {
+        console.log("SalesDetails: Fetching notifications for sale:", salesId);
         const q = query(
           collection(db, "notifications"),
           where("orderId", "==", salesId),
@@ -157,71 +198,38 @@ function SalesDetails() {
           id: doc.id,
           ...doc.data(),
         }));
-        setNotifications(data.length > 0 ? data : dummyNotifications);
+        setNotifications(data);
       } catch (err) {
-        console.error("Error fetching notifications:", err);
-        setError("Failed to load notifications. Using sample notifications.");
-        setNotifications(dummyNotifications);
+        console.error("SalesDetails: Error fetching notifications:", err);
+        setError("Failed to load notifications: " + err.message);
+        setNotifications([]);
       }
     };
 
     fetchSale();
-    fetchMessages();
     fetchNotifications();
+
+    // Set up real-time messages listener and clean up
+    const unsubscribeMessages = fetchMessages();
+    return () => {
+      if (unsubscribeMessages) {
+        console.log("SalesDetails: Cleaning up messages listener for sale:", salesId);
+        unsubscribeMessages();
+      }
+    };
   }, [user, salesId]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
+      console.log("SalesDetails: Unauthorized access, redirecting to home");
       router.replace("/");
     }
   }, [user, router]);
 
-  // Handle tracking number save
-  const handleSaveTracking = async () => {
-    if (!saleDetails || isSaving || saleDetails.id === dummySaleDetails.id) return;
-
-    setIsSaving(true);
-    setError(null);
-    setSuccess(null);
-
-    try {
-      const saleDoc = doc(db, "sales", salesId);
-      await updateDoc(saleDoc, {
-        trackingNumber,
-        timeline: [
-          ...(saleDetails.timeline || []),
-          {
-            title: trackingNumber ? "Tracking Number Updated" : "Tracking Number Removed",
-            date: new Date().toISOString(),
-            description: trackingNumber ? `Tracking number set to ${trackingNumber}.` : "Tracking number cleared.",
-          },
-        ],
-      });
-      setSaleDetails({
-        ...saleDetails,
-        trackingNumber,
-        timeline: [
-          ...saleDetails.timeline,
-          {
-            title: trackingNumber ? "Tracking Number Updated" : "Tracking Number Removed",
-            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString(),
-            description: trackingNumber ? `Tracking number set to ${trackingNumber}.` : "Tracking number cleared.",
-          },
-        ],
-      });
-      setSuccess("Tracking number updated successfully!");
-    } catch (err) {
-      console.error("Error updating tracking number:", err);
-      setError("Failed to save tracking number: " + err.message);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!saleDetails || !newMessage.trim() || isSending || saleDetails.id === dummySaleDetails.id) return;
+    if (!saleDetails || !newMessage.trim() || isSending) return;
 
     setIsSending(true);
     setError(null);
@@ -235,15 +243,87 @@ function SalesDetails() {
         message: newMessage.trim(),
         timestamp: new Date().toISOString(),
       };
-      await addDoc(collection(db, "messages"), messageData);
-      setMessages([...messages, messageData]);
+      const docRef = await addDoc(collection(db, "messages"), messageData);
       setNewMessage("");
       setSuccess("Message sent successfully!");
     } catch (err) {
-      console.error("Error sending message:", err);
+      console.error("SalesDetails: Error sending message:", err);
       setError("Failed to send message: " + err.message);
     } finally {
       setIsSending(false);
+    }
+  };
+
+  // Handle updating tracking number
+  const handleSaveTracking = async () => {
+    if (!saleDetails || isSaving || trackingNumber === saleDetails.trackingNumber) return;
+
+    setIsSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saleDocRef = doc(db, "transactions", salesId);
+      const updatedData = {
+        trackingNumber,
+        updatedAt: new Date().toISOString(),
+        timeline: [
+          ...(saleDetails.timeline || []),
+          {
+            title: trackingNumber ? "Tracking Number Updated" : "Tracking Number Removed",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: trackingNumber ? `Tracking number set to ${trackingNumber}.` : "Tracking number cleared.",
+          },
+        ],
+      };
+      await updateDoc(saleDocRef, updatedData);
+      setSaleDetails({
+        ...saleDetails,
+        ...updatedData,
+      });
+      setSuccess("Tracking number updated successfully!");
+    } catch (err) {
+      console.error("SalesDetails: Error updating tracking number:", err);
+      setError("Failed to save tracking number: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Handle marking as shipped
+  const handleMarkAsShipped = async () => {
+    if (!saleDetails || isShipping || saleDetails.status !== "Pending") return;
+
+    setIsShipping(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saleDocRef = doc(db, "transactions", salesId);
+      const updatedData = {
+        shippingStatus: "Shipped",
+        shippingConfirmedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        timeline: [
+          ...(saleDetails.timeline || []),
+          {
+            title: "Order Shipped",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: `Order shipped with tracking number ${trackingNumber || 'Not Available'}.`,
+          },
+        ],
+      };
+      await updateDoc(saleDocRef, updatedData);
+      setSaleDetails({
+        ...saleDetails,
+        ...updatedData,
+      });
+      setSuccess("Order marked as shipped successfully!");
+    } catch (err) {
+      console.error("SalesDetails: Error marking as shipped:", err);
+      setError("Failed to mark order as shipped: " + err.message);
+    } finally {
+      setIsShipping(false);
     }
   };
 
@@ -253,7 +333,7 @@ function SalesDetails() {
   }
 
   // Handle invalid or missing salesId
-  if (!salesId || !salesId.startsWith("SALE")) {
+  if (!salesId) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
@@ -267,14 +347,14 @@ function SalesDetails() {
     );
   }
 
-  // Handle no saleDetails (e.g., still loading)
+  // Handle no saleDetails (e.g., still loading or error)
   if (!saleDetails) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
-          <MDTypography variant="body2" color="text">
-            Loading sale details...
+          <MDTypography variant="h4" color="error">
+            {error || "Loading sale details..."}
           </MDTypography>
         </MDBox>
         <Footer />
@@ -291,7 +371,7 @@ function SalesDetails() {
             <Card>
               <MDBox p={3}>
                 <MDTypography variant="h4" color="dark" mb={2}>
-                  Sale Details - {saleDetails.id || "N/A"}
+                  Sale Details - {saleDetails.id}
                 </MDTypography>
                 {error && (
                   <MDTypography variant="body2" color="error" mb={2}>
@@ -307,7 +387,7 @@ function SalesDetails() {
                   <Grid item xs={12} md={6}>
                     <MDBox mb={2}>
                       <MDTypography variant="h6" color="dark">
-                        Item Name
+                        Product
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
                         {saleDetails.itemName || "N/A"}
@@ -315,42 +395,18 @@ function SalesDetails() {
                     </MDBox>
                     <MDBox mb={2}>
                       <MDTypography variant="h6" color="dark">
-                        Sale Price
+                        Buyer
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.salePrice ? `${saleDetails.salePrice} ${saleDetails.currency || "N/A"}` : "N/A"}
+                        {saleDetails.buyer || saleDetails.buyerId || "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
                       <MDTypography variant="h6" color="dark">
-                        Buyer Wallet
+                        Shipping Address
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
-                        {saleDetails.buyerWallet ? `${saleDetails.buyerWallet.slice(0, 6)}...${saleDetails.buyerWallet.slice(-4)}` : "N/A"}
-                      </MDTypography>
-                    </MDBox>
-                    <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
-                        Status
-                      </MDTypography>
-                      <MDTypography variant="body2" color="text">
-                        {saleDetails.status ? (saleDetails.status.charAt(0).toUpperCase() + saleDetails.status.slice(1)) : "N/A"}
-                      </MDTypography>
-                    </MDBox>
-                    <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
-                        Date
-                      </MDTypography>
-                      <MDTypography variant="body2" color="text">
-                        {saleDetails.createdAt || "N/A"}
-                      </MDTypography>
-                    </MDBox>
-                    <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
-                        Shipping Location
-                      </MDTypography>
-                      <MDTypography variant="body2" color="text">
-                        {saleDetails.shippingLocation || "N/A"}
+                        {saleDetails.shippingAddress || "N/A"}
                       </MDTypography>
                     </MDBox>
                     <MDBox mb={2}>
@@ -363,22 +419,42 @@ function SalesDetails() {
                         placeholder="Enter tracking number"
                         fullWidth
                         sx={{
-                          "& .MuiInputBase-input": {
-                            padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
-                          },
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
                         }}
-                        disabled={saleDetails.id === dummySaleDetails.id}
                       />
                       <MDButton
-                        variant="contained"
-                        color="dark"
                         onClick={handleSaveTracking}
-                        disabled={isSaving || trackingNumber === saleDetails.trackingNumber || saleDetails.id === dummySaleDetails.id}
+                        color="dark"
+                        variant="gradient"
+                        disabled={isSaving || trackingNumber === saleDetails.trackingNumber}
                         sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                       >
                         {isSaving ? "Saving..." : "Save Tracking"}
                       </MDButton>
+                    </MDBox>
+                    <MDBox mb={2}>
+                      <MDTypography variant="h6" color="dark">
+                        Amount
+                      </MDTypography>
+                      <MDTypography variant="body2" color="text">
+                        {saleDetails.salePrice} {saleDetails.currency || "N/A"}
+                      </MDTypography>
+                    </MDBox>
+                    <MDBox mb={2}>
+                      <MDTypography variant="h6" color="dark">
+                        Status
+                      </MDTypography>
+                      <MDTypography variant="body2" color="text">
+                        {saleDetails.status || "N/A"}
+                      </MDTypography>
+                    </MDBox>
+                    <MDBox mb={2}>
+                      <MDTypography variant="h6" color="dark">
+                        Date
+                      </MDTypography>
+                      <MDTypography variant="body2" color="text">
+                        {saleDetails.date || "N/A"}
+                      </MDTypography>
                     </MDBox>
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -386,7 +462,7 @@ function SalesDetails() {
                       <MDTypography variant="h6" color="dark" mb={2}>
                         Sale Timeline
                       </MDTypography>
-                      {saleDetails.timeline && saleDetails.timeline.length > 0 ? (
+                      {saleDetails.timeline?.length > 0 ? (
                         saleDetails.timeline.map((event, index) => (
                           <TimelineItem
                             key={index}
@@ -412,6 +488,23 @@ function SalesDetails() {
                       <MDTypography variant="h6" color="dark" mb={2}>
                         Seller Actions
                       </MDTypography>
+                      {/* Mark as Shipped (RWI Only) */}
+                      {saleDetails.type === "rwi" && saleDetails.status === "Pending" && (
+                        <MDBox mb={2}>
+                          <MDTypography variant="body1" color="dark" mb={1}>
+                            Mark as Shipped
+                          </MDTypography>
+                          <MDButton
+                            onClick={handleMarkAsShipped}
+                            color="success"
+                            variant="gradient"
+                            disabled={isShipping}
+                            sx={{ width: { xs: "100%", sm: "auto" } }}
+                          >
+                            {isShipping ? "Marking..." : "Mark as Shipped"}
+                          </MDButton>
+                        </MDBox>
+                      )}
                       {/* Buyer Confirmation (RWI Only) */}
                       {saleDetails.type === "rwi" && (
                         <MDBox mb={2}>
@@ -425,7 +518,7 @@ function SalesDetails() {
                           </MDTypography>
                         </MDBox>
                       )}
-                      {/* Seller Rating */}
+                      {/* Buyer Rating */}
                       <MDBox mb={2}>
                         <MDTypography variant="body1" color="dark" mb={1}>
                           Buyer Rating
@@ -434,13 +527,9 @@ function SalesDetails() {
                           value={saleDetails.sellerRating || 0}
                           readOnly
                           sx={{
-                            fontSize: "2rem", // Larger stars
-                            "& .MuiRating-iconEmpty": {
-                              color: "#FFFFFF", // White fill for unselected stars
-                            },
-                            "& .MuiRating-iconFilled": {
-                              color: "#FFD700", // Gold fill for selected stars
-                            },
+                            fontSize: "2rem",
+                            "& .MuiRating-iconEmpty": { color: "#FFFFFF" },
+                            "& .MuiRating-iconFilled": { color: "#FFD700" },
                           }}
                         />
                       </MDBox>
@@ -456,19 +545,16 @@ function SalesDetails() {
                           fullWidth
                           multiline
                           rows={3}
-                          disabled={isSending || saleDetails.id === dummySaleDetails.id}
+                          disabled={isSending}
                           sx={{
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "10px", md: "12px" },
-                              color: "#344767",
-                            },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
                           }}
                         />
                         <MDButton
                           onClick={handleSendMessage}
                           color="primary"
                           variant="gradient"
-                          disabled={isSending || !newMessage.trim() || saleDetails.id === dummySaleDetails.id}
+                          disabled={isSending || !newMessage.trim()}
                           sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                         >
                           {isSending ? "Sending..." : "Send Message"}

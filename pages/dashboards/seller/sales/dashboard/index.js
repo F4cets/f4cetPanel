@@ -12,7 +12,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 
 // Firebase imports
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"; // Ensure doc is imported
 import { db } from "/lib/firebase";
 
 // User context
@@ -37,32 +37,6 @@ import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 import DataTable from "/examples/Tables/DataTable";
 
-// Dummy Data (for initial testing, will be replaced by Firestore data)
-const dummySalesData = [
-  {
-    id: "SALE001",
-    itemName: "Strong Hold Hoodie",
-    salePrice: 50,
-    currency: "USDC",
-    buyerWallet: "buyer123...xyz",
-    status: "pending",
-    createdAt: "2025-03-20",
-    shippingLocation: "New York, USA",
-    trackingNumber: "",
-  },
-  {
-    id: "SALE002",
-    itemName: "Ebook: The Future of Web3",
-    salePrice: 20,
-    currency: "USDC",
-    buyerWallet: "buyer456...abc",
-    status: "shipped",
-    createdAt: "2025-03-19",
-    shippingLocation: "Digital",
-    trackingNumber: "DIGITAL123",
-  },
-];
-
 function SalesDashboard() {
   const { user } = useUser();
   const router = useRouter();
@@ -71,28 +45,64 @@ function SalesDashboard() {
   const [statusFilter, setStatusFilter] = useState(null); // Pending, Shipped, Delivered, Paid
   const [salesData, setSalesData] = useState([]);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Fetch sales data from Firestore
   useEffect(() => {
     const fetchSales = async () => {
-      if (!user || !user.walletId) return;
+      if (!user || !user.walletId) {
+        console.log("SalesDashboard: No user or walletId, skipping fetch");
+        setLoading(false);
+        return;
+      }
 
       try {
+        console.log("SalesDashboard: Fetching transactions for seller:", user.walletId);
         const q = query(
-          collection(db, "sales"),
+          collection(db, "transactions"),
           where("sellerId", "==", user.walletId)
         );
         const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.split("T")[0] || "N/A", // Handle missing dates
+        const data = await Promise.all(querySnapshot.docs.map(async (txDoc) => {
+          const txData = txDoc.data();
+          // Fetch product name from products collection
+          let itemName = "Unknown Product";
+          if (txData.productIds?.[0]) {
+            try {
+              const productDoc = await getDoc(doc(db, "products", txData.productIds[0]));
+              if (productDoc.exists()) {
+                itemName = productDoc.data().name || itemName;
+              } else {
+                console.warn(`SalesDashboard: Product ${txData.productIds[0]} not found`);
+              }
+            } catch (productErr) {
+              console.warn(`SalesDashboard: Error fetching product ${txData.productIds[0]}:`, productErr);
+            }
+          }
+          // Map status: use shippingStatus, map Delivered + buyerConfirmed to Paid
+          const displayStatus = txData.shippingStatus?.toLowerCase() === "delivered" && txData.buyerConfirmed
+            ? "paid"
+            : txData.shippingStatus?.toLowerCase() || "pending";
+          return {
+            id: txDoc.id,
+            itemName,
+            salePrice: txData.amount || 0,
+            currency: txData.currency || "USDC",
+            buyerWallet: txData.buyerId || "N/A",
+            status: displayStatus,
+            createdAt: txData.createdAt?.toDate().toISOString().split("T")[0] || "N/A",
+            shippingLocation: txData.type === "digital" ? "Digital" : txData.shippingAddress || "N/A",
+            trackingNumber: txData.trackingNumber || "N/A",
+          };
         }));
-        setSalesData(data.length > 0 ? data : dummySalesData); // Fallback to dummy data
+        console.log("SalesDashboard: Fetched transactions:", data);
+        setSalesData(data);
+        setLoading(false);
       } catch (err) {
-        console.error("Error fetching sales:", err);
-        setError("Failed to load sales data. Using sample data.");
-        setSalesData(dummySalesData); // Use dummy data on error
+        console.error("SalesDashboard: Error fetching transactions:", err);
+        setError("Failed to load sales data. Please try again.");
+        setSalesData([]);
+        setLoading(false);
       }
     };
 
@@ -102,6 +112,7 @@ function SalesDashboard() {
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
+      console.log("SalesDashboard: Unauthorized access, redirecting to home");
       router.replace("/");
     }
   }, [user, router]);
@@ -164,19 +175,13 @@ function SalesDashboard() {
           </MDTypography>
         </Link>
       ) : (
-        <MDTypography variant="button" color="error">
-          Invalid ID
-        </MDTypography>
+        <MDTypography variant="button" color="error">Invalid ID</MDTypography>
       ),
       itemName: (
-        <MDTypography variant="button" color="text">
-          {sale.itemName || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{sale.itemName || "N/A"}</MDTypography>
       ),
       salePrice: (
-        <MDTypography variant="button" color="text">
-          {sale.salePrice} {sale.currency || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{sale.salePrice} {sale.currency || "N/A"}</MDTypography>
       ),
       buyerWallet: (
         <MDTypography variant="button" color="text">
@@ -207,14 +212,10 @@ function SalesDashboard() {
         </MDBox>
       ),
       shippingLocation: (
-        <MDTypography variant="button" color="text">
-          {sale.shippingLocation || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{sale.shippingLocation || "N/A"}</MDTypography>
       ),
       trackingNumber: (
-        <MDTypography variant="button" color="text">
-          {sale.trackingNumber || "N/A"}
-        </MDTypography>
+        <MDTypography variant="button" color="text">{sale.trackingNumber || "N/A"}</MDTypography>
       ),
     })),
   };
@@ -248,16 +249,9 @@ function SalesDashboard() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 fullWidth
                 sx={{
-                  "& .MuiInputBase-input": {
-                    padding: { xs: "10px", md: "12px" },
-                    color: "#344767",
-                  },
-                  "& .MuiInputLabel-root": {
-                    color: "#344767 !important",
-                  },
-                  "& .MuiInputLabel-root.Mui-focused": {
-                    color: "#344767 !important",
-                  },
+                  "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
+                  "& .MuiInputLabel-root": { color: "#344767 !important" },
+                  "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                 }}
               />
             </MDBox>
@@ -277,31 +271,28 @@ function SalesDashboard() {
             {error}
           </MDTypography>
         )}
-        {filteredData.length === 0 ? (
+        {loading ? (
+          <MDTypography variant="body2" color="text">
+            Loading sales...
+          </MDTypography>
+        ) : filteredData.length === 0 ? (
           <MDTypography variant="body2" color="text">
             No sales found. Try adjusting your filters.
           </MDTypography>
         ) : (
-          <Card
-            sx={{
-              background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
-              borderRadius: "16px",
-              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
-              overflow: "hidden",
-            }}
-          >
+          <Card sx={{
+            background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+            borderRadius: "16px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.1)",
+            overflow: "hidden",
+          }}>
             <DataTable
               table={tableData}
               entriesPerPage={false}
               canSearch={false}
               sx={{
-                "& th": {
-                  paddingRight: "20px !important",
-                  paddingLeft: "20px !important",
-                },
-                "& .MuiTablePagination-root": {
-                  display: "none !important",
-                },
+                "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                "& .MuiTablePagination-root": { display: "none !important" },
               }}
             />
           </Card>

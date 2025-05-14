@@ -9,8 +9,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { Keypair } from "@solana/web3.js";
+import { v4 as uuidv4 } from "uuid";
 
 // User context
 import { useUser } from "/contexts/UserContext";
@@ -22,7 +24,7 @@ import Divider from "@mui/material/Divider";
 import Chip from "@mui/material/Chip";
 import Checkbox from "@mui/material/Checkbox";
 import Icon from "@mui/material/Icon";
-import IconButton from "@mui/material/IconButton"; // Added for delete button
+import IconButton from "@mui/material/IconButton";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -50,26 +52,30 @@ export default function SellerOnboarding() {
   const { publicKey } = useWallet();
   const [form, setForm] = useState({
     storeName: "",
-    shortDescription: "",
-    shopEmail: "",
-    subheading: "",
+    description: "",
+    sellerName: "",
+    shippingAddress: "",
+    taxId: "",
+    maxPrice: "",
+    minPrice: "",
     categories: [],
     thumbnailImage: null,
-    backgroundImage: null,
+    bannerImage: null,
   });
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
-  const [backgroundPreview, setBackgroundPreview] = useState(null);
+  const [bannerPreview, setBannerPreview] = useState(null);
   const [dragActiveThumbnail, setDragActiveThumbnail] = useState(false);
-  const [dragActiveBackground, setDragActiveBackground] = useState(false);
+  const [dragActiveBanner, setDragActiveBanner] = useState(false);
   const [userRole, setUserRole] = useState(null);
+  const [storeId, setStoreId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Check role and wallet
+  // Check role and load store data
   useEffect(() => {
     console.log("Onboarding: Starting role fetch - Wallet ID from user:", user?.walletId, "PublicKey:", publicKey?.toString());
-    const checkRole = async () => {
+    const checkRoleAndStore = async () => {
       try {
         if (!user || !user.walletId) {
           throw new Error("Wallet ID is missing from user context");
@@ -83,28 +89,59 @@ export default function SellerOnboarding() {
 
         console.log("Onboarding: Fetching user role for wallet:", user.walletId);
         const userDoc = await getDoc(doc(db, "users", user.walletId));
-        if (userDoc.exists()) {
-          const role = userDoc.data().role || "buyer";
-          console.log("Onboarding: User Role:", role);
-          setUserRole(role);
-          // Redirect if not seller
-          if (role !== "seller") {
-            console.log("Onboarding: Unauthorized role, redirecting to buyer dashboard");
-            router.push("/dashboards/buyer");
-          }
-        } else {
-          console.log("Onboarding: No user found in Firestore");
+        if (!userDoc.exists()) {
+          console.log("Onboarding: No user found in Firestore, redirecting to buyer dashboard");
           setUserRole("buyer");
           router.push("/dashboards/buyer");
+          return;
         }
+
+        const userData = userDoc.data();
+        const role = userData.role || "buyer";
+        console.log("Onboarding: User Role:", role);
+        setUserRole(role);
+
+        // Load store data if seller
+        if (role === "seller") {
+          const storeIds = userData.storeIds || [];
+          console.log("Onboarding: Store IDs:", storeIds);
+          if (storeIds.length > 0) {
+            console.log("Onboarding: Loading store data for editing");
+            setStoreId(storeIds[0]); // Assume one store for simplicity
+            const storeDoc = await getDoc(doc(db, "stores", storeIds[0]));
+            if (storeDoc.exists()) {
+              const storeData = storeDoc.data();
+              console.log("Onboarding: Store Data:", storeData);
+              setForm({
+                storeName: storeData.name || "",
+                description: storeData.description || "",
+                sellerName: storeData.businessInfo?.sellerName || "",
+                shippingAddress: storeData.businessInfo?.shippingAddress || "",
+                taxId: storeData.businessInfo?.taxId || "",
+                maxPrice: storeData.maxPrice?.toString() || "",
+                minPrice: storeData.minPrice?.toString() || "",
+                categories: storeData.categories || [],
+                thumbnailImage: null,
+                bannerImage: null,
+              });
+              setThumbnailPreview(storeData.thumbnailUrl || null);
+              setBannerPreview(storeData.bannerUrl || null);
+              console.log("Onboarding: Thumbnail Preview URL:", storeData.thumbnailUrl);
+              console.log("Onboarding: Banner Preview URL:", storeData.bannerUrl);
+            } else {
+              console.log("Onboarding: Store document not found for storeId:", storeIds[0]);
+            }
+          }
+        }
+
         setLoading(false);
       } catch (err) {
-        console.error("Onboarding: Error fetching role:", err.message);
+        console.error("Onboarding: Error fetching role/store:", err.message);
         setError(err.message);
         setLoading(false);
       }
     };
-    checkRole();
+    checkRoleAndStore();
   }, [user, publicKey, router]);
 
   // Handle file selection (click or drop)
@@ -113,8 +150,8 @@ export default function SellerOnboarding() {
       setForm((prev) => ({ ...prev, [field]: file }));
       if (field === "thumbnailImage") {
         setThumbnailPreview(URL.createObjectURL(file));
-      } else if (field === "backgroundImage") {
-        setBackgroundPreview(URL.createObjectURL(file));
+      } else if (field === "bannerImage") {
+        setBannerPreview(URL.createObjectURL(file));
       }
     }
   };
@@ -124,8 +161,8 @@ export default function SellerOnboarding() {
     setForm((prev) => ({ ...prev, [field]: null }));
     if (field === "thumbnailImage") {
       setThumbnailPreview(null);
-    } else if (field === "backgroundImage") {
-      setBackgroundPreview(null);
+    } else if (field === "bannerImage") {
+      setBannerPreview(null);
     }
   };
 
@@ -134,13 +171,13 @@ export default function SellerOnboarding() {
     e.preventDefault();
     e.stopPropagation();
     if (field === "thumbnail") setDragActiveThumbnail(true);
-    else if (field === "background") setDragActiveBackground(true);
+    else if (field === "banner") setDragActiveBanner(true);
   };
   const handleDragLeave = (e, field) => {
     e.preventDefault();
     e.stopPropagation();
     if (field === "thumbnail") setDragActiveThumbnail(false);
-    else if (field === "background") setDragActiveBackground(false);
+    else if (field === "banner") setDragActiveBanner(false);
   };
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -150,10 +187,10 @@ export default function SellerOnboarding() {
     e.preventDefault();
     e.stopPropagation();
     if (field === "thumbnail") setDragActiveThumbnail(false);
-    else if (field === "background") setDragActiveBackground(false);
+    else if (field === "banner") setDragActiveBanner(false);
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("image/")) {
-      handleFileChange(file, field === "thumbnail" ? "thumbnailImage" : "backgroundImage");
+      handleFileChange(file, field === "thumbnail" ? "thumbnailImage" : "bannerImage");
     }
   };
 
@@ -176,46 +213,84 @@ export default function SellerOnboarding() {
     try {
       setError(null);
       setSuccess(null);
-      const { storeName, shortDescription, shopEmail, subheading, categories, thumbnailImage, backgroundImage } = form;
-      if (!storeName || !shortDescription || !shopEmail || !categories.length) {
+      const { storeName, description, sellerName, shippingAddress, taxId, maxPrice, minPrice, categories, thumbnailImage, bannerImage } = form;
+      if (!storeName || !description || !sellerName || !shippingAddress || !maxPrice || !minPrice || !categories.length || (!thumbnailImage && !thumbnailPreview)) {
         throw new Error("Please fill in all required fields");
       }
 
-      // Upload images
-      let thumbnailUrl = "";
-      let backgroundUrl = "";
+      // Validate price fields
+      const maxPriceNum = parseFloat(maxPrice);
+      const minPriceNum = parseFloat(minPrice);
+      if (isNaN(maxPriceNum) || isNaN(minPriceNum) || maxPriceNum <= minPriceNum) {
+        throw new Error("Max price must be greater than min price and both must be valid numbers");
+      }
+
+      // Generate escrow wallet (only for new stores)
+      const escrowId = storeId ? null : Keypair.generate().publicKey.toString();
+
+      // Upload images if changed
+      let thumbnailUrl = thumbnailPreview;
+      let bannerUrl = bannerPreview;
       if (thumbnailImage) {
-        const thumbnailRef = ref(storage, `stores/${user.walletId}/thumbnail-${thumbnailImage.name}`);
+        const fileExt = thumbnailImage.name.split('.').pop().toLowerCase();
+        const thumbnailRef = ref(storage, `stores/${storeId || user.walletId}/thumbnail.${fileExt}`);
+        console.log("Onboarding: Uploading thumbnail to:", thumbnailRef.fullPath);
         await uploadBytes(thumbnailRef, thumbnailImage);
         thumbnailUrl = await getDownloadURL(thumbnailRef);
+        console.log("Onboarding: Thumbnail URL:", thumbnailUrl);
       }
-      if (backgroundImage) {
-        const backgroundRef = ref(storage, `stores/${user.walletId}/banner-${backgroundImage.name}`);
-        await uploadBytes(backgroundRef, backgroundImage);
-        backgroundUrl = await getDownloadURL(backgroundRef);
+      if (bannerImage) {
+        const fileExt = bannerImage.name.split('.').pop().toLowerCase();
+        const bannerRef = ref(storage, `stores/${storeId || user.walletId}/banner.${fileExt}`);
+        console.log("Onboarding: Uploading banner to:", bannerRef.fullPath);
+        await uploadBytes(bannerRef, bannerImage);
+        bannerUrl = await getDownloadURL(bannerRef);
+        console.log("Onboarding: Banner URL:", bannerUrl);
       }
 
-      // Save seller profile
-      await setDoc(doc(db, "sellers", user.walletId), {
-        storeName,
-        shortDescription,
-        shopEmail,
-        subheading,
+      // Use existing storeId or generate new one
+      const targetStoreId = storeId || `${storeName.replace(/\s+/g, '-').toLowerCase()}-${uuidv4().slice(0, 8)}`;
+
+      // Save or update store profile
+      const storeData = {
+        name: storeName,
+        description,
+        businessInfo: {
+          sellerName,
+          shippingAddress,
+          taxId: taxId || "",
+        },
         categories,
-        thumbnailImage: thumbnailUrl,
-        backgroundImage: backgroundUrl,
-        createdAt: new Date(),
-      });
+        maxPrice: maxPriceNum,
+        minPrice: minPriceNum,
+        thumbnailUrl,
+        bannerUrl,
+        isActive: true,
+        sellerId: user.walletId,
+        updatedAt: serverTimestamp(),
+      };
+      if (!storeId) {
+        storeData.escrowId = escrowId;
+        storeData.createdAt = serverTimestamp();
+      }
 
-      // Update user role
-      await setDoc(doc(db, "users", user.walletId), { role: "seller" }, { merge: true });
-      setUser({ ...user, role: "seller" });
+      console.log("Onboarding: Saving store data to stores/", targetStoreId, ":", storeData);
+      await setDoc(doc(db, "stores", targetStoreId), storeData, { merge: true });
 
-      setSuccess("Store profile created successfully!");
+      // Update user with storeId and role
+      await setDoc(doc(db, "users", user.walletId), {
+        role: "seller",
+        storeIds: [targetStoreId],
+      }, { merge: true });
+
+      // Update local user context
+      setUser({ ...user, role: "seller", storeIds: [targetStoreId] });
+
+      setSuccess("Store profile saved successfully!");
       setTimeout(() => router.push("/dashboards/seller"), 2000);
     } catch (error) {
-      console.error("Error creating seller profile:", error);
-      setError("Failed to create seller profile: " + error.message);
+      console.error("Onboarding: Error saving seller profile:", error);
+      setError("Failed to save seller profile: " + error.message);
     }
   };
 
@@ -226,9 +301,9 @@ export default function SellerOnboarding() {
         <MDBox py={{ xs: 2, md: 3 }}>
           <Grid container spacing={3} justifyContent="center">
             <Grid item xs={12} md={9}>
-              <Card sx={{ 
-                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", 
-                borderRadius: "16px", 
+              <Card sx={{
+                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+                borderRadius: "16px",
                 boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
                 backdropFilter: "blur(10px)",
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
@@ -257,9 +332,9 @@ export default function SellerOnboarding() {
         <MDBox py={{ xs: 2, md: 3 }}>
           <Grid container spacing={3} justifyContent="center">
             <Grid item xs={12} md={9}>
-              <Card sx={{ 
-                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", 
-                borderRadius: "16px", 
+              <Card sx={{
+                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+                borderRadius: "16px",
                 boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
                 backdropFilter: "blur(10px)",
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
@@ -285,12 +360,12 @@ export default function SellerOnboarding() {
         <MDBox py={{ xs: 2, md: 3 }}>
           <Grid container spacing={3} justifyContent="center">
             <Grid item xs={12} md={9}>
-              <Card sx={{ 
-                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", 
-                borderRadius: "16px", 
+              <Card sx={{
+                background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+                borderRadius: "16px",
                 boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
                 backdropFilter: "blur(10px)",
-                backgroundColor: "rgba(255, 255, 0.8)",
+                backgroundColor: "rgba(255, 255, 255, 0.8)",
                 overflow: "hidden"
               }}>
                 <MDBox p={{ xs: 2, md: 3 }}>
@@ -315,58 +390,54 @@ export default function SellerOnboarding() {
     );
   }
 
-  if (userRole !== "seller") {
-    return null; // Redirect handled in useEffect
-  }
-
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={{ xs: 2, md: 3 }}>
         <Grid container spacing={3} justifyContent="center">
           <Grid item xs={12} md={9}>
-            <Card sx={{ 
-              background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", 
-              borderRadius: "16px", 
+            <Card sx={{
+              background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)",
+              borderRadius: "16px",
               boxShadow: "0 8px 24px rgba(0, 0, 0, 0.15)",
               backdropFilter: "blur(10px)",
               backgroundColor: "rgba(255, 255, 255, 0.8)",
               overflow: "hidden"
             }}>
               <MDBox p={{ xs: 2, md: 4 }}>
-                <MDTypography 
-                  variant="h5" 
-                  mb={{ xs: 3, md: 4 }} 
-                  sx={{ 
-                    fontWeight: 700, 
-                    color: "#344767", // Dark text
+                <MDTypography
+                  variant="h5"
+                  mb={{ xs: 3, md: 4 }}
+                  sx={{
+                    fontWeight: 700,
+                    color: "#344767",
                     textAlign: "center",
                     letterSpacing: "0.5px"
                   }}
                 >
-                  Create Your F4cet Store Profile
+                  {storeId ? "Edit Your F4cet Store Profile" : "Create Your F4cet Store Profile"}
                 </MDTypography>
                 {error && (
-                  <MDTypography 
-                    variant="body2" 
-                    color="error" 
-                    mb={2} 
-                    sx={{ 
-                      color: "#d32f2f", // Explicit red for error
-                      textAlign: { xs: "center", md: "left" } 
+                  <MDTypography
+                    variant="body2"
+                    color="error"
+                    mb={2}
+                    sx={{
+                      color: "#d32f2f",
+                      textAlign: { xs: "center", md: "left" }
                     }}
                   >
                     {error}
                   </MDTypography>
                 )}
                 {success && (
-                  <MDTypography 
-                    variant="body2" 
-                    color="success" 
-                    mb={2} 
-                    sx={{ 
-                      color: "#2e7d32", // Explicit green for success
-                      textAlign: { xs: "center", md: "left" } 
+                  <MDTypography
+                    variant="body2"
+                    color="success"
+                    mb={2}
+                    sx={{
+                      color: "#2e7d32",
+                      textAlign: { xs: "center", md: "left" }
                     }}
                   >
                     {success}
@@ -404,9 +475,7 @@ export default function SellerOnboarding() {
                                 right: "-10px",
                                 backgroundColor: "#d32f2f",
                                 color: "#fff",
-                                "&:hover": {
-                                  backgroundColor: "#b71c1c",
-                                },
+                                "&:hover": { backgroundColor: "#b71c1c" },
                               }}
                             >
                               <Icon>close</Icon>
@@ -424,10 +493,7 @@ export default function SellerOnboarding() {
                           backgroundColor: dragActiveThumbnail ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
                           transition: "all 0.3s ease",
                           cursor: "pointer",
-                          "&:hover": {
-                            transform: "scale(1.02)",
-                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                          },
+                          "&:hover": { transform: "scale(1.02)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)" },
                           width: { xs: "150px", md: "250px" },
                           height: { xs: "112px", md: "100px" },
                           margin: "0 auto",
@@ -441,24 +507,11 @@ export default function SellerOnboarding() {
                         onDrop={(e) => handleDrop(e, "thumbnail")}
                         onClick={() => document.getElementById("thumbnailInput").click()}
                       >
-                        <MDTypography 
-                          variant="body2" 
-                          sx={{ 
-                            color: dragActiveThumbnail ? "#3f51b5" : "#344767",
-                            mb: 1 
-                          }}
-                        >
+                        <MDTypography variant="body2" sx={{ color: dragActiveThumbnail ? "#3f51b5" : "#344767", mb: 1 }}>
                           Drag & Drop or Click to Upload
                         </MDTypography>
-                        <MDTypography 
-                          variant="caption" 
-                          sx={{ 
-                            color: "#344767",
-                            display: "block", 
-                            mb: 1 
-                          }}
-                        >
-                          (Supports PNG, JPG, up to 5MB)
+                        <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
+                          (Supports PNG, JPG, WebP, up to 5MB)
                         </MDTypography>
                         <MDInput
                           id="thumbnailInput"
@@ -469,20 +522,13 @@ export default function SellerOnboarding() {
                         />
                       </MDBox>
                       <MDBox mb={4}>
-                        <MDTypography 
-                          variant="h6" 
-                          sx={{ 
-                            fontWeight: 600, 
-                            color: "#344767",
-                            textAlign: "center"
-                          }}
-                        >
+                        <MDTypography variant="h6" sx={{ fontWeight: 600, color: "#344767", textAlign: "center" }}>
                           Store Thumbnail
                         </MDTypography>
                       </MDBox>
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      {backgroundPreview && (
+                      {bannerPreview && (
                         <MDBox mb={3} display="flex" justifyContent="center">
                           <MDBox
                             sx={{
@@ -493,7 +539,7 @@ export default function SellerOnboarding() {
                           >
                             <MDBox
                               component="img"
-                              src={backgroundPreview}
+                              src={bannerPreview}
                               sx={{
                                 width: "100%",
                                 height: "100%",
@@ -504,16 +550,14 @@ export default function SellerOnboarding() {
                               }}
                             />
                             <IconButton
-                              onClick={() => handleDeleteImage("backgroundImage")}
+                              onClick={() => handleDeleteImage("bannerImage")}
                               sx={{
                                 position: "absolute",
                                 top: "-10px",
                                 right: "-10px",
                                 backgroundColor: "#d32f2f",
                                 color: "#fff",
-                                "&:hover": {
-                                  backgroundColor: "#b71c1c",
-                                },
+                                "&:hover": { backgroundColor: "#b71c1c" },
                               }}
                             >
                               <Icon>close</Icon>
@@ -524,17 +568,14 @@ export default function SellerOnboarding() {
                       <MDBox
                         mb={1}
                         sx={{
-                          border: `2px dashed ${dragActiveBackground ? "#3f51b5" : "#bdbdbd"}`,
+                          border: `2px dashed ${dragActiveBanner ? "#3f51b5" : "#bdbdbd"}`,
                           borderRadius: "12px",
                           padding: { xs: "16px", md: "20px" },
                           textAlign: "center",
-                          backgroundColor: dragActiveBackground ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
+                          backgroundColor: dragActiveBanner ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
                           transition: "all 0.3s ease",
                           cursor: "pointer",
-                          "&:hover": {
-                            transform: "scale(1.02)",
-                            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                          },
+                          "&:hover": { transform: "scale(1.02)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)" },
                           width: { xs: "150px", md: "250px" },
                           height: { xs: "112px", md: "100px" },
                           margin: "0 auto",
@@ -542,48 +583,28 @@ export default function SellerOnboarding() {
                           flexDirection: "column",
                           justifyContent: "center",
                         }}
-                        onDragEnter={(e) => handleDragEnter(e, "background")}
-                        onDragLeave={(e) => handleDragLeave(e, "background")}
+                        onDragEnter={(e) => handleDragEnter(e, "banner")}
+                        onDragLeave={(e) => handleDragLeave(e, "banner")}
                         onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, "background")}
-                        onClick={() => document.getElementById("backgroundInput").click()}
+                        onDrop={(e) => handleDrop(e, "banner")}
+                        onClick={() => document.getElementById("bannerInput").click()}
                       >
-                        <MDTypography 
-                          variant="body2" 
-                          sx={{ 
-                            color: dragActiveBackground ? "#3f51b5" : "#344767",
-                            mb: 1 
-                          }}
-                        >
+                        <MDTypography variant="body2" sx={{ color: dragActiveBanner ? "#3f51b5" : "#344767", mb: 1 }}>
                           Drag & Drop or Click to Upload
                         </MDTypography>
-                        <MDTypography 
-                          variant="caption" 
-                          sx={{ 
-                            color: "#344767",
-                            display: "block", 
-                            mb: 1 
-                          }}
-                        >
-                          (Supports PNG, JPG, up to 5MB)
+                        <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
+                          (Supports PNG, JPG, WebP, up to 5MB)
                         </MDTypography>
                         <MDInput
-                          id="backgroundInput"
+                          id="bannerInput"
                           type="file"
                           accept="image/*"
-                          onChange={(e) => handleFileChange(e.target.files[0], "backgroundImage")}
+                          onChange={(e) => handleFileChange(e.target.files[0], "bannerImage")}
                           sx={{ display: "none" }}
                         />
                       </MDBox>
                       <MDBox mb={4}>
-                        <MDTypography 
-                          variant="h6" 
-                          sx={{ 
-                            fontWeight: 600, 
-                            color: "#344767",
-                            textAlign: "center"
-                          }}
-                        >
+                        <MDTypography variant="h6" sx={{ fontWeight: 600, color: "#344767", textAlign: "center" }}>
                           Store Banner Image
                         </MDTypography>
                       </MDBox>
@@ -601,75 +622,60 @@ export default function SellerOnboarding() {
                           fullWidth
                           required
                           sx={{
-                            "& .MuiInputBase-root": {
-                              transition: "all 0.3s ease",
-                              "&:hover": {
-                                transform: "scale(1.01)",
-                              },
-                            },
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "12px", md: "14px" },
-                              color: "#344767",
-                            },
-                            "& .MuiInputLabel-root": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important",
-                            },
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                             "& .MuiOutlinedInput-root": {
-                              "& fieldset": {
-                                borderColor: "#bdbdbd",
-                              },
-                              "&:hover fieldset": {
-                                borderColor: "#3f51b5",
-                              },
-                              "&.Mui-focused fieldset": {
-                                borderColor: "#3f51b5",
-                              },
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
                             },
                           }}
                         />
                       </MDBox>
                       <MDBox mb={4}>
                         <MDInput
-                          label="Subheading"
-                          name="subheading"
-                          value={form.subheading}
+                          label="Seller Name"
+                          name="sellerName"
+                          value={form.sellerName}
                           onChange={handleInputChange}
                           fullWidth
-                          placeholder="e.g., Free shipping on orders over 2 SOL! Use code F4CETS10"
+                          required
                           sx={{
-                            "& .MuiInputBase-root": {
-                              transition: "all 0.3s ease",
-                              "&:hover": {
-                                transform: "scale(1.01)",
-                              },
-                            },
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "12px", md: "14px" },
-                              color: "#344767",
-                            },
-                            "& .MuiInputLabel-root": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputBase-input::placeholder": {
-                              color: "#757575",
-                              opacity: 1,
-                            },
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                             "& .MuiOutlinedInput-root": {
-                              "& fieldset": {
-                                borderColor: "#bdbdbd",
-                              },
-                              "&:hover fieldset": {
-                                borderColor: "#3f51b5",
-                              },
-                              "&.Mui-focused fieldset": {
-                                borderColor: "#3f51b5",
-                              },
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
+                            },
+                          }}
+                        />
+                      </MDBox>
+                      <MDBox mb={4}>
+                        <MDInput
+                          label="Description"
+                          name="description"
+                          value={form.description}
+                          onChange={handleInputChange}
+                          multiline
+                          rows={4}
+                          fullWidth
+                          required
+                          placeholder="Company slogan - keep it to 1 sentence"
+                          sx={{
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                            "& .MuiInputBase-input::placeholder": { color: "#757575", opacity: 1 },
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
                             },
                           }}
                         />
@@ -678,86 +684,85 @@ export default function SellerOnboarding() {
                     <Grid item xs={12} md={6}>
                       <MDBox mb={4}>
                         <MDInput
-                          label="Short Description"
-                          name="shortDescription"
-                          value={form.shortDescription}
+                          label="Shipping Address"
+                          name="shippingAddress"
+                          value={form.shippingAddress}
                           onChange={handleInputChange}
-                          multiline
-                          rows={4}
                           fullWidth
                           required
-                          placeholder="Company slogan - keep it to 1 sentence"
                           sx={{
-                            "& .MuiInputBase-root": {
-                              transition: "all 0.3s ease",
-                              "&:hover": {
-                                transform: "scale(1.01)",
-                              },
-                            },
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "12px", md: "14px" },
-                              color: "#344767",
-                            },
-                            "& .MuiInputLabel-root": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputBase-input::placeholder": {
-                              color: "#757575",
-                              opacity: 1,
-                            },
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                             "& .MuiOutlinedInput-root": {
-                              "& fieldset": {
-                                borderColor: "#bdbdbd",
-                              },
-                              "&:hover fieldset": {
-                                borderColor: "#3f51b5",
-                              },
-                              "&.Mui-focused fieldset": {
-                                borderColor: "#3f51b5",
-                              },
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
                             },
                           }}
                         />
                       </MDBox>
                       <MDBox mb={4}>
                         <MDInput
-                          label="Shop Email"
-                          name="shopEmail"
-                          type="email"
-                          value={form.shopEmail}
+                          label="Tax ID (Optional)"
+                          name="taxId"
+                          value={form.taxId}
+                          onChange={handleInputChange}
+                          fullWidth
+                          sx={{
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
+                            },
+                          }}
+                        />
+                      </MDBox>
+                      <MDBox mb={4}>
+                        <MDInput
+                          label="Minimum Price (USD)"
+                          name="minPrice"
+                          type="number"
+                          value={form.minPrice}
                           onChange={handleInputChange}
                           fullWidth
                           required
                           sx={{
-                            "& .MuiInputBase-root": {
-                              transition: "all 0.3s ease",
-                              "&:hover": {
-                                transform: "scale(1.01)",
-                              },
-                            },
-                            "& .MuiInputBase-input": {
-                              padding: { xs: "12px", md: "14px" },
-                              color: "#344767",
-                            },
-                            "& .MuiInputLabel-root": {
-                              color: "#344767 !important",
-                            },
-                            "& .MuiInputLabel-root.Mui-focused": {
-                              color: "#344767 !important",
-                            },
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                             "& .MuiOutlinedInput-root": {
-                              "& fieldset": {
-                                borderColor: "#bdbdbd",
-                              },
-                              "&:hover fieldset": {
-                                borderColor: "#3f51b5",
-                              },
-                              "&.Mui-focused fieldset": {
-                                borderColor: "#3f51b5",
-                              },
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
+                            },
+                          }}
+                        />
+                      </MDBox>
+                      <MDBox mb={4}>
+                        <MDInput
+                          label="Maximum Price (USD)"
+                          name="maxPrice"
+                          type="number"
+                          value={form.maxPrice}
+                          onChange={handleInputChange}
+                          fullWidth
+                          required
+                          sx={{
+                            "& .MuiInputBase-root": { transition: "all 0.3s ease", "&:hover": { transform: "scale(1.01)" } },
+                            "& .MuiInputBase-input": { padding: { xs: "12px", md: "14px" }, color: "#344767" },
+                            "& .MuiInputLabel-root": { color: "#344767 !important" },
+                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&:hover fieldset": { borderColor: "#3f51b5" },
+                              "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
                             },
                           }}
                         />
@@ -765,15 +770,7 @@ export default function SellerOnboarding() {
                     </Grid>
                   </Grid>
                   <MDBox mb={4}>
-                    <MDTypography 
-                      variant="h6" 
-                      sx={{ 
-                        fontWeight: 600, 
-                        color: "#344767",
-                        mb: 1.5,
-                        letterSpacing: "0.5px"
-                      }}
-                    >
+                    <MDTypography variant="h6" sx={{ fontWeight: 600, color: "#344767", mb: 1.5, letterSpacing: "0.5px" }}>
                       Categories
                     </MDTypography>
                     <MDBox
@@ -796,9 +793,7 @@ export default function SellerOnboarding() {
                             padding: "8px 12px",
                             borderRadius: "8px",
                             transition: "background-color 0.3s ease",
-                            "&:hover": {
-                              backgroundColor: "rgba(255, 255, 255, 0.1)",
-                            },
+                            "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
                             backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
                           }}
                         >
@@ -808,22 +803,12 @@ export default function SellerOnboarding() {
                               onChange={() => handleCategoryChange(category)}
                               sx={{
                                 color: "#fff",
-                                "&.Mui-checked": {
-                                  color: "#fff",
-                                },
-                                "& .MuiSvgIcon-root": {
-                                  borderRadius: "4px",
-                                },
+                                "&.Mui-checked": { color: "#fff" },
+                                "& .MuiSvgIcon-root": { borderRadius: "4px" },
                                 padding: "4px",
                               }}
                             />
-                            <MDTypography
-                              variant="body2"
-                              sx={{
-                                color: "#fff",
-                                fontSize: { xs: "0.875rem", md: "1rem" },
-                              }}
-                            >
+                            <MDTypography variant="body2" sx={{ color: "#fff", fontSize: { xs: "0.875rem", md: "1rem" } }}>
                               {category}
                             </MDTypography>
                           </MDBox>
@@ -837,13 +822,8 @@ export default function SellerOnboarding() {
                                 color: "#fff",
                                 borderRadius: "16px",
                                 height: "24px",
-                                "& .MuiChip-label": {
-                                  padding: "0 8px",
-                                  fontSize: "0.75rem",
-                                },
-                                "&:hover": {
-                                  backgroundColor: "rgba(255, 255, 255, 0.3)",
-                                },
+                                "& .MuiChip-label": { padding: "0 8px", fontSize: "0.75rem" },
+                                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
                               }}
                             />
                           )}
@@ -852,21 +832,18 @@ export default function SellerOnboarding() {
                     </MDBox>
                   </MDBox>
                   <MDBox display="flex" justifyContent="center">
-                    <MDButton 
-                      type="submit" 
-                      color="primary" 
-                      variant="gradient" 
-                      sx={{ 
+                    <MDButton
+                      type="submit"
+                      color="primary"
+                      variant="gradient"
+                      sx={{
                         padding: { xs: "10px 28px", md: "12px 36px" },
                         borderRadius: "12px",
                         transition: "all 0.5s ease",
-                        "&:hover": {
-                          transform: "translateY(-2px)",
-                          boxShadow: "0 6px 16px rgba(0, 0, 0, 0.3)",
-                        },
+                        "&:hover": { transform: "translateY(-2px)", boxShadow: "0 6px 16px rgba(0, 0, 0, 0.3)" },
                       }}
                     >
-                      Save Profile
+                      {storeId ? "Update Profile" : "Save Profile"}
                     </MDButton>
                   </MDBox>
                 </form>
