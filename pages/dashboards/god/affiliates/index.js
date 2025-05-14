@@ -7,7 +7,7 @@
 */
 
 // React imports
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -15,7 +15,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 
 // Firebase imports
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, orderBy, limit, startAfter } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -55,34 +55,6 @@ const categories = [
   "Sporting Goods", "Toys & Games"
 ];
 
-// Dummy Data
-const dummyAffiliates = [
-  {
-    id: "affiliate123",
-    name: "CryptoDeals",
-    affiliateLink: "https://cryptodeals.com",
-    categories: ["Electronics", "Software"],
-    cryptoBackOffer: "Upto 85% Crypto Cashback",
-    logoUrl: "",
-  },
-  {
-    id: "affiliate456",
-    name: "FashionAffiliate",
-    affiliateLink: "https://fashionaffiliate.com",
-    categories: ["Clothing", "Accessories"],
-    cryptoBackOffer: "Upto 75% Crypto Cashback",
-    logoUrl: "",
-  },
-  {
-    id: "affiliate789",
-    name: "TechPromo",
-    affiliateLink: "https://techpromo.com",
-    categories: ["Electronics", "EGames"],
-    cryptoBackOffer: "Upto 80% Crypto Cashback",
-    logoUrl: "",
-  },
-];
-
 // Animation variants for the button
 const buttonVariants = {
   rest: {
@@ -104,10 +76,14 @@ function AffiliateSearch() {
   const { user } = useUser();
   const router = useRouter();
   const [affiliates, setAffiliates] = useState([]);
+  const [displayedAffiliates, setDisplayedAffiliates] = useState([]);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: "",
     affiliateLink: "",
@@ -118,31 +94,82 @@ function AffiliateSearch() {
   const [logoPreview, setLogoPreview] = useState(null);
   const [dragActiveLogo, setDragActiveLogo] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const loaderRef = useRef(null);
 
-  // Fetch affiliates from Firestore
+  // Fetch affiliates from Firestore with infinite scroll
+  const fetchAffiliates = useCallback(async () => {
+    if (!user || !user.walletId || isLoading || !hasMore) return;
+
+    setIsLoading(true);
+    try {
+      const pageSize = 10; // Load 10 affiliates at a time
+      let affiliatesQuery = query(
+        collection(db, "affiliates"),
+        orderBy("name"),
+        limit(pageSize)
+      );
+
+      if (lastDoc) {
+        affiliatesQuery = query(
+          collection(db, "affiliates"),
+          orderBy("name"),
+          startAfter(lastDoc),
+          limit(pageSize)
+        );
+      }
+
+      const affiliatesSnapshot = await getDocs(affiliatesQuery);
+      const affiliatesData = affiliatesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      })).filter(affiliate => affiliate.name && affiliate.affiliateLink);
+
+      setDisplayedAffiliates(prev => {
+        const newData = [...prev, ...affiliatesData];
+        return Array.from(new Map(newData.map(item => [item.id, item])).values());
+      });
+      setAffiliates(prev => {
+        const newData = [...prev, ...affiliatesData];
+        return Array.from(new Map(newData.map(item => [item.id, item])).values());
+      });
+      setLastDoc(affiliatesSnapshot.docs[affiliatesSnapshot.docs.length - 1]);
+      setHasMore(affiliatesSnapshot.docs.length === pageSize);
+
+      console.log("Fetched affiliates:", affiliatesData); // Debugging
+    } catch (err) {
+      console.error("Error fetching affiliates:", err);
+      setError("Failed to load affiliates.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, lastDoc, isLoading, hasMore]);
+
+  // Initial fetch
   useEffect(() => {
-    const fetchAffiliates = async () => {
-      if (!user || !user.walletId) return;
+    fetchAffiliates();
+  }, [fetchAffiliates]);
 
-      try {
-        const affiliatesCollection = collection(db, "affiliates");
-        const affiliatesSnapshot = await getDocs(affiliatesCollection);
-        const affiliatesData = affiliatesSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter(affiliate => affiliate.name && affiliate.affiliateLink);
-        setAffiliates(affiliatesData.length > 0 ? affiliatesData : dummyAffiliates);
-      } catch (err) {
-        console.error("Error fetching affiliates:", err);
-        setError("Failed to load affiliates. Using sample data.");
-        setAffiliates(dummyAffiliates);
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          fetchAffiliates();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => {
+      if (loaderRef.current) {
+        observer.unobserve(loaderRef.current);
       }
     };
-
-    fetchAffiliates();
-  }, [user]);
+  }, [hasMore, isLoading, fetchAffiliates]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
@@ -152,7 +179,7 @@ function AffiliateSearch() {
   }, [user, router]);
 
   // Filter affiliates by search term
-  const filteredAffiliates = affiliates.filter(affiliate =>
+  const filteredAffiliates = displayedAffiliates.filter(affiliate =>
     (affiliate.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
     (affiliate.id?.toLowerCase() || "").includes(searchTerm.toLowerCase())
   );
@@ -237,9 +264,16 @@ function AffiliateSearch() {
     try {
       let logoUrl = "";
       if (createForm.logo) {
-        const logoRef = ref(storage, `affiliates/${createForm.name}/logo-${createForm.logo.name}`);
+        // Extract file extension
+        const extension = createForm.logo.name.split('.').pop();
+        // Use clean affiliate name (sanitize if needed)
+        const sanitizedName = createForm.name.replace(/[^a-zA-Z0-9-_]/g, '');
+        // Construct path to match Storage rule (logo.<extension>)
+        const logoRef = ref(storage, `affiliates/${sanitizedName}/logo.${extension}`);
+        console.log("Uploading logo to:", logoRef.fullPath); // Debugging
         await uploadBytes(logoRef, createForm.logo);
         logoUrl = await getDownloadURL(logoRef);
+        console.log("Logo uploaded, URL:", logoUrl); // Debugging
       }
 
       const newAffiliate = {
@@ -248,13 +282,19 @@ function AffiliateSearch() {
         cryptoBackOffer: createForm.cryptoBackOffer,
         categories: createForm.categories,
         logoUrl,
+        isActive: true,
         createdAt: new Date().toISOString(),
-        removed: false,
-        flagCount: 0,
-        flagReasons: [],
+        updatedAt: new Date().toISOString(),
       };
       const docRef = await addDoc(collection(db, "affiliates"), newAffiliate);
-      setAffiliates([...affiliates, { id: docRef.id, ...newAffiliate }]);
+      setAffiliates(prev => {
+        const updated = [...prev, { id: docRef.id, ...newAffiliate }];
+        return Array.from(new Map(updated.map(item => [item.id, item])).values());
+      });
+      setDisplayedAffiliates(prev => {
+        const updated = [...prev, { id: docRef.id, ...newAffiliate }];
+        return Array.from(new Map(updated.map(item => [item.id, item])).values());
+      });
       setSuccess("Affiliate created successfully!");
       handleCloseCreateModal();
     } catch (err) {
@@ -273,16 +313,12 @@ function AffiliateSearch() {
   return (
     <DashboardLayout>
       <DashboardNavbar />
-      <MDBox py={3}>
+      <MDBox py={3} minHeight="100vh">
         <MDBox mb={3} display="flex" justifyContent="space-between" alignItems="center">
           <MDTypography variant="h4" color="dark">
             Affiliate Management
           </MDTypography>
-          <motion.div
-            variants={buttonVariants}
-            initial="rest"
-            whileHover="hover"
-          >
+          <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
             <MDButton
               onClick={handleOpenCreateModal}
               variant="gradient"
@@ -295,9 +331,7 @@ function AffiliateSearch() {
                 borderRadius: "12px",
                 boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
                 background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                "&:hover": {
-                  background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                },
+                "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
                 width: { xs: "100%", sm: "auto" },
                 maxWidth: { xs: "300px", sm: "auto" },
               }}
@@ -322,22 +356,12 @@ function AffiliateSearch() {
               onChange={(e) => setSearchTerm(e.target.value)}
               fullWidth
               sx={{
-                "& .MuiInputBase-root": {
-                  transition: "all 0.3s ease",
-                },
-                "& .MuiInputBase-input": {
-                  padding: { xs: "8px", md: "10px" },
-                },
+                "& .MuiInputBase-root": { transition: "all 0.3s ease" },
+                "& .MuiInputBase-input": { padding: { xs: "8px", md: "10px" } },
                 "& .MuiOutlinedInput-root": {
-                  "& fieldset": {
-                    borderColor: '#bdbdbd',
-                  },
-                  "&:hover fieldset": {
-                    borderColor: '#3f51b5',
-                  },
-                  "&.Mui-focused fieldset": {
-                    borderColor: '#3f51b5',
-                  },
+                  "& fieldset": { borderColor: '#bdbdbd' },
+                  "&:hover fieldset": { borderColor: '#3f51b5' },
+                  "&.Mui-focused fieldset": { borderColor: '#3f51b5' },
                 },
               }}
             />
@@ -401,6 +425,13 @@ function AffiliateSearch() {
             </MDBox>
           )}
         </Grid>
+        {hasMore && (
+          <MDBox ref={loaderRef} textAlign="center" py={2}>
+            <MDTypography variant="body2" color="text">
+              Loading more affiliates...
+            </MDTypography>
+            </MDBox>
+        )}
         <Dialog open={openCreateModal} onClose={handleCloseCreateModal} maxWidth="md" fullWidth>
           <DialogTitle>Create New Affiliate</DialogTitle>
           <DialogContent>
@@ -445,9 +476,7 @@ function AffiliateSearch() {
                           right: "-10px",
                           backgroundColor: "#d32f2f",
                           color: "#fff",
-                          "&:hover": {
-                            backgroundColor: "#b71c1c",
-                          },
+                          "&:hover": { backgroundColor: "#b71c1c" },
                         }}
                       >
                         <Icon>close</Icon>
@@ -536,9 +565,7 @@ function AffiliateSearch() {
                     required
                     disabled={isCreating}
                     sx={{
-                      "& .MuiInputBase-root": {
-                        transition: "all 0.3s ease",
-                      },
+                      "& .MuiInputBase-root": { transition: "all 0.3s ease" },
                       "& .MuiInputBase-input": {
                         padding: { xs: "10px", md: "12px" },
                         color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
@@ -577,9 +604,7 @@ function AffiliateSearch() {
                     placeholder="e.g., https://example.com"
                     disabled={isCreating}
                     sx={{
-                      "& .MuiInputBase-root": {
-                        transition: "all 0.3s ease",
-                      },
+                      "& .MuiInputBase-root": { transition: "all 0.3s ease" },
                       "& .MuiInputBase-input": {
                         padding: { xs: "10px", md: "12px" },
                         color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
@@ -620,9 +645,7 @@ function AffiliateSearch() {
                     placeholder="e.g., Upto 85% Crypto Cashback"
                     disabled={isCreating}
                     sx={{
-                      "& .MuiInputBase-root": {
-                        transition: "all 0.3s ease",
-                      },
+                      "& .MuiInputBase-root": { transition: "all 0.3s ease" },
                       "& .MuiInputBase-input": {
                         padding: { xs: "10px", md: "12px" },
                         color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
@@ -680,9 +703,7 @@ function AffiliateSearch() {
                       padding: "8px 12px",
                       borderRadius: "8px",
                       transition: "background-color 0.3s ease",
-                      "&:hover": {
-                        backgroundColor: "rgba(255, 255, 255, 0.1)",
-                      },
+                      "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
                       backgroundColor: createForm.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
                     }}
                   >
@@ -718,13 +739,8 @@ function AffiliateSearch() {
                           color: "#fff",
                           borderRadius: "16px",
                           height: "24px",
-                          "& .MuiChip-label": {
-                            padding: "0 8x",
-                            fontSize: "0.75rem",
-                          },
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.3)",
-                          },
+                          "& .MuiChip-label": { padding: "0 8px", fontSize: "0.75rem" },
+                          "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
                         }}
                       />
                     )}

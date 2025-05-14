@@ -11,7 +11,9 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { db } from "/lib/firebase"; // Adjust path to your Firebase config
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -23,21 +25,12 @@ import Card from "@mui/material/Card";
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
 import DefaultStatisticsCard from "/examples/Cards/StatisticsCards/DefaultStatisticsCard";
-import DefaultLineChart from "/examples/Charts/LineCharts/DefaultLineChart";
 import DataTable from "/examples/Tables/DataTable";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
-import MDBadgeDot from "/components/MDBadgeDot";
-import MDButton from "/components/MDButton";
-import Tooltip from "@mui/material/Tooltip";
-import Icon from "@mui/material/Icon";
 
-// Data
-import defaultLineChartData from "/pagesComponents/dashboards/sales/data/defaultLineChartData";
-import dataTableData from "/pagesComponents/dashboards/sales/data/dataTableData";
-
-// Dummy Data for New Cards
+// Dummy Data for Tables
 const topSellingStoresData = {
   columns: [
     { Header: "Store Name", accessor: "storeName", width: "40%" },
@@ -45,26 +38,24 @@ const topSellingStoresData = {
     { Header: "Avg. Rating", accessor: "avgRating", width: "30%" },
   ],
   rows: [
-    {
-      storeName: "FashionHub",
-      totalSales: "$8,500",
-      avgRating: "4.8",
-    },
-    {
-      storeName: "TechTrend",
-      totalSales: "$6,200",
-      avgRating: "4.5",
-    },
-    {
-      storeName: "ArtisanCrafts",
-      totalSales: "$4,800",
-      avgRating: "4.7",
-    },
-    {
-      storeName: "EcoGoods",
-      totalSales: "$3,900",
-      avgRating: "4.3",
-    },
+    { storeName: "FashionHub", totalSales: "$8,500", avgRating: "4.8" },
+    { storeName: "TechTrend", totalSales: "$6,200", avgRating: "4.5" },
+    { storeName: "ArtisanCrafts", totalSales: "$4,800", avgRating: "4.7" },
+    { storeName: "EcoGoods", totalSales: "$3,900", avgRating: "4.3" },
+  ],
+};
+
+const topSellingItemsData = {
+  columns: [
+    { Header: "Item Name", accessor: "itemName", width: "40%" },
+    { Header: "Store Name", accessor: "storeName", width: "30%" },
+    { Header: "Revenue", accessor: "revenue", width: "30%" },
+  ],
+  rows: [
+    { itemName: "Smartphone X", storeName: "TechTrend", revenue: "$3,200" },
+    { itemName: "Leather Jacket", storeName: "FashionHub", revenue: "$2,500" },
+    { itemName: "Handmade Vase", storeName: "ArtisanCrafts", revenue: "$1,800" },
+    { itemName: "Eco Tote Bag", storeName: "EcoGoods", revenue: "$1,200" },
   ],
 };
 
@@ -72,20 +63,10 @@ const flaggedStoresData = {
   columns: [
     { Header: "Store Name", accessor: "storeName", width: "30%" },
     { Header: "Flag Count", accessor: "flagCount", width: "20%" },
-    { Header: "Reasons", accessor: "reasons", width: "50%" },
+    { Header: "Reasons", accessor: "reasons", width: "30%" },
+    { Header: "First Flagged", accessor: "date", width: "20%" },
   ],
-  rows: [
-    {
-      storeName: "FakeGoods",
-      flagCount: "5",
-      reasons: "Suspected counterfeit products, misleading descriptions",
-    },
-    {
-      storeName: "ScamShop",
-      flagCount: "3",
-      reasons: "Non-delivery, poor customer service",
-    },
-  ],
+  rows: [],
 };
 
 const flaggedItemsData = {
@@ -93,25 +74,23 @@ const flaggedItemsData = {
     { Header: "Item Name", accessor: "itemName", width: "30%" },
     { Header: "Store Name", accessor: "storeName", width: "20%" },
     { Header: "Flag Count", accessor: "flagCount", width: "20%" },
-    { Header: "Reasons", accessor: "reasons", width: "30%" },
+    { Header: "Reasons", accessor: "reasons", width: "20%" },
+    { Header: "First Flagged", accessor: "date", width: "20%" },
   ],
-  rows: [
-    {
-      itemName: "Luxury Watch Replica",
-      storeName: "FakeGoods",
-      flagCount: "4",
-      reasons: "Counterfeit item",
-    },
-    {
-      itemName: "Miracle Cure E-book",
-      storeName: "ScamShop",
-      flagCount: "3",
-      reasons: "False health claims",
-    },
-  ],
+  rows: [],
 };
 
 function GodDashboard() {
+  // State for Firestore data
+  const [sales, setSales] = useState(0);
+  const [buyers, setBuyers] = useState(0);
+  const [sellers, setSellers] = useState(0);
+  const [affiliates, setAffiliates] = useState(0);
+  const [topStores, setTopStores] = useState({ columns: [], rows: [] });
+  const [topItems, setTopItems] = useState({ columns: [], rows: [] });
+  const [flaggedStores, setFlaggedStores] = useState({ columns: [], rows: [] });
+  const [flaggedItems, setFlaggedItems] = useState({ columns: [], rows: [] });
+
   // DefaultStatisticsCard state for the dropdown value
   const [salesDropdownValue, setSalesDropdownValue] = useState("6 May - 7 May");
   const [buyersDropdownValue, setBuyersDropdownValue] = useState("6 May - 7 May");
@@ -162,6 +141,116 @@ function GodDashboard() {
     </Menu>
   );
 
+  // Fetch Firestore data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Sales: Sum of transaction amounts
+        const transactionsQuery = query(collection(db, "transactions"));
+        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const totalSales = transactionsSnapshot.docs.reduce((sum, doc) => {
+          const data = doc.data();
+          return sum + (data.amount || 0);
+        }, 0);
+        setSales(totalSales);
+
+        // Buyers: Count users with role "buyer"
+        const buyersQuery = query(collection(db, "users"), where("role", "==", "buyer"));
+        const buyersSnapshot = await getDocs(buyersQuery);
+        setBuyers(buyersSnapshot.size);
+
+        // Sellers: Count users with role "seller"
+        const sellersQuery = query(collection(db, "users"), where("role", "==", "seller"));
+        const sellersSnapshot = await getDocs(sellersQuery);
+        setSellers(sellersSnapshot.size);
+
+        // Affiliates: Count documents in affiliates collection
+        const affiliatesQuery = query(collection(db, "affiliates"));
+        const affiliatesSnapshot = await getDocs(affiliatesQuery);
+        setAffiliates(affiliatesSnapshot.size);
+
+        // Top Selling Stores
+        const storeRevenue = {};
+        transactionsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const storeId = data.storeId;
+          if (storeId) {
+            storeRevenue[storeId] = (storeRevenue[storeId] || 0) + data.amount;
+          }
+        });
+
+        const storesQuery = query(collection(db, "stores"));
+        const storesSnapshot = await getDocs(storesQuery);
+        const storeRows = [];
+        storesSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const revenue = storeRevenue[data.storeId] || 0;
+          if (revenue > 0) {
+            storeRows.push({
+              storeName: data.name,
+              totalSales: `$${revenue.toLocaleString()}`,
+              avgRating: data.avgRating || "N/A", // Placeholder, update if ratings added
+            });
+          }
+        });
+
+        storeRows.sort((a, b) => parseFloat(b.totalSales.replace(/[$,]/g, '')) - parseFloat(a.totalSales.replace(/[$,]/g, '')));
+        setTopStores({
+          columns: [
+            { Header: "Store Name", accessor: "storeName", width: "40%" },
+            { Header: "Total Sales", accessor: "totalSales", width: "30%" },
+            { Header: "Avg. Rating", accessor: "avgRating", width: "30%" },
+          ],
+          rows: storeRows.slice(0, 5),
+        });
+
+        // Top Selling Items
+        const productRevenue = {};
+        transactionsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          data.productIds.forEach((productId) => {
+            productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length); // Approximate split
+          });
+        });
+
+        const productsQuery = query(collection(db, "products"));
+        const productsSnapshot = await getDocs(productsQuery);
+        const productRows = [];
+        productsSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const revenue = productRevenue[doc.id] || 0;
+          if (revenue > 0) {
+            productRows.push({
+              itemName: data.name,
+              storeName: storesSnapshot.docs.find(s => s.id === data.storeId)?.data().name || "Unknown",
+              revenue: `$${revenue.toLocaleString()}`,
+            });
+          }
+        });
+
+        productRows.sort((a, b) => parseFloat(b.revenue.replace(/[$,]/g, '')) - parseFloat(a.revenue.replace(/[$,]/g, '')));
+        setTopItems({
+          columns: [
+            { Header: "Item Name", accessor: "itemName", width: "40%" },
+            { Header: "Store Name", accessor: "storeName", width: "30%" },
+            { Header: "Revenue", accessor: "revenue", width: "30%" },
+          ],
+          rows: productRows.slice(0, 5),
+        });
+
+        // Flagged Stores (Placeholder)
+        setFlaggedStores(flaggedStoresData);
+
+        // Flagged Items (Placeholder)
+        setFlaggedItems(flaggedItemsData);
+      } catch (error) {
+        console.error("Error fetching Firestore data:", error);
+      }
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -171,12 +260,7 @@ function GodDashboard() {
             <Grid item xs={12} sm={3}>
               <DefaultStatisticsCard
                 title="Sales"
-                count="$14,227"
-                percentage={{
-                  color: "success",
-                  value: "+17%",
-                  label: "since last month",
-                }}
+                count={`$${sales.toLocaleString()}`}
                 dropdown={{
                   action: openSalesDropdown,
                   menu: renderMenu(salesDropdown, closeSalesDropdown),
@@ -187,12 +271,7 @@ function GodDashboard() {
             <Grid item xs={12} sm={3}>
               <DefaultStatisticsCard
                 title="Buyers"
-                count="1,489"
-                percentage={{
-                  color: "success",
-                  value: "+46%",
-                  label: "since last month",
-                }}
+                count={buyers.toLocaleString()}
                 dropdown={{
                   action: openBuyersDropdown,
                   menu: renderMenu(buyersDropdown, closeBuyersDropdown),
@@ -203,12 +282,7 @@ function GodDashboard() {
             <Grid item xs={12} sm={3}>
               <DefaultStatisticsCard
                 title="Sellers"
-                count="217"
-                percentage={{
-                  color: "success",
-                  value: "+21%",
-                  label: "since last month",
-                }}
+                count={sellers.toLocaleString()}
                 dropdown={{
                   action: openSellersDropdown,
                   menu: renderMenu(sellersDropdown, closeSellersDropdown),
@@ -219,60 +293,12 @@ function GodDashboard() {
             <Grid item xs={12} sm={3}>
               <DefaultStatisticsCard
                 title="Affiliates"
-                count="323"
-                percentage={{
-                  color: "success",
-                  value: "+17",
-                  label: "since last month",
-                }}
+                count={affiliates.toLocaleString()}
                 dropdown={{
                   action: openRevenueDropdown,
                   menu: renderMenu(revenueDropdown, closeRevenueDropdown),
                   value: revenueDropdownValue,
                 }}
-              />
-            </Grid>
-          </Grid>
-        </MDBox>
-        <MDBox mb={3}>
-          <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <DefaultLineChart
-                title="Growth"
-                description={
-                  <MDBox display="flex" justifyContent="space-between">
-                    <MDBox display="flex" ml={-1}>
-                      <MDBadgeDot
-                        color="info"
-                        size="sm"
-                        badgeContent="Buyers"
-                      />
-                      <MDBadgeDot
-                        color="dark"
-                        size="sm"
-                        badgeContent="Sellers"
-                      />
-                    </MDBox>
-                    <MDBox mt={-4} mr={-1} position="absolute" right="1.5rem">
-                      <Tooltip
-                        title="See which ads perform better"
-                        placement="left"
-                        arrow
-                      >
-                        <MDButton
-                          variant="outlined"
-                          color="secondary"
-                          size="small"
-                          circular
-                          iconOnly
-                        >
-                          <Icon>priority_high</Icon>
-                        </MDButton>
-                      </Tooltip>
-                    </MDBox>
-                  </MDBox>
-                }
-                chart={defaultLineChartData}
               />
             </Grid>
           </Grid>
@@ -287,7 +313,7 @@ function GodDashboard() {
               </MDBox>
               <MDBox py={1}>
                 <DataTable
-                  table={topSellingStoresData}
+                  table={topStores}
                   entriesPerPage={false}
                   showTotalEntries={false}
                   isSorted={false}
@@ -305,7 +331,7 @@ function GodDashboard() {
               </MDBox>
               <MDBox py={1}>
                 <DataTable
-                  table={dataTableData}
+                  table={topItems}
                   entriesPerPage={false}
                   showTotalEntries={false}
                   isSorted={false}
@@ -323,7 +349,7 @@ function GodDashboard() {
               </MDBox>
               <MDBox py={1}>
                 <DataTable
-                  table={flaggedStoresData}
+                  table={flaggedStores}
                   entriesPerPage={false}
                   showTotalEntries={false}
                   isSorted={false}
@@ -341,7 +367,7 @@ function GodDashboard() {
               </MDBox>
               <MDBox py={1}>
                 <DataTable
-                  table={flaggedItemsData}
+                  table={flaggedItems}
                   entriesPerPage={false}
                   showTotalEntries={false}
                   isSorted={false}

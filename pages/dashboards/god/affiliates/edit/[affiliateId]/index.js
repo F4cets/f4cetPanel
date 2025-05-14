@@ -47,19 +47,6 @@ const categories = [
   "Sporting Goods", "Toys & Games"
 ];
 
-// Dummy Data
-const dummyAffiliate = {
-  id: "affiliate123",
-  name: "CryptoDeals",
-  affiliateLink: "https://cryptodeals.com",
-  categories: ["Electronics", "Software"],
-  cryptoBackOffer: "Upto 85% Crypto Cashback",
-  logoUrl: "",
-  removed: false,
-  flagCount: 0,
-  flagReasons: [],
-};
-
 function AffiliateEdit() {
   const { user } = useUser();
   const router = useRouter();
@@ -102,29 +89,11 @@ function AffiliateEdit() {
           });
           setLogoPreview(data.logoUrl || null);
         } else {
-          setError("Affiliate not found. Using sample data.");
-          setAffiliate(dummyAffiliate);
-          setForm({
-            name: dummyAffiliate.name,
-            affiliateLink: dummyAffiliate.affiliateLink,
-            cryptoBackOffer: dummyAffiliate.cryptoBackOffer,
-            categories: dummyAffiliate.categories,
-            logo: null,
-          });
-          setLogoPreview(dummyAffiliate.logoUrl);
+          setError("Affiliate not found.");
         }
       } catch (err) {
         console.error("Error fetching affiliate:", err);
-        setError("Failed to load affiliate details. Using sample data.");
-        setAffiliate(dummyAffiliate);
-        setForm({
-          name: dummyAffiliate.name,
-          affiliateLink: dummyAffiliate.affiliateLink,
-          cryptoBackOffer: dummyAffiliate.cryptoBackOffer,
-          categories: dummyAffiliate.categories,
-          logo: null,
-        });
-        setLogoPreview(dummyAffiliate.logoUrl);
+        setError("Failed to load affiliate details.");
       }
     };
 
@@ -193,7 +162,7 @@ function AffiliateEdit() {
 
   // Handle saving affiliate changes
   const handleSave = async () => {
-    if (!affiliate || isSaving || affiliate.id === dummyAffiliate.id) return;
+    if (!affiliate || isSaving) return;
 
     setIsSaving(true);
     setError(null);
@@ -210,9 +179,12 @@ function AffiliateEdit() {
 
       // Upload logo if changed
       if (form.logo) {
-        const logoRef = ref(storage, `affiliates/${affiliateId}/logo-${form.logo.name}`);
+        const extension = form.logo.name.split('.').pop();
+        const logoRef = ref(storage, `affiliates/${affiliateId}/logo.${extension}`);
+        console.log("Uploading logo to:", logoRef.fullPath); // Debugging
         await uploadBytes(logoRef, form.logo);
         updatedForm.logoUrl = await getDownloadURL(logoRef);
+        console.log("Logo uploaded, URL:", updatedForm.logoUrl); // Debugging
       } else {
         updatedForm.logoUrl = affiliate.logoUrl || "";
       }
@@ -224,6 +196,7 @@ function AffiliateEdit() {
         cryptoBackOffer: updatedForm.cryptoBackOffer,
         categories: updatedForm.categories,
         logoUrl: updatedForm.logoUrl,
+        updatedAt: new Date().toISOString(),
       });
       setAffiliate({ ...affiliate, ...updatedForm });
       setSuccess("Affiliate updated successfully!");
@@ -237,7 +210,7 @@ function AffiliateEdit() {
 
   // Handle flagging affiliate
   const handleFlagAffiliate = async () => {
-    if (!affiliate || isFlagging || affiliate.id === dummyAffiliate.id) return;
+    if (!affiliate || isFlagging) return;
 
     setIsFlagging(true);
     setError(null);
@@ -247,6 +220,7 @@ function AffiliateEdit() {
       const affiliateDoc = doc(db, "affiliates", affiliateId);
       await updateDoc(affiliateDoc, {
         removed: true,
+        updatedAt: new Date().toISOString(),
       });
       setAffiliate({ ...affiliate, removed: true });
       setSuccess("Affiliate flagged for removal successfully!");
@@ -268,7 +242,7 @@ function AffiliateEdit() {
     return (
       <DashboardLayout>
         <DashboardNavbar />
-        <MDBox py={3}>
+        <MDBox py={3} display="flex" justifyContent="center">
           <MDTypography variant="h4" color="error">
             Invalid Affiliate ID
           </MDTypography>
@@ -283,7 +257,7 @@ function AffiliateEdit() {
     return (
       <DashboardLayout>
         <DashboardNavbar />
-        <MDBox py={3}>
+        <MDBox py={3} display="flex" justifyContent="center">
           <MDTypography variant="body2" color="text">
             Loading affiliate details...
           </MDTypography>
@@ -296,139 +270,135 @@ function AffiliateEdit() {
   return (
     <DashboardLayout>
       <DashboardNavbar />
-      <MDBox py={3}>
-        <Grid container spacing={3}>
+      <MDBox py={3} display="flex" justifyContent="center">
+        <Grid container spacing={3} maxWidth="md">
           <Grid item xs={12}>
             <Card>
-              <MDBox p={3}>
-                <MDTypography variant="h4" color="dark" mb={2}>
+              <MDBox p={3} display="flex" flexDirection="column" alignItems="center">
+                <MDTypography variant="h4" sx={{ color: "#212121" }} mb={2} textAlign="center">
                   Edit Affiliate - {affiliate.id}
                 </MDTypography>
                 {error && (
-                  <MDTypography variant="body2" color="error" mb={2}>
+                  <MDTypography variant="body2" color="error" mb={2} textAlign="center">
                     {error}
                   </MDTypography>
                 )}
                 {success && (
-                  <MDTypography variant="body2" color="success" mb={2}>
+                  <MDTypography variant="body2" color="success" mb={2} textAlign="center">
                     {success}
                   </MDTypography>
                 )}
-                <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
-                    <Grid container spacing={3}>
-                      <Grid item xs={12}>
-                        {logoPreview && (
-                          <MDBox mb={3} display="flex" justifyContent="center">
-                            <MDBox
-                              sx={{
-                                position: "relative",
-                                width: { xs: "150px", md: "200px" },
-                                height: { xs: "150px", md: "200px" },
-                              }}
-                            >
-                              <MDBox
-                                component="img"
-                                src={logoPreview}
-                                sx={{
-                                  width: "100%",
-                                  height: "100%",
-                                  borderRadius: "12px",
-                                  border: "2px solid #e0e0e0",
-                                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                                  objectFit: "cover",
-                                }}
-                              />
-                              <IconButton
-                                onClick={handleDeleteImage}
-                                sx={{
-                                  position: "absolute",
-                                  top: "-10px",
-                                  right: "-10px",
-                                  backgroundColor: "#d32f2f",
-                                  color: "#fff",
-                                  "&:hover": {
-                                    backgroundColor: "#b71c1c",
-                                  },
-                                }}
-                              >
-                                <Icon>close</Icon>
-                              </IconButton>
-                            </MDBox>
-                          </MDBox>
-                        )}
+                <Grid container spacing={3} maxWidth="sm">
+                  <Grid item xs={12}>
+                    {logoPreview && (
+                      <MDBox mb={3} display="flex" justifyContent="center">
                         <MDBox
-                          mb={1}
                           sx={{
-                            border: `2px dashed ${dragActiveLogo ? "#3f51b5" : "#bdbdbd"}`,
-                            borderRadius: "12px",
-                            padding: { xs: "16px", md: "20px" },
-                            textAlign: "center",
-                            backgroundColor: dragActiveLogo ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
-                            transition: "all 0.3s ease",
-                            cursor: "pointer",
-                            "&:hover": {
-                              transform: "scale(1.02)",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-                            },
-                            width: { xs: "150px", md: "250px" },
-                            height: { xs: "112px", md: "100px" },
-                            margin: "0 auto",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
+                            position: "relative",
+                            width: { xs: "200px", md: "350px" }, // Widened
+                            height: { xs: "150px", md: "200px" }, // Adjusted height
                           }}
-                          onDragEnter={handleDragEnter}
-                          onDragLeave={handleDragLeave}
-                          onDragOver={handleDragOver}
-                          onDrop={handleDrop}
-                          onClick={() => document.getElementById("logoInput").click()}
                         >
-                          <MDTypography
-                            variant="body2"
+                          <MDBox
+                            component="img"
+                            src={logoPreview}
                             sx={{
-                              color: dragActiveLogo ? "#3f51b5" : "#344767",
-                              mb: 1,
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "12px",
+                              border: "2px solid #e0e0e0",
+                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                              objectFit: "cover",
                             }}
-                          >
-                            Drag & Drop or Click to Upload
-                          </MDTypography>
-                          <MDTypography
-                            variant="caption"
-                            sx={{
-                              color: "#344767",
-                              display: "block",
-                              mb: 1,
-                            }}
-                          >
-                            (Supports PNG, JPG, up to 5MB)
-                          </MDTypography>
-                          <MDInput
-                            id="logoInput"
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => handleFileChange(e.target.files[0])}
-                            sx={{ display: "none" }}
-                            disabled={isSaving || affiliate.id === dummyAffiliate.id}
                           />
-                        </MDBox>
-                        <MDBox mb={2}>
-                          <MDTypography
-                            variant="h6"
+                          <IconButton
+                            onClick={handleDeleteImage}
                             sx={{
-                              fontWeight: 600,
-                              color: "#344767",
-                              textAlign: "center",
+                              position: "absolute",
+                              top: "-10px",
+                              right: "-10px",
+                              backgroundColor: "#d32f2f",
+                              color: "#fff",
+                              "&:hover": { backgroundColor: "#b71c1c" },
                             }}
                           >
-                            Affiliate Logo
-                          </MDTypography>
+                            <Icon>close</Icon>
+                          </IconButton>
                         </MDBox>
-                      </Grid>
-                    </Grid>
+                      </MDBox>
+                    )}
+                    <MDBox
+                      mb={1}
+                      sx={{
+                        border: `2px dashed ${dragActiveLogo ? "#3f51b5" : "#bdbdbd"}`,
+                        borderRadius: "12px",
+                        padding: { xs: "16px", md: "20px" },
+                        textAlign: "center",
+                        backgroundColor: dragActiveLogo ? "rgba(63, 81, 181, 0.1)" : "rgba(255, 255, 255, 0.9)",
+                        transition: "all 0.3s ease",
+                        cursor: "pointer",
+                        "&:hover": {
+                          transform: "scale(1.02)",
+                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                        },
+                        width: { xs: "200px", md: "350px" }, // Widened
+                        height: { xs: "150px", md: "200px" }, // Adjusted height
+                        margin: "0 auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                      }}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                      onDragOver={handleDragOver}
+                      onDrop={handleDrop}
+                      onClick={() => document.getElementById("logoInput").click()}
+                    >
+                      <MDTypography
+                        variant="body2"
+                        sx={{
+                          color: dragActiveLogo ? "#3f51b5" : "#344767",
+                          mb: 1,
+                        }}
+                      >
+                        Drag & Drop or Click to Upload
+                      </MDTypography>
+                      <MDTypography
+                        variant="caption"
+                        sx={{
+                          color: "#344767",
+                          display: "block",
+                          mb: 1,
+                        }}
+                      >
+                        (Supports PNG, JPG, up to 5MB)
+                      </MDTypography>
+                      <MDInput
+                        id="logoInput"
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e.target.files[0])}
+                        sx={{ display: "none" }}
+                        disabled={isSaving}
+                      />
+                    </MDBox>
+                    <MDBox mb={2}>
+                      <MDTypography
+                        variant="h6"
+                        sx={{
+                          fontWeight: 600,
+                          color: "#212121",
+                          textAlign: "center", // Changed from center
+                        }}
+                      >
+                        Affiliate Logo
+                      </MDTypography>
+                    </MDBox>
+                  </Grid>
+                  <Grid item xs={12}>
                     <Divider sx={{ mb: 2, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }} textAlign="left">
                         Affiliate ID
                       </MDTypography>
                       <MDInput
@@ -436,15 +406,30 @@ function AffiliateEdit() {
                         fullWidth
                         disabled
                         sx={{
+                          "& .MuiInputBase-root": {
+                            transition: "all 0.3s ease",
+                            backgroundColor: theme => theme.palette.mode === 'dark' ? '#fff' : 'inherit',
+                          },
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: "#344767",
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
+                          },
+                          "& .MuiOutlinedInput-root": {
+                            "& fieldset": {
+                              borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd',
+                            },
+                            "&:hover fieldset": {
+                              borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5',
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5',
+                            },
                           },
                         }}
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }} textAlign="left">
                         Affiliate Name
                       </MDTypography>
                       <MDInput
@@ -452,23 +437,24 @@ function AffiliateEdit() {
                         onChange={(e) => handleFormChange("name", e.target.value)}
                         fullWidth
                         required
-                        disabled={isSaving || affiliate.id === dummyAffiliate.id}
+                        disabled={isSaving}
                         sx={{
                           "& .MuiInputBase-root": {
                             transition: "all 0.3s ease",
+                            backgroundColor: theme => theme.palette.mode === 'dark' ? '#fff' : 'inherit',
                           },
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root.Mui-focused": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputBase-input::placeholder": {
-                            color: theme => theme.palette.mode === 'dark' ? '#bbb !important' : '#757575 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#757575' : '#757575',
                             opacity: 1,
                           },
                           "& .MuiOutlinedInput-root": {
@@ -486,7 +472,7 @@ function AffiliateEdit() {
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }} textAlign="left">
                         Affiliate Link
                       </MDTypography>
                       <MDInput
@@ -495,23 +481,24 @@ function AffiliateEdit() {
                         fullWidth
                         required
                         placeholder="e.g., https://example.com"
-                        disabled={isSaving || affiliate.id === dummyAffiliate.id}
+                        disabled={isSaving}
                         sx={{
                           "& .MuiInputBase-root": {
                             transition: "all 0.3s ease",
+                            backgroundColor: theme => theme.palette.mode === 'dark' ? '#fff' : 'inherit',
                           },
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root.Mui-focused": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputBase-input::placeholder": {
-                            color: theme => theme.palette.mode === 'dark' ? '#bbb !important' : '#757575 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#757575' : '#757575',
                             opacity: 1,
                           },
                           "& .MuiOutlinedInput-root": {
@@ -529,7 +516,7 @@ function AffiliateEdit() {
                       />
                     </MDBox>
                     <MDBox mb={2}>
-                      <MDTypography variant="h6" color="dark">
+                      <MDTypography variant="h6" sx={{ color: "#212121", textAlign: "left" }} textAlign="left">
                         Crypto Back Offer
                       </MDTypography>
                       <MDInput
@@ -538,23 +525,24 @@ function AffiliateEdit() {
                         fullWidth
                         required
                         placeholder="e.g., Upto 85% Crypto Cashback"
-                        disabled={isSaving || affiliate.id === dummyAffiliate.id}
+                        disabled={isSaving}
                         sx={{
                           "& .MuiInputBase-root": {
                             transition: "all 0.3s ease",
+                            backgroundColor: theme => theme.palette.mode === 'dark' ? '#fff' : 'inherit',
                           },
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputLabel-root.Mui-focused": {
-                            color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#E0E0E0' : '#212121',
                           },
                           "& .MuiInputBase-input::placeholder": {
-                            color: theme => theme.palette.mode === 'dark' ? '#bbb !important' : '#757575 !important',
+                            color: theme => theme.palette.mode === 'dark' ? '#757575' : '#757575',
                             opacity: 1,
                           },
                           "& .MuiOutlinedInput-root": {
@@ -574,7 +562,7 @@ function AffiliateEdit() {
                     <MDBox mb={2}>
                       <MDTypography
                         variant="h6"
-                        sx={{ fontWeight: 600, color: "#344767", mb: 1.5, letterSpacing: "0.5px" }}
+                        sx={{ fontWeight: 600, color: "#212121", mb: 1.5, textAlign: "left" }} // Changed from center
                       >
                         Categories
                       </MDTypography>
@@ -586,6 +574,8 @@ function AffiliateEdit() {
                           padding: "10px",
                           background: "linear-gradient(135deg, #6c6083 0%, #4d455d 100%)",
                           boxShadow: "inset 0 2px 8px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1)",
+                          margin: "0 auto",
+                          width: "100%",
                         }}
                       >
                         {categories.map(category => (
@@ -598,9 +588,7 @@ function AffiliateEdit() {
                               padding: "8px 12px",
                               borderRadius: "8px",
                               transition: "background-color 0.3s ease",
-                              "&:hover": {
-                                backgroundColor: "rgba(255, 255, 255, 0.1)",
-                              },
+                              "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
                               backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
                             }}
                           >
@@ -608,7 +596,7 @@ function AffiliateEdit() {
                               <Checkbox
                                 checked={form.categories.includes(category)}
                                 onChange={() => handleCategoryChange(category)}
-                                disabled={isSaving || affiliate.id === dummyAffiliate.id}
+                                disabled={isSaving}
                                 sx={{
                                   color: "#fff",
                                   "&.Mui-checked": { color: "#fff" },
@@ -636,13 +624,8 @@ function AffiliateEdit() {
                                   color: "#fff",
                                   borderRadius: "16px",
                                   height: "24px",
-                                  "& .MuiChip-label": {
-                                    padding: "0 8px",
-                                    fontSize: "0.75rem",
-                                  },
-                                  "&:hover": {
-                                    backgroundColor: "rgba(255, 255, 255, 0.3)",
-                                  },
+                                  "& .MuiChip-label": { padding: "0 8px", fontSize: "0.75rem" },
+                                  "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
                                 }}
                               />
                             )}
@@ -650,12 +633,12 @@ function AffiliateEdit() {
                         ))}
                       </MDBox>
                     </MDBox>
-                    <MDBox display="flex" gap={2}>
+                    <MDBox display="flex" justifyContent="center" gap={2}>
                       <MDButton
                         variant="gradient"
                         color="dark"
                         onClick={handleSave}
-                        disabled={isSaving || affiliate.id === dummyAffiliate.id}
+                        disabled={isSaving}
                         sx={{ width: { xs: "100%", sm: "auto" } }}
                       >
                         {isSaving ? "Saving..." : "Save Changes"}
@@ -664,21 +647,11 @@ function AffiliateEdit() {
                         variant="gradient"
                         color="error"
                         onClick={handleFlagAffiliate}
-                        disabled={isFlagging || affiliate.removed || affiliate.id === dummyAffiliate.id}
+                        disabled={isFlagging || affiliate.removed}
                         sx={{ width: { xs: "100%", sm: "auto" } }}
                       >
                         {isFlagging ? "Flagging..." : affiliate.removed ? "Affiliate Flagged" : "Flag Affiliate"}
                       </MDButton>
-                    </MDBox>
-                  </Grid>
-                  <Grid item xs={12} md={6}>
-                    <MDBox>
-                      <MDTypography variant="h6" color="dark" mb={2}>
-                        Affiliate Details
-                      </MDTypography>
-                      <MDTypography variant="body2" color="text">
-                        Additional affiliate details (e.g., performance metrics) can be displayed here in the future.
-                      </MDTypography>
                     </MDBox>
                   </Grid>
                 </Grid>

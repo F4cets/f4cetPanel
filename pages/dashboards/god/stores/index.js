@@ -7,7 +7,7 @@
 */
 
 // React imports
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -15,7 +15,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 
 // Firebase imports
-import { collection, getDocs, addDoc } from "firebase/firestore";
+import { collection, query, getDocs, addDoc, limit, startAfter, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -53,52 +53,6 @@ const categories = [
   "Electronics", "Fitness & Nutrition", "Food & Drinks", "Home & Living", "Jewelry",
   "Luggage & Bags", "NFTs", "Pet Supplies", "Private Access Groups", "Shoes", "Software",
   "Sporting Goods", "Toys & Games"
-];
-
-// Dummy Data
-const dummyStores = [
-  {
-    id: "store123",
-    storeName: "FashionHub",
-    walletId: "sellerWallet456",
-    shortDescription: "Trendy clothing and accessories",
-    shopEmail: "contact@fashionhub.com",
-    subheading: "Free shipping on orders over 2 SOL!",
-    categories: ["Clothing", "Accessories"],
-    thumbnailUrl: "",
-    backgroundUrl: "",
-    removed: false,
-    flagCount: 0,
-    flagReasons: [],
-  },
-  {
-    id: "store456",
-    storeName: "TechTrend",
-    walletId: "sellerWallet789",
-    shortDescription: "Latest tech gadgets",
-    shopEmail: "support@techtrend.com",
-    subheading: "Use code TECH10 for 10% off!",
-    categories: ["Electronics", "Software"],
-    thumbnailUrl: "",
-    backgroundUrl: "",
-    removed: false,
-    flagCount: 0,
-    flagReasons: [],
-  },
-  {
-    id: "store789",
-    storeName: "ArtisanCrafts",
-    walletId: "sellerWallet012",
-    shortDescription: "Handmade crafts and art",
-    shopEmail: "info@artisancrafts.com",
-    subheading: "Support local artisans!",
-    categories: ["Art & Collectibles", "Craft Supplies"],
-    thumbnailUrl: "",
-    backgroundUrl: "",
-    removed: false,
-    flagCount: 0,
-    flagReasons: [],
-  },
 ];
 
 // Animation variants for the button
@@ -141,31 +95,77 @@ function StoreSearch() {
   const [dragActiveThumbnail, setDragActiveThumbnail] = useState(false);
   const [dragActiveBackground, setDragActiveBackground] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const observerRef = useRef(null);
 
-  // Fetch stores from Firestore
+  // Fetch stores with pagination
+  const fetchStores = async (isLoadMore = false) => {
+    if (!user || !user.walletId || isLoading || !hasMore) return;
+
+    setIsLoading(true);
+    try {
+      const storesCollection = collection(db, "stores");
+      const pageSize = 6; // Load 6 stores per page
+      const storesQuery = isLoadMore
+        ? query(storesCollection, orderBy("createdAt", "desc"), startAfter(lastDoc), limit(pageSize))
+        : query(storesCollection, orderBy("createdAt", "desc"), limit(pageSize));
+
+      const storesSnapshot = await getDocs(storesQuery);
+      const storesData = storesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        storeName: doc.data().name,
+        walletId: doc.data().sellerId,
+        shortDescription: doc.data().description,
+        shopEmail: doc.data().businessInfo?.sellerEmail || "",
+        subheading: "", // Not in schema, set to empty
+        categories: doc.data().categories || [],
+        thumbnailUrl: doc.data().thumbnailUrl || "",
+        backgroundUrl: doc.data().bannerUrl || "",
+        removed: !doc.data().isActive,
+        flagCount: doc.data().flagCount || 0,
+        flagReasons: [], // Not in schema, set to empty
+      }));
+
+      setStores(prev => isLoadMore ? [...prev, ...storesData] : storesData);
+      setLastDoc(storesSnapshot.docs[storesSnapshot.docs.length - 1]);
+      setHasMore(storesSnapshot.docs.length === pageSize);
+    } catch (err) {
+      console.error("Error fetching stores:", err);
+      setError("Failed to load stores.");
+      setStores([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initial fetch
   useEffect(() => {
-    const fetchStores = async () => {
-      if (!user || !user.walletId) return;
-
-      try {
-        const storesCollection = collection(db, "stores");
-        const storesSnapshot = await getDocs(storesCollection);
-        const storesData = storesSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          .filter(store => store.storeName && store.walletId);
-        setStores(storesData.length > 0 ? storesData : dummyStores);
-      } catch (err) {
-        console.error("Error fetching stores:", err);
-        setError("Failed to load stores. Using sample data.");
-        setStores(dummyStores);
-      }
-    };
-
     fetchStores();
   }, [user]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          fetchStores(true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerRef.current) {
+      observer.observe(observerRef.current);
+    }
+
+    return () => {
+      if (observerRef.current) {
+        observer.unobserve(observerRef.current);
+      }
+    };
+  }, [hasMore, isLoading]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
@@ -273,35 +273,65 @@ function StoreSearch() {
     setSuccess(null);
 
     try {
+      // Sanitize store name for storage path
+      const sanitizedStoreName = createForm.storeName.replace(/[^a-zA-Z0-9-_]/g, '');
       let thumbnailUrl = "";
       let backgroundUrl = "";
+
+      // Upload thumbnail if provided
       if (createForm.thumbnailImage) {
-        const thumbnailRef = ref(storage, `stores/${createForm.walletId}/thumbnail-${createForm.thumbnailImage.name}`);
+        const extension = createForm.thumbnailImage.name.split('.').pop();
+        const thumbnailRef = ref(storage, `stores/${sanitizedStoreName}/thumbnail.${extension}`);
+        console.log("Uploading thumbnail to:", thumbnailRef.fullPath); // Debugging
         await uploadBytes(thumbnailRef, createForm.thumbnailImage);
         thumbnailUrl = await getDownloadURL(thumbnailRef);
+        console.log("Thumbnail uploaded, URL:", thumbnailUrl); // Debugging
       }
+
+      // Upload banner if provided
       if (createForm.backgroundImage) {
-        const backgroundRef = ref(storage, `stores/${createForm.walletId}/banner-${createForm.backgroundImage.name}`);
+        const extension = createForm.backgroundImage.name.split('.').pop();
+        const backgroundRef = ref(storage, `stores/${sanitizedStoreName}/banner.${extension}`);
+        console.log("Uploading banner to:", backgroundRef.fullPath); // Debugging
         await uploadBytes(backgroundRef, createForm.backgroundImage);
         backgroundUrl = await getDownloadURL(backgroundRef);
+        console.log("Banner uploaded, URL:", backgroundUrl); // Debugging
       }
 
       const newStore = {
-        storeName: createForm.storeName,
-        walletId: createForm.walletId,
-        shortDescription: createForm.shortDescription,
-        shopEmail: createForm.shopEmail,
-        subheading: createForm.subheading,
+        name: createForm.storeName,
+        sellerId: createForm.walletId,
+        description: createForm.shortDescription,
+        businessInfo: {
+          sellerEmail: createForm.shopEmail,
+          sellerName: "",
+          shippingAddress: "",
+          taxId: "",
+        },
         categories: createForm.categories,
         thumbnailUrl,
-        backgroundUrl,
+        bannerUrl: backgroundUrl,
+        escrowId: "",
+        isActive: true,
         createdAt: new Date().toISOString(),
-        removed: false,
+        updatedAt: new Date().toISOString(),
         flagCount: 0,
-        flagReasons: [],
       };
       const docRef = await addDoc(collection(db, "stores"), newStore);
-      setStores([...stores, { id: docRef.id, ...newStore }]);
+      setStores([...stores, {
+        id: docRef.id,
+        storeName: newStore.name,
+        walletId: newStore.sellerId,
+        shortDescription: newStore.description,
+        shopEmail: newStore.businessInfo.sellerEmail,
+        subheading: "",
+        categories: newStore.categories,
+        thumbnailUrl: newStore.thumbnailUrl,
+        backgroundUrl: newStore.bannerUrl,
+        removed: !newStore.isActive,
+        flagCount: newStore.flagCount,
+        flagReasons: [],
+      }]);
       setSuccess("Store created successfully!");
       handleCloseCreateModal();
     } catch (err) {
@@ -456,6 +486,23 @@ function StoreSearch() {
             </MDBox>
           )}
         </Grid>
+        {isLoading && (
+          <MDBox width="100%" textAlign="center" py={3}>
+            <MDTypography variant="body2" color="text">
+              Loading more stores...
+            </MDTypography>
+          </MDBox>
+        )}
+        {!isLoading && hasMore && (
+          <MDBox ref={observerRef} width="100%" height="20px" />
+        )}
+        {!isLoading && !hasMore && filteredStores.length > 0 && (
+          <MDBox width="100%" textAlign="center" py={3}>
+            <MDTypography variant="body2" color="text">
+              No more stores to load.
+            </MDTypography>
+          </MDBox>
+        )}
         <Dialog open={openCreateModal} onClose={handleCloseCreateModal} maxWidth="md" fullWidth>
           <DialogTitle>Create New Store</DialogTitle>
           <DialogContent>
