@@ -131,8 +131,19 @@ function SellerEscrow() {
           const productData = productDoc.data();
           const createdDate = productData.createdAt?.toDate ? productData.createdAt.toDate() : new Date(productData.createdAt);
 
-          // Use product quantity for both digital and RWI (pre-minted NFTs)
-          const quantity = productData.quantity || 0;
+          // Determine quantity based on product type
+          let quantity = 0;
+          if (productData.type === "digital") {
+            quantity = productData.quantity || 0;
+          } else if (productData.type === "rwi" && Array.isArray(productData.variants) && productData.variants.length > 0) {
+            // Sum quantities from variants for RWI products
+            quantity = productData.variants.reduce((sum, variant) => {
+              const variantQty = parseInt(variant.quantity, 10);
+              return sum + (isNaN(variantQty) ? 0 : variantQty);
+            }, 0);
+          }
+
+          console.log(`Product ${productDoc.id}: type=${productData.type}, quantity=${quantity}, nftMint=${productData.nftMint}`);
 
           if (quantity > 0 && productData.nftMint) {
             products.push({
@@ -151,6 +162,8 @@ function SellerEscrow() {
         const rwiCount = transactions.filter(tx => tx.type === "rwi").length;
         const totalItems = transactions.length;
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+        console.log("Escrow NFT Inventory:", products);
 
         setPendingEscrowPayments(transactions);
         setEscrowNFTInventory(products);
