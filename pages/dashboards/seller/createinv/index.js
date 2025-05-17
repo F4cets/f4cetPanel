@@ -14,7 +14,7 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { getFirestore, doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -246,12 +246,20 @@ function CreateInventory() {
     }
 
     try {
-      // Upload images to Firebase Storage
+      // Generate productId for consistent path
+      const productRef = doc(collection(db, "products"));
+      const productId = productRef.id;
+
+      // Upload images to Firebase Storage with fixed names (image1, image2, image3)
       const imageUrls = await Promise.all(
-        images.map(async (image, index) => {
-          const imageRef = ref(storage, `products/${user.walletId}/${Date.now()}_${index}_${image.name}`);
+        images.slice(0, 3).map(async (image, index) => {
+          const fileExt = image.name.split('.').pop().toLowerCase();
+          const imageRef = ref(storage, `products/${productId}/image${index + 1}.${fileExt}`);
+          console.log("CreateInventory: Uploading image to:", imageRef.fullPath);
           await uploadBytes(imageRef, image);
-          return await getDownloadURL(imageRef);
+          const url = await getDownloadURL(imageRef);
+          console.log("CreateInventory: Image URL:", url);
+          return url;
         })
       );
 
@@ -265,7 +273,7 @@ function CreateInventory() {
         imageUrls,
         selectedImage: imageUrls[0], // First image for NFT minting
         storeId,
-        sellerId: user.walletId, // Added sellerId
+        sellerId: user.walletId,
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -280,7 +288,8 @@ function CreateInventory() {
       }
 
       // Save product to Firestore
-      const productRef = await addDoc(collection(db, "products"), productData);
+      console.log("CreateInventory: Saving product data to products/", productId, ":", productData);
+      await setDoc(productRef, productData);
 
       setSuccess("Inventory created successfully!");
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [] });
@@ -288,8 +297,9 @@ function CreateInventory() {
       setImagePreviews([]);
       setInventoryVariants([]);
       setVariantForm({ size: "", color: "", quantity: "" });
+      setTimeout(() => router.push("/dashboards/seller"), 2000);
     } catch (err) {
-      console.error("Error creating inventory:", err);
+      console.error("CreateInventory: Error creating inventory:", err);
       setError("Failed to create inventory: " + err.message);
     }
   };
@@ -773,7 +783,7 @@ function CreateInventory() {
                   <MDBox display="flex" justifyContent="center" gap={2}>
                     <MDButton
                       type="submit"
-                      color="dark" // Kept dark as requested
+                      color="dark"
                       variant="gradient"
                       sx={{
                         padding: { xs: "8px 24px", md: "10px 32px" },

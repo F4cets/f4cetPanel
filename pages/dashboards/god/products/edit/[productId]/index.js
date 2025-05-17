@@ -14,7 +14,7 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp, getDocs, query, where } from "firebase/firestore"; // Added getDocs, query, where
+import { doc, getDoc, updateDoc, setDoc, collection, serverTimestamp, getDocs, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -263,17 +263,26 @@ function EditProduct() {
       }
       const storeData = storeDoc.data();
 
+      // Determine productId
+      const targetProductId = productId === "new" ? doc(collection(db, "products")).id : productId;
+
+      // Upload new images with fixed naming
       let imageUrls = product?.imageUrls || [];
       if (images.length > 0) {
         imageUrls = await Promise.all(
-          images.map(async (image, index) => {
-            const imageRef = ref(storage, `products/${storeData.sellerId}/${Date.now()}_${index}_${image.name}`);
+          images.slice(0, 3).map(async (image, index) => {
+            const fileExt = image.name.split('.').pop().toLowerCase();
+            const imageRef = ref(storage, `products/${targetProductId}/image${index + 1}.${fileExt}`);
+            console.log("EditProduct: Uploading image to:", imageRef.fullPath);
             await uploadBytes(imageRef, image);
-            return await getDownloadURL(imageRef);
+            const url = await getDownloadURL(imageRef);
+            console.log("EditProduct: Image URL:", url);
+            return url;
           })
         );
       }
 
+      // Prepare product data
       const productData = {
         type: inventoryType,
         name: form.name,
@@ -295,12 +304,15 @@ function EditProduct() {
         productData.variants = inventoryVariants;
       }
 
+      // Save or update product
       if (productId === "new") {
         productData.createdAt = serverTimestamp();
         productData.nftMint = `mint-${Math.random().toString(36).substring(2, 10)}`;
-        await addDoc(collection(db, "products"), productData);
+        console.log("EditProduct: Creating new product at products/", targetProductId, ":", productData);
+        await setDoc(doc(db, "products", targetProductId), productData);
         setSuccess("Product created successfully!");
       } else {
+        console.log("EditProduct: Updating product at products/", targetProductId, ":", productData);
         await updateDoc(doc(db, "products", productId), productData);
         setSuccess("Product updated successfully!");
       }
@@ -310,9 +322,9 @@ function EditProduct() {
       setImagePreviews([]);
       setInventoryVariants([]);
       setVariantForm({ size: "", color: "", quantity: "" });
-      router.push("/dashboards/god/products");
+      setTimeout(() => router.push("/dashboards/god/products"), 2000);
     } catch (err) {
-      console.error("Error saving product:", err);
+      console.error("EditProduct: Error saving product:", err);
       setError("Failed to save product: " + err.message);
     }
   };

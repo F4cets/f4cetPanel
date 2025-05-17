@@ -1,84 +1,27 @@
 /**
 =========================================================
-* NextJS Material Dashboard 2 PRO - v2.2.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/nextjs-material-dashboard-pro
-* Copyright 2023 Creative Tim (https://www.creative-tim.com)
-* Coded by Creative Tim and F4cets Team
+* F4cetPanel - God Dashboard
 =========================================================
 
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
 import { useState, useEffect } from "react";
-import { db } from "/lib/firebase"; // Adjust path to your Firebase config
+import { db } from "/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
 import Card from "@mui/material/Card";
+import Icon from "@mui/material/Icon";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
-import DefaultStatisticsCard from "/examples/Cards/StatisticsCards/DefaultStatisticsCard";
 import DataTable from "/examples/Tables/DataTable";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
-
-// Dummy Data for Tables
-const topSellingStoresData = {
-  columns: [
-    { Header: "Store Name", accessor: "storeName", width: "40%" },
-    { Header: "Total Sales", accessor: "totalSales", width: "30%" },
-    { Header: "Avg. Rating", accessor: "avgRating", width: "30%" },
-  ],
-  rows: [
-    { storeName: "FashionHub", totalSales: "$8,500", avgRating: "4.8" },
-    { storeName: "TechTrend", totalSales: "$6,200", avgRating: "4.5" },
-    { storeName: "ArtisanCrafts", totalSales: "$4,800", avgRating: "4.7" },
-    { storeName: "EcoGoods", totalSales: "$3,900", avgRating: "4.3" },
-  ],
-};
-
-const topSellingItemsData = {
-  columns: [
-    { Header: "Item Name", accessor: "itemName", width: "40%" },
-    { Header: "Store Name", accessor: "storeName", width: "30%" },
-    { Header: "Revenue", accessor: "revenue", width: "30%" },
-  ],
-  rows: [
-    { itemName: "Smartphone X", storeName: "TechTrend", revenue: "$3,200" },
-    { itemName: "Leather Jacket", storeName: "FashionHub", revenue: "$2,500" },
-    { itemName: "Handmade Vase", storeName: "ArtisanCrafts", revenue: "$1,800" },
-    { itemName: "Eco Tote Bag", storeName: "EcoGoods", revenue: "$1,200" },
-  ],
-};
-
-const flaggedStoresData = {
-  columns: [
-    { Header: "Store Name", accessor: "storeName", width: "30%" },
-    { Header: "Flag Count", accessor: "flagCount", width: "20%" },
-    { Header: "Reasons", accessor: "reasons", width: "30%" },
-    { Header: "First Flagged", accessor: "date", width: "20%" },
-  ],
-  rows: [],
-};
-
-const flaggedItemsData = {
-  columns: [
-    { Header: "Item Name", accessor: "itemName", width: "30%" },
-    { Header: "Store Name", accessor: "storeName", width: "20%" },
-    { Header: "Flag Count", accessor: "flagCount", width: "20%" },
-    { Header: "Reasons", accessor: "reasons", width: "20%" },
-    { Header: "First Flagged", accessor: "date", width: "20%" },
-  ],
-  rows: [],
-};
 
 function GodDashboard() {
   // State for Firestore data
@@ -90,56 +33,6 @@ function GodDashboard() {
   const [topItems, setTopItems] = useState({ columns: [], rows: [] });
   const [flaggedStores, setFlaggedStores] = useState({ columns: [], rows: [] });
   const [flaggedItems, setFlaggedItems] = useState({ columns: [], rows: [] });
-
-  // DefaultStatisticsCard state for the dropdown value
-  const [salesDropdownValue, setSalesDropdownValue] = useState("6 May - 7 May");
-  const [buyersDropdownValue, setBuyersDropdownValue] = useState("6 May - 7 May");
-  const [sellersDropdownValue, setSellersDropdownValue] = useState("6 May - 7 May");
-  const [revenueDropdownValue, setRevenueDropdownValue] = useState("6 May - 7 May");
-
-  // DefaultStatisticsCard state for the dropdown action
-  const [salesDropdown, setSalesDropdown] = useState(null);
-  const [buyersDropdown, setBuyersDropdown] = useState(null);
-  const [sellersDropdown, setSellersDropdown] = useState(null);
-  const [revenueDropdown, setRevenueDropdown] = useState(null);
-
-  // DefaultStatisticsCard handler for the dropdown action
-  const openSalesDropdown = ({ currentTarget }) => setSalesDropdown(currentTarget);
-  const closeSalesDropdown = ({ currentTarget }) => {
-    setSalesDropdown(null);
-    setSalesDropdownValue(currentTarget.innerText || salesDropdownValue);
-  };
-  const openBuyersDropdown = ({ currentTarget }) => setBuyersDropdown(currentTarget);
-  const closeBuyersDropdown = ({ currentTarget }) => {
-    setBuyersDropdown(null);
-    setBuyersDropdownValue(currentTarget.innerText || buyersDropdownValue);
-  };
-  const openSellersDropdown = ({ currentTarget }) => setSellersDropdown(currentTarget);
-  const closeSellersDropdown = ({ currentTarget }) => {
-    setSellersDropdown(null);
-    setSellersDropdownValue(currentTarget.innerText || sellersDropdownValue);
-  };
-  const openRevenueDropdown = ({ currentTarget }) => setRevenueDropdown(currentTarget);
-  const closeRevenueDropdown = ({ currentTarget }) => {
-    setRevenueDropdown(null);
-    setRevenueDropdownValue(currentTarget.innerText || revenueDropdownValue);
-  };
-
-  // Dropdown menu template for the DefaultStatisticsCard
-  const renderMenu = (state, close) => (
-    <Menu
-      anchorEl={state}
-      transformOrigin={{ vertical: "top", horizontal: "center" }}
-      open={Boolean(state)}
-      onClose={close}
-      keepMounted
-      disableAutoFocusItem
-    >
-      <MenuItem onClick={close}>Last 7 days</MenuItem>
-      <MenuItem onClick={close}>Last week</MenuItem>
-      <MenuItem onClick={close}>Last 30 days</MenuItem>
-    </Menu>
-  );
 
   // Fetch Firestore data
   useEffect(() => {
@@ -171,11 +64,17 @@ function GodDashboard() {
 
         // Top Selling Stores
         const storeRevenue = {};
+        const storeRatings = {};
         transactionsSnapshot.forEach((doc) => {
           const data = doc.data();
           const storeId = data.storeId;
           if (storeId) {
             storeRevenue[storeId] = (storeRevenue[storeId] || 0) + data.amount;
+            if (data.sellerRating) {
+              storeRatings[storeId] = storeRatings[storeId] || { sum: 0, count: 0 };
+              storeRatings[storeId].sum += data.sellerRating;
+              storeRatings[storeId].count += 1;
+            }
           }
         });
 
@@ -185,11 +84,14 @@ function GodDashboard() {
         storesSnapshot.forEach((doc) => {
           const data = doc.data();
           const revenue = storeRevenue[data.storeId] || 0;
+          const avgRating = storeRatings[data.storeId]
+            ? (storeRatings[data.storeId].sum / storeRatings[data.storeId].count).toFixed(1)
+            : "N/A";
           if (revenue > 0) {
             storeRows.push({
               storeName: data.name,
               totalSales: `$${revenue.toLocaleString()}`,
-              avgRating: data.avgRating || "N/A", // Placeholder, update if ratings added
+              avgRating,
             });
           }
         });
@@ -209,7 +111,7 @@ function GodDashboard() {
         transactionsSnapshot.forEach((doc) => {
           const data = doc.data();
           data.productIds.forEach((productId) => {
-            productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length); // Approximate split
+            productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length);
           });
         });
 
@@ -220,9 +122,10 @@ function GodDashboard() {
           const data = doc.data();
           const revenue = productRevenue[doc.id] || 0;
           if (revenue > 0) {
+            const storeDoc = storesSnapshot.docs.find(s => s.id === data.storeId);
             productRows.push({
               itemName: data.name,
-              storeName: storesSnapshot.docs.find(s => s.id === data.storeId)?.data().name || "Unknown",
+              storeName: storeDoc ? storeDoc.data().name : "Unknown",
               revenue: `$${revenue.toLocaleString()}`,
             });
           }
@@ -238,13 +141,83 @@ function GodDashboard() {
           rows: productRows.slice(0, 5),
         });
 
-        // Flagged Stores (Placeholder)
-        setFlaggedStores(flaggedStoresData);
+        // Flagged Stores
+        const notificationsQuery = query(collection(db, "notifications"), where("type", "==", "issue"));
+        const notificationsSnapshot = await getDocs(notificationsQuery);
+        const flaggedStoreIssues = {};
+        const flaggedItemIssues = {};
 
-        // Flagged Items (Placeholder)
-        setFlaggedItems(flaggedItemsData);
+        for (const notifDoc of notificationsSnapshot.docs) {
+          const notifData = notifDoc.data();
+          const txDocRef = doc(db, "transactions", notifData.orderId);
+          const txDoc = await getDoc(txDocRef);
+          if (txDoc.exists()) {
+            const txData = txDoc.data();
+            const storeId = txData.storeId;
+            const storeDoc = storesSnapshot.docs.find(s => s.id === storeId);
+            if (storeDoc) {
+              const storeName = storeDoc.data().name;
+              flaggedStoreIssues[storeId] = flaggedStoreIssues[storeId] || { count: 0, reasons: [], firstFlagged: null };
+              flaggedStoreIssues[storeId].count += 1;
+              flaggedStoreIssues[storeId].reasons.push(notifData.description);
+              const notifDate = new Date(notifData.timestamp);
+              if (!flaggedStoreIssues[storeId].firstFlagged || notifDate < flaggedStoreIssues[storeId].firstFlagged) {
+                flaggedStoreIssues[storeId].firstFlagged = notifDate;
+              }
+            }
+            txData.productIds.forEach((productId) => {
+              const productDoc = productsSnapshot.docs.find(p => p.id === productId);
+              if (productDoc) {
+                const productName = productDoc.data().name;
+                flaggedItemIssues[productId] = flaggedItemIssues[productId] || { count: 0, reasons: [], firstFlagged: null, storeName };
+                flaggedItemIssues[productId].count += 1;
+                flaggedItemIssues[productId].reasons.push(notifData.description);
+                const notifDate = new Date(notifData.timestamp);
+                if (!flaggedItemIssues[productId].firstFlagged || notifDate < flaggedItemIssues[productId].firstFlagged) {
+                  flaggedItemIssues[productId].firstFlagged = notifDate;
+                }
+              }
+            });
+          }
+        }
+
+        const flaggedStoreRows = Object.entries(flaggedStoreIssues).map(([storeId, issue]) => ({
+          storeName: storesSnapshot.docs.find(s => s.id === storeId)?.data().name || storeId,
+          flagCount: issue.count,
+          reasons: issue.reasons.join("; "),
+          date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
+        }));
+
+        setFlaggedStores({
+          columns: [
+            { Header: "Store Name", accessor: "storeName", width: "30%" },
+            { Header: "Flag Count", accessor: "flagCount", width: "20%" },
+            { Header: "Reasons", accessor: "reasons", width: "30%" },
+            { Header: "First Flagged", accessor: "date", width: "20%" },
+          ],
+          rows: flaggedStoreRows,
+        });
+
+        const flaggedItemRows = Object.entries(flaggedItemIssues).map(([productId, issue]) => ({
+          itemName: productsSnapshot.docs.find(p => p.id === productId)?.data().name || productId,
+          storeName: issue.storeName,
+          flagCount: issue.count,
+          reasons: issue.reasons.join("; "),
+          date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
+        }));
+
+        setFlaggedItems({
+          columns: [
+            { Header: "Item Name", accessor: "itemName", width: "30%" },
+            { Header: "Store Name", accessor: "storeName", width: "20%" },
+            { Header: "Flag Count", accessor: "flagCount", width: "20%" },
+            { Header: "Reasons", accessor: "reasons", width: "20%" },
+            { Header: "First Flagged", accessor: "date", width: "20%" },
+          ],
+          rows: flaggedItemRows,
+        });
       } catch (error) {
-        console.error("Error fetching Firestore data:", error);
+        console.error("GodDashboard: Error fetching Firestore data:", error);
       }
     };
 
@@ -258,48 +231,100 @@ function GodDashboard() {
         <MDBox mb={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={3}>
-              <DefaultStatisticsCard
-                title="Sales"
-                count={`$${sales.toLocaleString()}`}
-                dropdown={{
-                  action: openSalesDropdown,
-                  menu: renderMenu(salesDropdown, closeSalesDropdown),
-                  value: salesDropdownValue,
-                }}
-              />
+              <Card>
+                <MDBox p={3} display="flex" alignItems="center">
+                  <MDBox
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    width="3rem"
+                    height="3rem"
+                    borderRadius="lg"
+                    color="white"
+                    bgColor="info"
+                    mr={2}
+                  >
+                    <Icon fontSize="medium">money</Icon>
+                  </MDBox>
+                  <MDBox>
+                    <MDTypography variant="h6" color="dark">Sales</MDTypography>
+                    <MDTypography variant="h4" color="info">${sales.toLocaleString()}</MDTypography>
+                    <MDTypography variant="caption" color="text">Total Sales</MDTypography>
+                  </MDBox>
+                </MDBox>
+              </Card>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <DefaultStatisticsCard
-                title="Buyers"
-                count={buyers.toLocaleString()}
-                dropdown={{
-                  action: openBuyersDropdown,
-                  menu: renderMenu(buyersDropdown, closeBuyersDropdown),
-                  value: buyersDropdownValue,
-                }}
-              />
+              <Card>
+                <MDBox p={3} display="flex" alignItems="center">
+                  <MDBox
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    width="3rem"
+                    height="3rem"
+                    borderRadius="lg"
+                    color="white"
+                    bgColor="warning"
+                    mr={2}
+                  >
+                    <Icon fontSize="medium">people</Icon>
+                  </MDBox>
+                  <MDBox>
+                    <MDTypography variant="h6" color="dark">Buyers</MDTypography>
+                    <MDTypography variant="h4" color="info">{buyers.toLocaleString()}</MDTypography>
+                    <MDTypography variant="caption" color="text">Total Buyers</MDTypography>
+                  </MDBox>
+                </MDBox>
+              </Card>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <DefaultStatisticsCard
-                title="Sellers"
-                count={sellers.toLocaleString()}
-                dropdown={{
-                  action: openSellersDropdown,
-                  menu: renderMenu(sellersDropdown, closeSellersDropdown),
-                  value: sellersDropdownValue,
-                }}
-              />
+              <Card>
+                <MDBox p={3} display="flex" alignItems="center">
+                  <MDBox
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    width="3rem"
+                    height="3rem"
+                    borderRadius="lg"
+                    color="white"
+                    bgColor="success"
+                    mr={2}
+                  >
+                    <Icon fontSize="medium">person_add</Icon>
+                  </MDBox>
+                  <MDBox>
+                    <MDTypography variant="h6" color="dark">Sellers</MDTypography>
+                    <MDTypography variant="h4" color="info">{sellers.toLocaleString()}</MDTypography>
+                    <MDTypography variant="caption" color="text">Total Sellers</MDTypography>
+                  </MDBox>
+                </MDBox>
+              </Card>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <DefaultStatisticsCard
-                title="Affiliates"
-                count={affiliates.toLocaleString()}
-                dropdown={{
-                  action: openRevenueDropdown,
-                  menu: renderMenu(revenueDropdown, closeRevenueDropdown),
-                  value: revenueDropdownValue,
-                }}
-              />
+              <Card>
+                <MDBox p={3} display="flex" alignItems="center">
+                  <MDBox
+                    display="flex"
+                    justifyContent="center"
+                    alignItems="center"
+                    width="3rem"
+                    height="3rem"
+                    borderRadius="lg"
+                    color="white"
+                    bgColor="error"
+                    mr={2}
+                  >
+                    <Icon fontSize="medium">handshake</Icon>
+                  </MDBox>
+                  <MDBox>
+                    <MDTypography variant="h6" color="dark">Affiliates</MDTypography>
+                    <MDTypography variant="h4" color="info">{affiliates.toLocaleString()}</MDTypography>
+                    <MDTypography variant="caption" color="text">Total Affiliates</MDTypography>
+                  </MDBox>
+                </MDBox>
+              </Card>
             </Grid>
           </Grid>
         </MDBox>
