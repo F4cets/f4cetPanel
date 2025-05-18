@@ -14,6 +14,7 @@ Coded by www.creative-tim.com
 */
 
 import Document, { Html, Head, Main, NextScript } from "next/document";
+import Script from "next/script";
 
 // @emotion
 import createCache from "@emotion/cache";
@@ -40,6 +41,19 @@ export default class MyDocument extends Document {
         <body>
           <Main />
           <NextScript />
+          {/* Google Analytics Scripts */}
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_MEASUREMENT_ID}`}
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '${process.env.NEXT_PUBLIC_MEASUREMENT_ID}');
+            `}
+          </Script>
         </body>
       </Html>
     );

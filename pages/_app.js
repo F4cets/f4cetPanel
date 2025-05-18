@@ -78,6 +78,22 @@ function Main({ Component, pageProps }) {
   const router = useRouter();
   const [isWalletInitialized, setIsWalletInitialized] = useState(false);
 
+  // Google Analytics page view tracking
+  useEffect(() => {
+    const handleRouteChange = (url) => {
+      if (window.gtag) {
+        window.gtag("config", process.env.NEXT_PUBLIC_MEASUREMENT_ID, {
+          page_path: url,
+        });
+      }
+    };
+
+    router.events.on("routeChangeComplete", handleRouteChange);
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChange);
+    };
+  }, [router.events]);
+
   // Wait for wallet connection to stabilize
   useEffect(() => {
     if (connected !== undefined) {
