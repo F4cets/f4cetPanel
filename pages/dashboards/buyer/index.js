@@ -297,29 +297,31 @@ function BuyerDashboard() {
             <MDTypography variant="h4" color="dark">
               {user?.walletId ? user.walletId.slice(0, 6) + "..." + user.walletId.slice(-4) : "User"} -- User Dashboard
             </MDTypography>
-            <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-              <MDButton
-                onClick={handleSellOnF4cet}
-                variant="gradient"
-                color="info"
-                size="large"
-                sx={{
-                  px: 4,
-                  py: 1.5,
-                  fontWeight: "bold",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                  background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                  "&:hover": {
-                    background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                  },
-                  width: { xs: "100%", sm: "auto" },
-                  maxWidth: { xs: "300px", sm: "auto" },
-                }}
-              >
-                Sell on F4cet
-              </MDButton>
-            </motion.div>
+            {user?.role !== "seller" && (
+              <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
+                <MDButton
+                  onClick={handleSellOnF4cet}
+                  variant="gradient"
+                  color="info"
+                  size="large"
+                  sx={{
+                    px: 4,
+                    py: 1.5,
+                    fontWeight: "bold",
+                    borderRadius: "12px",
+                    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                    background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
+                    "&:hover": {
+                      background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
+                    },
+                    width: { xs: "100%", sm: "auto" },
+                    maxWidth: { xs: "300px", sm: "auto" },
+                  }}
+                >
+                  Sell on F4cet
+                </MDButton>
+              </motion.div>
+            )}
           </MDBox>
         </MDBox>
 
