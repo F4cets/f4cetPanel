@@ -68,6 +68,7 @@ function EditProduct() {
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isTogglingActive, setIsTogglingActive] = useState(false);
 
   // Category options
   const digitalCategories = [
@@ -220,6 +221,31 @@ function EditProduct() {
   const handleRemoveImage = (index) => {
     setImages(images.filter((_, i) => i !== index));
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
+  };
+
+  // Handle toggle isActive
+  const handleToggleProductActive = async () => {
+    if (!productId || productId === "new" || isTogglingActive) return;
+
+    setIsTogglingActive(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const productRef = doc(db, "products", productId);
+      const newIsActive = !form.isActive;
+      await updateDoc(productRef, {
+        isActive: newIsActive,
+        updatedAt: serverTimestamp(),
+      });
+      setForm({ ...form, isActive: newIsActive });
+      setSuccess(`Product ${newIsActive ? "activated" : "deactivated"} successfully!`);
+    } catch (err) {
+      console.error("EditProduct: Error toggling product active status:", err);
+      setError("Failed to toggle product active status: " + err.message);
+    } finally {
+      setIsTogglingActive(false);
+    }
   };
 
   // Handle form submission
@@ -542,6 +568,19 @@ function EditProduct() {
                       Active
                     </MDTypography>
                   </MDBox>
+                  {productId !== "new" && (
+                    <MDBox mb={3}>
+                      <MDButton
+                        onClick={handleToggleProductActive}
+                        color={form.isActive ? "error" : "success"}
+                        variant="gradient"
+                        disabled={isTogglingActive}
+                        sx={{ width: { xs: "100%", sm: "auto" } }}
+                      >
+                        {isTogglingActive ? "Toggling..." : form.isActive ? "Deactivate Product" : "Activate Product"}
+                      </MDButton>
+                    </MDBox>
+                  )}
                   {inventoryType === "digital" && (
                     <>
                       <MDBox mb={3}>

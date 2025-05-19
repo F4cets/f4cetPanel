@@ -45,100 +45,114 @@ function MarketplaceOrderDetails() {
   const [issueDescription, setIssueDescription] = useState("");
   const [rating, setRating] = useState(null);
   const [isSending, setIsSending] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
+  const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
+  const [isConfirmingReceipt, setIsConfirmingReceipt] = useState(false);
   const [isFlagging, setIsFlagging] = useState(false);
+  const [isUnflagging, setIsUnflagging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [hasFlaggedIssue, setHasFlaggedIssue] = useState(false);
 
-  // Fetch order details and messages from Firestore
+  // Fetch order details, messages, and check for flagged issues from Firestore
   useEffect(() => {
-    const fetchOrder = async () => {
-      if (!user || !user.walletId || !orderId) return;
+    if (!user || !user.walletId || !orderId) return;
 
+    const fetchOrder = async () => {
       try {
         const orderDocRef = doc(db, "transactions", orderId);
-        const orderSnapshot = await getDoc(orderDocRef);
-        if (orderSnapshot.exists() && orderSnapshot.data().buyerId === user.walletId) {
-          const orderData = orderSnapshot.data();
+        const unsubscribe = onSnapshot(orderDocRef, async (orderSnapshot) => {
+          if (orderSnapshot.exists() && orderSnapshot.data().buyerId === user.walletId) {
+            const orderData = orderSnapshot.data();
 
-          // Fetch product names
-          let productNames = [];
-          if (Array.isArray(orderData.productIds)) {
-            for (const productId of orderData.productIds) {
-              const productDocRef = doc(db, "products", productId);
-              const productDoc = await getDoc(productDocRef);
-              if (productDoc.exists()) {
-                const productData = productDoc.data();
-                productNames.push(productData.name || productId);
-              } else {
-                productNames.push(productId);
+            // Fetch product names
+            let productNames = [];
+            if (Array.isArray(orderData.productIds)) {
+              for (const productId of orderData.productIds) {
+                const productDocRef = doc(db, "products", productId);
+                const productDoc = await getDoc(productDocRef);
+                if (productDoc.exists()) {
+                  const productData = productDoc.data();
+                  productNames.push(productData.name || productId);
+                } else {
+                  productNames.push(productId);
+                }
               }
             }
-          }
 
-          // Fetch seller name (if available)
-          let sellerName = orderData.sellerId;
-          const sellerDocRef = doc(db, "users", orderData.sellerId);
-          const sellerDoc = await getDoc(sellerDocRef);
-          if (sellerDoc.exists()) {
-            const sellerData = sellerDoc.data();
-            sellerName = sellerData.name || sellerName;
-          }
+            // Fetch seller name (if available)
+            let sellerName = orderData.sellerId;
+            const sellerDocRef = doc(db, "users", orderData.sellerId);
+            const sellerDoc = await getDoc(sellerDocRef);
+            if (sellerDoc.exists()) {
+              const sellerData = sellerDoc.data();
+              sellerName = sellerData.name || sellerName;
+            }
 
-          // Build timeline dynamically
-          const timeline = [];
-          if (orderData.createdAt) {
-            const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
-            timeline.push({
-              title: "Order Placed",
-              date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: "Order placed successfully.",
-            });
-          }
-          if (orderData.shippingConfirmedAt) {
-            const shippedDate = orderData.shippingConfirmedAt.toDate ? orderData.shippingConfirmedAt.toDate() : new Date(orderData.shippingConfirmedAt);
-            timeline.push({
-              title: "Order Shipped",
-              date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: `Order shipped with tracking number ${orderData.trackingNumber || 'Not Available'}.`,
-            });
-          }
-          if (orderData.deliveryConfirmedAt) {
-            const deliveredDate = orderData.deliveryConfirmedAt.toDate ? orderData.deliveryConfirmedAt.toDate() : new Date(orderData.deliveryConfirmedAt);
-            timeline.push({
-              title: "Order Delivered",
-              date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: "Order delivered to customer.",
-            });
-          }
+            // Build timeline dynamically
+            const timeline = [];
+            if (orderData.createdAt) {
+              const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
+              timeline.push({
+                title: "Order Placed",
+                date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Order placed successfully.",
+              });
+            }
+            if (orderData.shippingConfirmedAt) {
+              const shippedDate = orderData.shippingConfirmedAt.toDate ? orderData.shippingConfirmedAt.toDate() : new Date(orderData.shippingConfirmedAt);
+              timeline.push({
+                title: "Order Shipped",
+                date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: `Order shipped with tracking number ${orderData.trackingNumber || 'Not Available'}.`,
+              });
+            }
+            if (orderData.deliveryConfirmedAt) {
+              const deliveredDate = orderData.deliveryConfirmedAt.toDate ? orderData.deliveryConfirmedAt.toDate() : new Date(orderData.deliveryConfirmedAt);
+              timeline.push({
+                title: "Order Delivered",
+                date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Buyer confirmed delivery of the item.",
+              });
+            }
 
-          const createdDateForDisplay = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
-          const data = {
-            id: orderSnapshot.id,
-            buyerId: orderData.buyerId,
-            sellerId: orderData.sellerId,
-            seller: sellerName,
-            product: productNames.join(", ") || "Unknown Product",
-            type: orderData.type || "rwi",
-            amount: orderData.amount || 0,
-            currency: orderData.currency || "USDC",
-            status: orderData.shippingStatus || "Unknown",
-            date: createdDateForDisplay.toISOString().split('T')[0],
-            shippingAddress: orderData.shippingAddress || "N/A",
-            trackingNumber: orderData.trackingNumber || "Not Available",
-            buyerConfirmed: orderData.buyerConfirmed || false,
-            sellerRating: orderData.sellerRating || null,
-            timeline: timeline.length > 0 ? timeline : [],
-          };
-          setOrderDetails(data);
-          setRating(data.sellerRating || null);
-        } else {
-          setError("Order not found or unauthorized.");
+            const createdDateForDisplay = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
+            const data = {
+              id: orderSnapshot.id,
+              buyerId: orderData.buyerId,
+              sellerId: orderData.sellerId,
+              seller: sellerName,
+              product: productNames.join(", ") || "Unknown Product",
+              type: orderData.type || "rwi",
+              amount: orderData.amount || 0,
+              currency: orderData.currency || "USDC",
+              status: orderData.shippingStatus || "Unknown",
+              date: createdDateForDisplay.toISOString().split('T')[0],
+              shippingAddress: orderData.shippingAddress || "N/A",
+              trackingNumber: orderData.trackingNumber || "Not Available",
+              buyerConfirmed: orderData.buyerConfirmed || false,
+              sellerRating: orderData.sellerRating || null,
+              deliveryConfirmedAt: orderData.deliveryConfirmedAt || null,
+              timeline: timeline.length > 0 ? timeline : [],
+            };
+            setOrderDetails(data);
+            setRating(data.sellerRating || null);
+          } else {
+            setError("Order not found or unauthorized.");
+            setOrderDetails(null);
+          }
+        }, (err) => {
+          console.error("OrderDetails: Error in order listener:", err);
+          setError("Failed to load order details: " + err.message);
           setOrderDetails(null);
-        }
+        });
+
+        return () => {
+          console.log("OrderDetails: Cleaning up order listener for order:", orderId);
+          unsubscribe();
+        };
       } catch (err) {
-        console.error("OrderDetails: Error fetching order:", err);
+        console.error("OrderDetails: Error setting up order listener:", err);
         setError("Failed to load order details: " + err.message);
         setOrderDetails(null);
       }
@@ -174,7 +188,26 @@ function MarketplaceOrderDetails() {
       }
     };
 
+    const checkFlaggedIssue = async () => {
+      if (!user || !user.walletId || !orderId) return;
+
+      try {
+        const q = query(
+          collection(db, "notifications"),
+          where("orderId", "==", orderId),
+          where("type", "==", "issue"),
+          where("read", "==", false)
+        );
+        const querySnapshot = await getDocs(q);
+        setHasFlaggedIssue(!querySnapshot.empty);
+      } catch (err) {
+        console.error("OrderDetails: Error checking flagged issue:", err);
+        setError("Failed to check flagged issue: " + err.message);
+      }
+    };
+
     fetchOrder();
+    checkFlaggedIssue();
     // Set up real-time messages listener and clean up
     const unsubscribeMessages = fetchMessages();
     return () => {
@@ -220,11 +253,47 @@ function MarketplaceOrderDetails() {
     }
   };
 
+  // Handle confirming delivery (RWI only)
+  const handleConfirmDelivery = async () => {
+    if (!orderDetails || isConfirmingDelivery || orderDetails.deliveryConfirmedAt) return;
+
+    setIsConfirmingDelivery(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const orderDocRef = doc(db, "transactions", orderId);
+      const updatedData = {
+        shippingStatus: "Delivered",
+        deliveryConfirmedAt: new Date().toISOString(),
+        timeline: [
+          ...(orderDetails.timeline || []),
+          {
+            title: "Order Delivered",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: "Buyer confirmed delivery of the item.",
+          },
+        ],
+      };
+      await updateDoc(orderDocRef, updatedData);
+      setOrderDetails({
+        ...orderDetails,
+        ...updatedData,
+      });
+      setSuccess("Delivery confirmed! You can now confirm receipt or flag an issue.");
+    } catch (err) {
+      console.error("OrderDetails: Error confirming delivery:", err);
+      setError("Failed to confirm delivery: " + err.message);
+    } finally {
+      setIsConfirmingDelivery(false);
+    }
+  };
+
   // Handle confirming receipt (RWI only)
   const handleConfirmReceipt = async () => {
-    if (!orderDetails || isConfirming || orderDetails.buyerConfirmed) return;
+    if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
-    setIsConfirming(true);
+    setIsConfirmingReceipt(true);
     setError(null);
     setSuccess(null);
 
@@ -252,7 +321,7 @@ function MarketplaceOrderDetails() {
       console.error("OrderDetails: Error confirming receipt:", err);
       setError("Failed to confirm receipt: " + err.message);
     } finally {
-      setIsConfirming(false);
+      setIsConfirmingReceipt(false);
     }
   };
 
@@ -275,12 +344,49 @@ function MarketplaceOrderDetails() {
       };
       await addDoc(collection(db, "notifications"), notificationData);
       setIssueDescription("");
+      setHasFlaggedIssue(true);
       setSuccess("Issue flagged successfully! Seller has been notified.");
     } catch (err) {
       console.error("OrderDetails: Error flagging issue:", err);
       setError("Failed to flag issue: " + err.message);
     } finally {
       setIsFlagging(false);
+    }
+  };
+
+  // Handle unflagging an issue
+  const handleUnflagIssue = async () => {
+    if (!orderDetails || isUnflagging || !hasFlaggedIssue) return;
+
+    setIsUnflagging(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const q = query(
+        collection(db, "notifications"),
+        where("orderId", "==", orderId),
+        where("type", "==", "issue"),
+        where("read", "==", false)
+      );
+      const querySnapshot = await getDocs(q);
+      if (!querySnapshot.empty) {
+        const notificationDoc = querySnapshot.docs[0];
+        const notificationRef = doc(db, "notifications", notificationDoc.id);
+        await updateDoc(notificationRef, {
+          read: true,
+          resolvedAt: new Date().toISOString(),
+        });
+        setHasFlaggedIssue(false);
+        setSuccess("Issue unflagged successfully!");
+      } else {
+        setError("No active flagged issue found to unflag.");
+      }
+    } catch (err) {
+      console.error("OrderDetails: Error unflagging issue:", err);
+      setError("Failed to unflag issue: " + err.message);
+    } finally {
+      setIsUnflagging(false);
     }
   };
 
@@ -477,6 +583,23 @@ function MarketplaceOrderDetails() {
                       <MDTypography variant="h6" color="dark" mb={2}>
                         Buyer Actions
                       </MDTypography>
+                      {/* Confirm Delivery (RWI Only) */}
+                      {orderDetails.type === "rwi" && orderDetails.status === "Shipped" && !orderDetails.deliveryConfirmedAt && (
+                        <MDBox mb={2}>
+                          <MDTypography variant="body1" color="dark" mb={1}>
+                            Confirm Delivery
+                          </MDTypography>
+                          <MDButton
+                            onClick={handleConfirmDelivery}
+                            color="success"
+                            variant="gradient"
+                            disabled={isConfirmingDelivery}
+                            sx={{ width: { xs: "100%", sm: "auto" } }}
+                          >
+                            {isConfirmingDelivery ? "Confirming..." : "Confirm Delivery"}
+                          </MDButton>
+                        </MDBox>
+                      )}
                       {/* Confirm Receipt (RWI Only) */}
                       {orderDetails.type === "rwi" && orderDetails.status === "Delivered" && !orderDetails.buyerConfirmed && (
                         <MDBox mb={2}>
@@ -487,10 +610,10 @@ function MarketplaceOrderDetails() {
                             onClick={handleConfirmReceipt}
                             color="success"
                             variant="gradient"
-                            disabled={isConfirming}
+                            disabled={isConfirmingReceipt}
                             sx={{ width: { xs: "100%", sm: "auto" } }}
                           >
-                            {isConfirming ? "Confirming..." : "Confirm Receipt"}
+                            {isConfirmingReceipt ? "Confirming..." : "Confirm Receipt"}
                           </MDButton>
                         </MDBox>
                       )}
@@ -567,7 +690,7 @@ function MarketplaceOrderDetails() {
                           fullWidth
                           multiline
                           rows={2}
-                          disabled={isFlagging}
+                          disabled={isFlagging || hasFlaggedIssue}
                           sx={{
                             "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
                           }}
@@ -576,11 +699,23 @@ function MarketplaceOrderDetails() {
                           onClick={handleFlagIssue}
                           color="error"
                           variant="gradient"
-                          disabled={isFlagging || !issueDescription.trim()}
-                          sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
+                          disabled={isFlagging || !issueDescription.trim() || hasFlaggedIssue}
+                          sx={{ mt: 1, width: { xs: "100%", sm: "auto" }, mr: 1 }}
                         >
                           {isFlagging ? "Flagging..." : "Flag Issue"}
                         </MDButton>
+                        {/* Unflag Issue */}
+                        {hasFlaggedIssue && (
+                          <MDButton
+                            onClick={handleUnflagIssue}
+                            color="success"
+                            variant="gradient"
+                            disabled={isUnflagging}
+                            sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
+                          >
+                            {isUnflagging ? "Unflagging..." : "Unflag Issue"}
+                          </MDButton>
+                        )}
                       </MDBox>
                     </Grid>
                   </Grid>

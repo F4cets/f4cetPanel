@@ -3,7 +3,7 @@
 * F4cetPanel - Buyer Dashboard Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -18,7 +18,7 @@ import { motion } from "framer-motion";
 import { useUser } from "/contexts/UserContext";
 
 // Firestore imports
-import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // NextJS Material Dashboard 2 PRO examples
@@ -30,9 +30,13 @@ import Footer from "/examples/Footer";
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
 import MDButton from "/components/MDButton";
+import MDInput from "/components/MDInput";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import DataTable from "/examples/Tables/DataTable";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import Divider from "@mui/material/Divider";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -47,6 +51,14 @@ function BuyerDashboard() {
   const [affiliateActivity, setAffiliateActivity] = useState([]);
   const [marketplaceOrders, setMarketplaceOrders] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [menu, setMenu] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState(null);
+
+  // Handle navigation to the sell-on-f4cet page
+  const handleSellOnF4cet = () => {
+    router.push("/dashboards/buyer/sell-on-f4cet");
+  };
 
   // Redirect to home if no user or walletId
   useEffect(() => {
@@ -66,13 +78,6 @@ function BuyerDashboard() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       try {
-        // Fetch user data
-        const userDocRef = doc(db, "users", walletId);
-        const userDoc = await getDoc(userDocRef);
-        if (!userDoc.exists()) return;
-
-        const userData = userDoc.data();
-
         // Fetch affiliate clicks from subcollection
         const clicksQuery = query(collection(db, `users/${walletId}/affiliateClicks`));
         const clicksSnapshot = await getDocs(clicksQuery);
@@ -81,72 +86,71 @@ function BuyerDashboard() {
           ...doc.data(),
           timestamp: doc.data().timestamp ? new Date(doc.data().timestamp) : new Date(),
         }));
+        console.log("Affiliate clicks:", clicks);
 
         // Affiliate Clicks (Last 30 Days)
         const recentClicks = clicks.filter(click => click.timestamp >= thirtyDaysAgo);
         setAffiliateClicksLast30Days(recentClicks.length);
 
         // Affiliate Activity
-        const affiliateActivityData = [];
-        for (const click of clicks) {
-          const clickDate = click.timestamp;
-          if (clickDate >= thirtyDaysAgo) {
-            const existingActivity = affiliateActivityData.find(activity => activity.affiliateName === click.affiliateName);
-            if (existingActivity) {
-              existingActivity.clicks += 1;
-              existingActivity.purchases = 0; // Placeholder
-              existingActivity.pendingWndo = 0; // Placeholder
-            } else {
-              affiliateActivityData.push({
-                id: click.id,
-                affiliateName: click.affiliateName,
-                date: clickDate.toISOString().split('T')[0],
-                clicks: 1,
-                purchases: 0, // Placeholder
-                pendingWndo: 0, // Placeholder
-                status: "clicked",
-              });
-            }
-          }
-        }
+        const affiliateActivityData = recentClicks.map(click => ({
+          id: click.id,
+          affiliateName: click.affiliateName || "Unknown",
+          sortAffiliateName: click.affiliateName || "Unknown",
+          date: click.timestamp.toISOString().split("T")[0],
+          clicks: 1,
+          purchases: 0, // Placeholder (WNDO not implemented)
+          pendingWndo: 0, // Placeholder (WNDO not implemented)
+          status: "clicked",
+        }));
+        console.log("Affiliate activity before sorting:", affiliateActivityData);
         setAffiliateActivity(affiliateActivityData);
-        setPendingWndoRewards(0); // Placeholder until purchase linking
+        setPendingWndoRewards(0); // Placeholder until WNDO implemented
 
         // Marketplace Purchases
-        const purchaseIds = userData.purchases || [];
-        const transactions = [];
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("buyerId", "==", walletId)
+        );
+        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const transactions = transactionsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt
+            ? new Date(doc.data().createdAt) // Handle string createdAt
+            : new Date(),
+        }));
+        console.log("Marketplace transactions:", transactions);
+
         let purchaseCount = 0;
         let purchaseAmount = 0;
-
-        console.log("Purchase IDs:", purchaseIds);
-
-        for (const purchaseId of purchaseIds) {
-          const transactionDocRef = doc(db, "transactions", purchaseId);
-          const transactionDoc = await getDoc(transactionDocRef);
-          if (transactionDoc.exists()) {
-            const transactionData = transactionDoc.data();
-            console.log(`Transaction ${purchaseId} data:`, transactionData);
-
-            if (transactionData.type === "rwi" && transactionData.buyerId === walletId) {
-              const purchaseDate = transactionData.createdAt.toDate ? transactionData.createdAt.toDate() : new Date();
-              if (purchaseDate >= thirtyDaysAgo) {
-                purchaseCount += 1;
-                purchaseAmount += transactionData.amount || 0;
-              }
-              transactions.push({
-                id: purchaseId,
-                date: purchaseDate.toISOString().split('T')[0],
-                product: transactionData.productIds.join(", "),
-                amount: transactionData.amount,
-                status: transactionData.shippingStatus,
-              });
-            }
+        const marketplaceOrdersData = [];
+        for (const transaction of transactions.filter(t => t.createdAt >= thirtyDaysAgo)) {
+          if (transaction.type === "rwi" || transaction.type === "digital") {
+            purchaseCount += 1;
+            purchaseAmount += transaction.amount || 0;
           }
+          // Fetch product names for each productId
+          const productNames = await Promise.all(
+            (transaction.productIds || []).map(async (productId) => {
+              const productDocRef = doc(db, "products", productId);
+              const productDoc = await getDoc(productDocRef);
+              return productDoc.exists() ? productDoc.data().name || "Unknown" : "Unknown";
+            })
+          );
+          marketplaceOrdersData.push({
+            id: transaction.id,
+            date: transaction.createdAt.toISOString().split("T")[0],
+            product: productNames.length > 0 ? productNames.join(", ") : "Unknown",
+            amount: transaction.amount || 0,
+            status: transaction.shippingStatus || "Pending",
+          });
         }
+
         setMarketplacePurchasesLast30Days(purchaseCount);
         setMarketplacePurchaseAmountLast30Days(purchaseAmount);
-        setMarketplaceOrders(transactions);
-        console.log("Final marketplace orders:", transactions);
+        setMarketplaceOrders(marketplaceOrdersData);
+        console.log("Marketplace orders:", marketplaceOrdersData);
       } catch (error) {
         console.error("Error fetching buyer data:", error);
       } finally {
@@ -154,7 +158,9 @@ function BuyerDashboard() {
       }
     };
 
-    fetchBuyerData();
+    if (user?.walletId) {
+      fetchBuyerData();
+    }
   }, [user, router]);
 
   // Animation variants for the button
@@ -174,41 +180,100 @@ function BuyerDashboard() {
     },
   };
 
+  // Filter data based on search and status
+  const filteredAffiliateData = affiliateActivity.filter((item) => {
+    const matchesSearch = searchQuery.trim()
+      ? item.affiliateName.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
+    const matchesStatus = statusFilter ? item.status === statusFilter : true;
+    return matchesSearch && matchesStatus;
+  });
+  console.log("Filtered affiliate data:", filteredAffiliateData);
+
   // Affiliate Activity Table
   const affiliateTableData = {
     columns: [
-      { Header: "Affiliate Name", accessor: "affiliateName", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Clicks", accessor: "clicks", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Purchases", accessor: "purchases", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Affiliate Name", accessor: "affiliateName", width: "20%", disableSortBy: true },
+      { Header: "Date", accessor: "date", width: "15%" },
+      { Header: "Clicks", accessor: "clicks", width: "15%" },
+      { Header: "Purchases", accessor: "purchases", width: "15%" },
+      { Header: "Pending WNDO", accessor: "pendingWndo", width: "15%" },
+      { Header: "Status", accessor: "status", width: "20%" },
     ],
-    rows: affiliateActivity.slice(0, 5).map(activity => ({
-      ...activity,
-      affiliateName: (
-        <Link href={`/dashboards/buyer/affiliate/details/${activity.id}`}>
-          <MDTypography variant="button" color="info" fontWeight="medium">
-            {activity.affiliateName}
-          </MDTypography>
-        </Link>
-      ),
-    })),
+    rows: filteredAffiliateData.slice(0, 5).map((item) => {
+      console.log("Row data:", { id: item.id, affiliateName: item.affiliateName, href: `/dashboards/buyer/affiliate/details/${item.id}` });
+      return {
+        ...item,
+        affiliateName: (
+          <Link
+            href={`/dashboards/buyer/affiliate/details/${item.id}`}
+            key={item.id}
+            onClick={(e) => {
+              console.log("Affiliate link clicked:", item.id);
+              e.stopPropagation();
+            }}
+          >
+            <MDTypography variant="button" color="info" fontWeight="medium">
+              {item.affiliateName}
+            </MDTypography>
+          </Link>
+        ),
+        status: (
+          <MDBox display="flex" alignItems="center">
+            <Icon
+              fontSize="small"
+              sx={{
+                color: item.status === "purchased" ? "success.main" : "info.main",
+                mr: 1,
+              }}
+            >
+              {item.status === "purchased" ? "check_circle" : "touch_app"}
+            </Icon>
+            <MDTypography variant="button" color="text">
+              {item.status}
+            </MDTypography>
+          </MDBox>
+        ),
+      };
+    }),
   };
+
+  const openMenu = (event) => setMenu(event.currentTarget);
+  const closeMenu = () => setMenu(null);
+
+  const renderMenu = (
+    <Menu
+      anchorEl={menu}
+      anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      transformOrigin={{ vertical: "top", horizontal: "left" }}
+      open={Boolean(menu)}
+      onClose={closeMenu}
+      keepMounted
+    >
+      <MenuItem onClick={() => { setStatusFilter("purchased"); closeMenu(); }}>Status: Purchased</MenuItem>
+      <MenuItem onClick={() => { setStatusFilter("clicked"); closeMenu(); }}>Status: Clicked</MenuItem>
+      <Divider sx={{ margin: "0.5rem 0" }} />
+      <MenuItem onClick={() => { setStatusFilter(null); closeMenu(); }}>
+        <MDTypography variant="button" color="error" fontWeight="regular">
+          Remove Filter
+        </MDTypography>
+      </MenuItem>
+    </Menu>
+  );
 
   // Marketplace Orders Table
   const marketplaceTableData = {
     columns: [
-      { Header: "Order ID", accessor: "id", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "date", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Amount ($)", accessor: "amount", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Order ID", accessor: "id", width: "20%" },
+      { Header: "Date", accessor: "date", width: "20%" },
+      { Header: "Product", accessor: "product", width: "20%" },
+      { Header: "Amount ($)", accessor: "amount", width: "20%" },
+      { Header: "Status", accessor: "status", width: "20%" },
     ],
     rows: marketplaceOrders.slice(0, 5).map(order => ({
       ...order,
       id: (
-        <Link href={`/dashboards/buyer/marketplace/details/${order.id}`}>
+        <Link href={`/dashboards/buyer/marketplace/details/${order.id}`} key={order.id}>
           <MDTypography variant="button" color="info" fontWeight="medium">
             {order.id}
           </MDTypography>
@@ -216,18 +281,6 @@ function BuyerDashboard() {
       ),
     })),
   };
-
-  // Handle navigation to the sell-on-f4cet page
-  const handleSellOnF4cet = () => {
-    router.push("/dashboards/buyer/sell-on-f4cet");
-  };
-
-  // Ensure user is loaded before rendering
-  if (!user || !user.walletId) {
-    return null;
-  }
-
-  const walletId = user.walletId;
 
   return (
     <DashboardLayout>
@@ -242,7 +295,7 @@ function BuyerDashboard() {
             gap={{ xs: 2, sm: 2 }}
           >
             <MDTypography variant="h4" color="dark">
-              {walletId ? walletId.slice(0, 6) + "..." + walletId.slice(-4) : "User"} -- User Dashboard
+              {user?.walletId ? user.walletId.slice(0, 6) + "..." + user.walletId.slice(-4) : "User"} -- User Dashboard
             </MDTypography>
             <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
               <MDButton
@@ -383,7 +436,7 @@ function BuyerDashboard() {
                     Marketplace Spent
                   </MDTypography>
                   <MDTypography variant="h4" color="info">
-                    ${marketplacePurchaseAmountLast30Days}
+                    ${marketplacePurchaseAmountLast30Days.toFixed(2)}
                   </MDTypography>
                   <MDTypography variant="caption" color="text">
                     Last 30 Days
@@ -400,13 +453,48 @@ function BuyerDashboard() {
           <Grid item xs={12}>
             <Card>
               <MDBox p={3}>
-                <MDTypography variant="h5" color="dark" mb={2}>
-                  Affiliate Activity (Last 5)
-                </MDTypography>
+                <MDBox
+                  display="flex"
+                  flexDirection={{ xs: "column", sm: "row" }}
+                  justifyContent={{ xs: "flex-start", sm: "space-between" }}
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                  mb={2}
+                  gap={{ xs: 1, sm: 2 }}
+                >
+                  <MDTypography variant="h5" color="dark">
+                    Affiliate Activity (Last 5)
+                  </MDTypography>
+                  <MDBox
+                    display="flex"
+                    flexDirection={{ xs: "column", sm: "row" }}
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    gap={{ xs: 1, sm: 2 }}
+                    width={{ xs: "100%", sm: "auto" }}
+                  >
+                    <MDBox width={{ xs: "100%", sm: "200px" }}>
+                      <MDInput
+                        placeholder="Search by Affiliate Name..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        fullWidth
+                      />
+                    </MDBox>
+                    <MDButton
+                      variant={menu ? "contained" : "outlined"}
+                      color="dark"
+                      onClick={openMenu}
+                      sx={{ width: { xs: "100%", sm: "auto" } }}
+                    >
+                      Filters <Icon>keyboard_arrow_down</Icon>
+                    </MDButton>
+                    {renderMenu}
+                  </MDBox>
+                </MDBox>
                 <DataTable
                   table={affiliateTableData}
                   entriesPerPage={false}
                   canSearch={false}
+                  canSort={true}
                   sx={{
                     "& th": {
                       paddingRight: "20px !important",
@@ -439,6 +527,7 @@ function BuyerDashboard() {
                   table={marketplaceTableData}
                   entriesPerPage={false}
                   canSearch={false}
+                  canSort={true}
                   sx={{
                     "& th": {
                       paddingRight: "20px !important",

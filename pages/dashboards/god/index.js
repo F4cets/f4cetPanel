@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { db } from "/lib/firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
+import Link from "next/link";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -18,6 +19,7 @@ import Icon from "@mui/material/Icon";
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
+import MDButton from "/components/MDButton"; // For future admin flag buttons
 import DataTable from "/examples/Tables/DataTable";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -62,6 +64,10 @@ function GodDashboard() {
         const affiliatesSnapshot = await getDocs(affiliatesQuery);
         setAffiliates(affiliatesSnapshot.size);
 
+        // Fetch stores for reference
+        const storesQuery = query(collection(db, "stores"));
+        const storesSnapshot = await getDocs(storesQuery);
+
         // Top Selling Stores
         const storeRevenue = {};
         const storeRatings = {};
@@ -69,7 +75,7 @@ function GodDashboard() {
           const data = doc.data();
           const storeId = data.storeId;
           if (storeId) {
-            storeRevenue[storeId] = (storeRevenue[storeId] || 0) + data.amount;
+            storeRevenue[storeId] = (storeRevenue[storeId] || 0) + (data.amount || 0);
             if (data.sellerRating) {
               storeRatings[storeId] = storeRatings[storeId] || { sum: 0, count: 0 };
               storeRatings[storeId].sum += data.sellerRating;
@@ -78,18 +84,23 @@ function GodDashboard() {
           }
         });
 
-        const storesQuery = query(collection(db, "stores"));
-        const storesSnapshot = await getDocs(storesQuery);
         const storeRows = [];
         storesSnapshot.forEach((doc) => {
           const data = doc.data();
-          const revenue = storeRevenue[data.storeId] || 0;
-          const avgRating = storeRatings[data.storeId]
-            ? (storeRatings[data.storeId].sum / storeRatings[data.storeId].count).toFixed(1)
+          const storeId = data.storeId || doc.id; // Fallback to doc.id if storeId is missing
+          const revenue = storeRevenue[storeId] || 0;
+          const avgRating = storeRatings[storeId]
+            ? (storeRatings[storeId].sum / storeRatings[storeId].count).toFixed(1)
             : "N/A";
           if (revenue > 0) {
             storeRows.push({
-              storeName: data.name,
+              storeName: (
+                <Link href={`/dashboards/god/stores/edit/${storeId}`}>
+                  <MDTypography variant="button" color="info" fontWeight="medium">
+                    {data.name || storeId}
+                  </MDTypography>
+                </Link>
+              ),
               totalSales: `$${revenue.toLocaleString()}`,
               avgRating,
             });
@@ -110,9 +121,11 @@ function GodDashboard() {
         const productRevenue = {};
         transactionsSnapshot.forEach((doc) => {
           const data = doc.data();
-          data.productIds.forEach((productId) => {
-            productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length);
-          });
+          if (Array.isArray(data.productIds)) {
+            data.productIds.forEach((productId) => {
+              productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length);
+            });
+          }
         });
 
         const productsQuery = query(collection(db, "products"));
@@ -120,11 +133,18 @@ function GodDashboard() {
         const productRows = [];
         productsSnapshot.forEach((doc) => {
           const data = doc.data();
-          const revenue = productRevenue[doc.id] || 0;
+          const productId = doc.id;
+          const revenue = productRevenue[productId] || 0;
           if (revenue > 0) {
             const storeDoc = storesSnapshot.docs.find(s => s.id === data.storeId);
             productRows.push({
-              itemName: data.name,
+              itemName: (
+                <Link href={`/dashboards/god/products/edit/${productId}`}>
+                  <MDTypography variant="button" color="info" fontWeight="medium">
+                    {data.name || productId}
+                  </MDTypography>
+                </Link>
+              ),
               storeName: storeDoc ? storeDoc.data().name : "Unknown",
               revenue: `$${revenue.toLocaleString()}`,
             });
@@ -141,7 +161,7 @@ function GodDashboard() {
           rows: productRows.slice(0, 5),
         });
 
-        // Flagged Stores
+        // Flagged Stores and Items
         const notificationsQuery = query(collection(db, "notifications"), where("type", "==", "issue"));
         const notificationsSnapshot = await getDocs(notificationsQuery);
         const flaggedStoreIssues = {};
@@ -149,15 +169,17 @@ function GodDashboard() {
 
         for (const notifDoc of notificationsSnapshot.docs) {
           const notifData = notifDoc.data();
+          const flaggedBy = notifData.flaggedBy || "unknown"; // Track user who flagged
           const txDocRef = doc(db, "transactions", notifData.orderId);
           const txDoc = await getDoc(txDocRef);
           if (txDoc.exists()) {
             const txData = txDoc.data();
             const storeId = txData.storeId;
             const storeDoc = storesSnapshot.docs.find(s => s.id === storeId);
-            if (storeDoc) {
+            if (storeDoc && storeDoc.data().isActive !== false) { // Only include active stores
               const storeName = storeDoc.data().name;
-              flaggedStoreIssues[storeId] = flaggedStoreIssues[storeId] || { count: 0, reasons: [], firstFlagged: null };
+              flaggedStoreIssues[storeId] = flaggedStoreIssues[storeId] || { count: 0, uniqueUsers: new Set(), reasons: [], firstFlagged: null };
+              flaggedStoreIssues[storeId].uniqueUsers.add(flaggedBy);
               flaggedStoreIssues[storeId].count += 1;
               flaggedStoreIssues[storeId].reasons.push(notifData.description);
               const notifDate = new Date(notifData.timestamp);
@@ -165,54 +187,77 @@ function GodDashboard() {
                 flaggedStoreIssues[storeId].firstFlagged = notifDate;
               }
             }
-            txData.productIds.forEach((productId) => {
-              const productDoc = productsSnapshot.docs.find(p => p.id === productId);
-              if (productDoc) {
-                const productName = productDoc.data().name;
-                flaggedItemIssues[productId] = flaggedItemIssues[productId] || { count: 0, reasons: [], firstFlagged: null, storeName };
-                flaggedItemIssues[productId].count += 1;
-                flaggedItemIssues[productId].reasons.push(notifData.description);
-                const notifDate = new Date(notifData.timestamp);
-                if (!flaggedItemIssues[productId].firstFlagged || notifDate < flaggedItemIssues[productId].firstFlagged) {
-                  flaggedItemIssues[productId].firstFlagged = notifDate;
+            if (Array.isArray(txData.productIds)) {
+              txData.productIds.forEach((productId) => {
+                const productDoc = productsSnapshot.docs.find(p => p.id === productId);
+                if (productDoc && productDoc.data().isActive !== false) { // Only include active products
+                  const productName = productDoc.data().name;
+                  flaggedItemIssues[productId] = flaggedItemIssues[productId] || { count: 0, uniqueUsers: new Set(), reasons: [], firstFlagged: null, storeName };
+                  flaggedItemIssues[productId].uniqueUsers.add(flaggedBy);
+                  flaggedItemIssues[productId].count += 1;
+                  flaggedItemIssues[productId].reasons.push(notifData.description);
+                  const notifDate = new Date(notifData.timestamp);
+                  if (!flaggedItemIssues[productId].firstFlagged || notifDate < flaggedItemIssues[productId].firstFlagged) {
+                    flaggedItemIssues[productId].firstFlagged = notifDate;
+                  }
                 }
-              }
-            });
+              });
+            }
           }
         }
 
-        const flaggedStoreRows = Object.entries(flaggedStoreIssues).map(([storeId, issue]) => ({
-          storeName: storesSnapshot.docs.find(s => s.id === storeId)?.data().name || storeId,
-          flagCount: issue.count,
-          reasons: issue.reasons.join("; "),
-          date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
-        }));
+        const flaggedStoreRows = Object.entries(flaggedStoreIssues)
+          .filter(([_, issue]) => issue.uniqueUsers.size >= 3) // Only show stores with 3+ unique user flags
+          .map(([storeId, issue]) => ({
+            storeName: (
+              <Link href={`/dashboards/god/stores/edit/${storeId}`}>
+                <MDTypography variant="button" color="info" fontWeight="medium">
+                  {storesSnapshot.docs.find(s => s.id === storeId)?.data().name || storeId}
+                </MDTypography>
+              </Link>
+            ),
+            flagCount: issue.count,
+            uniqueUsers: issue.uniqueUsers.size,
+            reasons: issue.reasons.join("; "),
+            date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
+          }));
 
         setFlaggedStores({
           columns: [
             { Header: "Store Name", accessor: "storeName", width: "30%" },
-            { Header: "Flag Count", accessor: "flagCount", width: "20%" },
-            { Header: "Reasons", accessor: "reasons", width: "30%" },
-            { Header: "First Flagged", accessor: "date", width: "20%" },
+            { Header: "Flag Count", accessor: "flagCount", width: "15%" },
+            { Header: "Unique Users", accessor: "uniqueUsers", width: "15%" },
+            { Header: "Reasons", accessor: "reasons", width: "25%" },
+            { Header: "First Flagged", accessor: "date", width: "15%" },
           ],
           rows: flaggedStoreRows,
         });
 
-        const flaggedItemRows = Object.entries(flaggedItemIssues).map(([productId, issue]) => ({
-          itemName: productsSnapshot.docs.find(p => p.id === productId)?.data().name || productId,
-          storeName: issue.storeName,
-          flagCount: issue.count,
-          reasons: issue.reasons.join("; "),
-          date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
-        }));
+        const flaggedItemRows = Object.entries(flaggedItemIssues)
+          .filter(([_, issue]) => issue.uniqueUsers.size >= 3) // Only show items with 3+ unique user flags
+          .map(([productId, issue]) => ({
+            itemName: (
+              <Link href={`/dashboards/god/products/edit/${productId}`}>
+                <MDTypography variant="button" color="info" fontWeight="medium">
+                  {productsSnapshot.docs.find(p => p.id === productId)?.data().name || productId}
+                </MDTypography>
+              </Link>
+            ),
+            storeName: issue.storeName,
+            flagCount: issue.count,
+            uniqueUsers: issue.uniqueUsers.size,
+            reasons: issue.reasons.join("; "),
+            date: issue.firstFlagged ? issue.firstFlagged.toISOString().split('T')[0] : "N/A",
+          }));
 
         setFlaggedItems({
           columns: [
             { Header: "Item Name", accessor: "itemName", width: "30%" },
-            { Header: "Store Name", accessor: "storeName", width: "20%" },
-            { Header: "Flag Count", accessor: "flagCount", width: "20%" },
+            { Header: "Store Name", accessor: "storeName", width: "15%" },
+            { Header: "Flag Count", accessor: "flagCount", width: "15%" },
+            { Header: "Unique Users", accessor: "uniqueUsers", width: "15%" },
             { Header: "Reasons", accessor: "reasons", width: "20%" },
-            { Header: "First Flagged", accessor: "date", width: "20%" },
+            { Header: "First Flagged", accessor: "date", width: "15%" },
           ],
           rows: flaggedItemRows,
         });
@@ -223,6 +268,60 @@ function GodDashboard() {
 
     fetchData();
   }, []);
+
+  // Placeholder for future admin flag button logic in edit pages
+  /*
+  // In god/products/edit/[productId]/index.js:
+  const handleToggleProductActive = async () => {
+    try {
+      const productRef = doc(db, "products", productId);
+      await updateDoc(productRef, { isActive: !product.isActive });
+      // Update local state or refetch
+    } catch (error) {
+      console.error("Error toggling product active status:", error);
+    }
+  };
+
+  // In god/stores/edit/[storeId]/index.js:
+  const handleToggleStoreActive = async () => {
+    try {
+      const storeRef = doc(db, "stores", storeId);
+      await updateDoc(storeRef, { isActive: !store.isActive });
+      // Update local state or refetch
+    } catch (error) {
+      console.error("Error toggling store active status:", error);
+    }
+  };
+
+  // User flagging abuse prevention:
+  // In user management (e.g., god/users/edit/[userId]/index.js):
+  const handleToggleUserActive = async () => {
+    try {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, { isActive: !user.isActive });
+      // If isActive: false, user cannot access marketplace/affiliate features
+    } catch (error) {
+      console.error("Error toggling user active status:", error);
+    }
+  };
+
+  // In frontend flagging (e.g., buyer/marketplace/details/[orderId]/index.js):
+  const handleFlagIssue = async () => {
+    try {
+      await addDoc(collection(db, "notifications"), {
+        orderId,
+        userId: sellerId,
+        flaggedBy: user.walletId, // Track flagging user
+        type: "issue",
+        description: issueDescription,
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+    } catch (error) {
+      console.error("Error flagging issue:", error);
+    }
+  };
+  */
 
   return (
     <DashboardLayout>

@@ -3,7 +3,7 @@
 * F4cetPanel - Marketplace Orders Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -61,59 +61,56 @@ function MarketplaceOrders() {
       const orders = [];
 
       try {
-        // Fetch user data to get their purchases
-        const userDocRef = doc(db, "users", walletId);
-        const userDoc = await getDoc(userDocRef);
-        if (!userDoc.exists()) return;
+        // Fetch transactions directly for the buyer
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("buyerId", "==", walletId),
+          where("type", "in", ["rwi", "digital"])
+        );
+        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const transactions = transactionsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
 
-        const userData = userDoc.data();
-        const purchaseIds = userData.purchases || [];
-
-        // Fetch each transaction
-        for (const purchaseId of purchaseIds) {
-          const transactionDocRef = doc(db, "transactions", purchaseId);
-          const transactionDoc = await getDoc(transactionDocRef);
-          if (transactionDoc.exists()) {
-            const transactionData = transactionDoc.data();
-            if (transactionData.type === "rwi" && transactionData.buyerId === walletId) {
-              // Fetch product names
-              let productNames = [];
-              if (Array.isArray(transactionData.productIds)) {
-                for (const productId of transactionData.productIds) {
-                  const productDocRef = doc(db, "products", productId);
-                  const productDoc = await getDoc(productDocRef);
-                  if (productDoc.exists()) {
-                    const productData = productDoc.data();
-                    productNames.push(productData.name || productId);
-                  } else {
-                    productNames.push(productId);
-                  }
-                }
+        // Process each transaction
+        for (const transaction of transactions) {
+          // Fetch product names
+          let productNames = [];
+          if (Array.isArray(transaction.productIds)) {
+            for (const productId of transaction.productIds) {
+              const productDocRef = doc(db, "products", productId);
+              const productDoc = await getDoc(productDocRef);
+              if (productDoc.exists()) {
+                const productData = productDoc.data();
+                productNames.push(productData.name || productId);
+              } else {
+                productNames.push(productId);
               }
-
-              // Fetch seller name (if available)
-              let sellerName = transactionData.sellerId;
-              const sellerDocRef = doc(db, "users", transactionData.sellerId);
-              const sellerDoc = await getDoc(sellerDocRef);
-              if (sellerDoc.exists()) {
-                const sellerData = sellerDoc.data();
-                sellerName = sellerData.name || sellerName;
-              }
-
-              // Format date
-              const transactionDate = transactionData.createdAt.toDate ? transactionData.createdAt.toDate() : new Date();
-              const dateStr = transactionDate.toISOString().split('T')[0];
-
-              orders.push({
-                id: purchaseId,
-                product: productNames.join(", ") || "Unknown Product",
-                seller: sellerName,
-                amount: `${transactionData.amount || 0} ${transactionData.currency || "USDC"}`,
-                status: transactionData.shippingStatus || "Unknown",
-                date: dateStr,
-              });
             }
           }
+
+          // Fetch seller name (if available)
+          let sellerName = transaction.sellerId;
+          const sellerDocRef = doc(db, "users", transaction.sellerId);
+          const sellerDoc = await getDoc(sellerDocRef);
+          if (sellerDoc.exists()) {
+            const sellerData = sellerDoc.data();
+            sellerName = sellerData.name || sellerName;
+          }
+
+          // Format date
+          const transactionDate = transaction.createdAt ? new Date(transaction.createdAt) : new Date();
+          const dateStr = transactionDate.toISOString().split('T')[0];
+
+          orders.push({
+            id: transaction.id,
+            product: productNames.length > 0 ? productNames.join(", ") : "Unknown Product",
+            seller: sellerName,
+            amount: `${transaction.amount || 0} ${transaction.currency || "USDC"}`,
+            status: transaction.shippingStatus || "Unknown",
+            date: dateStr,
+          });
         }
 
         setMarketplaceData(orders);

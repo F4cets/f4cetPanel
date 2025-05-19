@@ -69,7 +69,7 @@ function StoreEdit() {
   const [dragActiveThumbnail, setDragActiveThumbnail] = useState(false);
   const [dragActiveBackground, setDragActiveBackground] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isFlagging, setIsFlagging] = useState(false);
+  const [isTogglingActive, setIsTogglingActive] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
@@ -284,27 +284,28 @@ function StoreEdit() {
     }
   };
 
-  // Handle flagging store
-  const handleFlagStore = async () => {
-    if (!store || isFlagging) return;
+  // Handle toggle isActive
+  const handleToggleStoreActive = async () => {
+    if (!store || isTogglingActive) return;
 
-    setIsFlagging(true);
+    setIsTogglingActive(true);
     setError(null);
     setSuccess(null);
 
     try {
       const storeDoc = doc(db, "stores", storeId);
+      const newIsActive = !store.isActive;
       await updateDoc(storeDoc, {
-        isActive: false,
+        isActive: newIsActive,
         updatedAt: new Date().toISOString(),
       });
-      setStore({ ...store, isActive: false });
-      setSuccess("Store flagged for removal successfully!");
+      setStore({ ...store, isActive: newIsActive });
+      setSuccess(`Store ${newIsActive ? "activated" : "deactivated"} successfully!`);
     } catch (err) {
-      console.error("Error flagging store:", err);
-      setError("Failed to flag store: " + err.message);
+      console.error("Error toggling store active status:", err);
+      setError("Failed to toggle store active status: " + err.message);
     } finally {
-      setIsFlagging(false);
+      setIsTogglingActive(false);
     }
   };
 
@@ -750,12 +751,12 @@ function StoreEdit() {
                       </MDButton>
                       <MDButton
                         variant="gradient"
-                        color="error"
-                        onClick={handleFlagStore}
-                        disabled={isFlagging || !store.isActive}
+                        color={store.isActive ? "error" : "success"}
+                        onClick={handleToggleStoreActive}
+                        disabled={isTogglingActive}
                         sx={{ width: { xs: "100%", sm: "auto" } }}
                       >
-                        {isFlagging ? "Flagging..." : !store.isActive ? "Store Flagged" : "Flag Store"}
+                        {isTogglingActive ? "Toggling..." : store.isActive ? "Deactivate Store" : "Activate Store"}
                       </MDButton>
                     </MDBox>
                   </Grid>
