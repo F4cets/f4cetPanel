@@ -41,112 +41,125 @@ function SalesDetails() {
   const { salesId } = router.query;
   const [saleDetails, setSaleDetails] = useState(null);
   const [trackingNumber, setTrackingNumber] = useState("");
+  const [messageInput, setMessageInput] = useState(""); // Renamed newMessage to messageInput for clarity
   const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isShipping, setIsShipping] = useState(false);
+  const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [hasFlaggedIssue, setHasFlaggedIssue] = useState(false);
+  const [timeUntilRelease, setTimeUntilRelease] = useState(null);
 
   // Fetch sale details, messages, and notifications from Firestore
   useEffect(() => {
+    if (!user || !user.walletId || !salesId) return;
+
     const fetchSale = async () => {
-      if (!user || !user.walletId || !salesId) return;
-
       try {
-        console.log("SalesDetails: Fetching transaction:", salesId);
         const saleDocRef = doc(db, "transactions", salesId);
-        const saleSnapshot = await getDoc(saleDocRef);
-        if (saleSnapshot.exists() && saleSnapshot.data().sellerId === user.walletId) {
-          const saleData = saleSnapshot.data();
+        const unsubscribe = onSnapshot(saleDocRef, async (saleSnapshot) => {
+          if (saleSnapshot.exists() && saleSnapshot.data().sellerId === user.walletId) {
+            const saleData = saleSnapshot.data();
 
-          // Fetch product names
-          let productNames = [];
-          if (Array.isArray(saleData.productIds)) {
-            for (const productId of saleData.productIds) {
-              const productDocRef = doc(db, "products", productId);
-              const productDoc = await getDoc(productDocRef);
-              if (productDoc.exists()) {
-                const productData = productDoc.data();
-                productNames.push(productData.name || productId);
-              } else {
-                productNames.push(productId);
+            // Fetch product names
+            let productNames = [];
+            if (Array.isArray(saleData.productIds)) {
+              for (const productId of saleData.productIds) {
+                const productDocRef = doc(db, "products", productId);
+                const productDoc = await getDoc(productDocRef);
+                if (productDoc.exists()) {
+                  const productData = productDoc.data();
+                  productNames.push(productData.name || productId);
+                } else {
+                  productNames.push(productId);
+                }
               }
             }
-          }
 
-          // Fetch buyer name (if available)
-          let buyerName = saleData.buyerId;
-          const buyerDocRef = doc(db, "users", saleData.buyerId);
-          const buyerDoc = await getDoc(buyerDocRef);
-          if (buyerDoc.exists()) {
-            const buyerData = buyerDoc.data();
-            buyerName = buyerData.name || buyerName;
-          }
+            // Fetch buyer name (if available)
+            let buyerName = saleData.buyerId;
+            const buyerDocRef = doc(db, "users", saleData.buyerId);
+            const buyerDoc = await getDoc(buyerDocRef);
+            if (buyerDoc.exists()) {
+              const buyerData = buyerDoc.data();
+              buyerName = buyerData.name || buyerName;
+            }
 
-          // Build timeline dynamically
-          const timeline = [];
-          if (saleData.createdAt) {
-            const createdDate = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
-            timeline.push({
-              title: "Order Placed",
-              date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: "Order placed successfully.",
-            });
-          }
-          if (saleData.shippingConfirmedAt) {
-            const shippedDate = saleData.shippingConfirmedAt.toDate ? saleData.shippingConfirmedAt.toDate() : new Date(saleData.shippingConfirmedAt);
-            timeline.push({
-              title: "Order Shipped",
-              date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: `Order shipped with tracking number ${saleData.trackingNumber || 'Not Available'}.`,
-            });
-          }
-          if (saleData.deliveryConfirmedAt) {
-            const deliveredDate = saleData.deliveryConfirmedAt.toDate ? saleData.deliveryConfirmedAt.toDate() : new Date(saleData.deliveryConfirmedAt);
-            timeline.push({
-              title: "Order Delivered",
-              date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: "Order delivered to customer.",
-            });
-          }
-          if (saleData.buyerConfirmed) {
-            const confirmedDate = saleData.updatedAt?.toDate() || new Date();
-            timeline.push({
-              title: "Receipt Confirmed",
-              date: `${confirmedDate.toISOString().split('T')[0]} ${confirmedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-              description: "Buyer confirmed receipt of the item.",
-            });
-          }
+            // Build timeline dynamically
+            const timeline = [];
+            if (saleData.createdAt) {
+              const createdDate = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
+              timeline.push({
+                title: "Order Placed",
+                date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Order placed successfully.",
+              });
+            }
+            if (saleData.shippingConfirmedAt) {
+              const shippedDate = saleData.shippingConfirmedAt.toDate ? saleData.shippingConfirmedAt.toDate() : new Date(saleData.shippingConfirmedAt);
+              timeline.push({
+                title: "Order Shipped",
+                date: `${shippedDate.toISOString().split('T')[0]} ${shippedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: `Order shipped with tracking number ${saleData.trackingNumber || 'Not Available'}.`,
+              });
+            }
+            if (saleData.deliveryConfirmedAt) {
+              const deliveredDate = saleData.deliveryConfirmedAt.toDate ? saleData.deliveryConfirmedAt.toDate() : new Date(saleData.deliveryConfirmedAt);
+              timeline.push({
+                title: "Order Delivered",
+                date: `${deliveredDate.toISOString().split('T')[0]} ${deliveredDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Order delivered to customer.",
+              });
+            }
+            if (saleData.buyerConfirmed) {
+              const confirmedDate = saleData.updatedAt?.toDate() || new Date();
+              timeline.push({
+                title: "Receipt Confirmed",
+                date: `${confirmedDate.toISOString().split('T')[0]} ${confirmedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Buyer confirmed receipt of the item.",
+              });
+            }
 
-          const createdDateForDisplay = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
-          const data = {
-            id: saleSnapshot.id,
-            sellerId: saleData.sellerId,
-            buyerId: saleData.buyerId,
-            buyer: buyerName,
-            itemName: productNames.join(", ") || "Unknown Product",
-            type: saleData.type || "rwi",
-            salePrice: saleData.amount || 0,
-            currency: saleData.currency || "USDC",
-            status: saleData.shippingStatus || "Pending",
-            date: createdDateForDisplay.toISOString().split('T')[0],
-            shippingAddress: saleData.shippingAddress || "N/A",
-            trackingNumber: saleData.trackingNumber || "Not Available",
-            buyerConfirmed: saleData.buyerConfirmed || false,
-            sellerRating: saleData.sellerRating || null,
-            timeline: timeline.length > 0 ? timeline : [],
-          };
-          setSaleDetails(data);
-          setTrackingNumber(data.trackingNumber || "");
-        } else {
-          setError("Sale not found or unauthorized.");
+            const createdDateForDisplay = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
+            const data = {
+              id: saleSnapshot.id,
+              sellerId: saleData.sellerId,
+              buyerId: saleData.buyerId,
+              buyer: buyerName,
+              itemName: productNames.join(", ") || "Unknown Product",
+              type: saleData.type || "rwi",
+              salePrice: saleData.amount || 0,
+              currency: saleData.currency || "USDC",
+              status: saleData.shippingStatus || "Pending",
+              date: createdDateForDisplay.toISOString().split('T')[0],
+              shippingAddress: saleData.shippingAddress || "N/A",
+              trackingNumber: saleData.trackingNumber || "Not Available",
+              buyerConfirmed: saleData.buyerConfirmed || false,
+              sellerRating: saleData.sellerRating || null,
+              deliveryConfirmedAt: saleData.deliveryConfirmedAt || null,
+              timeline: timeline.length > 0 ? timeline : [],
+            };
+            setSaleDetails(data);
+            setTrackingNumber(data.trackingNumber || "");
+          } else {
+            setError("Sale not found or unauthorized.");
+            setSaleDetails(null);
+          }
+        }, (err) => {
+          console.error("SalesDetails: Error in sale listener:", err);
+          setError("Failed to load sale details: " + err.message);
           setSaleDetails(null);
-        }
+        });
+
+        return () => {
+          console.log("SalesDetails: Cleaning up sale listener for sale:", salesId);
+          unsubscribe();
+        };
       } catch (err) {
-        console.error("SalesDetails: Error fetching sale:", err);
+        console.error("SalesDetails: Error setting up sale listener:", err);
         setError("Failed to load sale details: " + err.message);
         setSaleDetails(null);
       }
@@ -166,7 +179,6 @@ function SalesDetails() {
             id: doc.id,
             ...doc.data(),
           }));
-          // Sort messages by timestamp in descending order (newest first)
           data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
           setMessages(data);
         }, (err) => {
@@ -182,42 +194,84 @@ function SalesDetails() {
       }
     };
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = () => {
       if (!user || !user.walletId || !salesId) return;
 
       try {
-        console.log("SalesDetails: Fetching notifications for sale:", salesId);
+        console.log("SalesDetails: Setting up real-time listener for notifications:", salesId);
         const q = query(
           collection(db, "notifications"),
           where("orderId", "==", salesId),
           where("userId", "==", user.walletId),
           where("type", "==", "issue")
         );
-        const querySnapshot = await getDocs(q);
-        const data = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setNotifications(data);
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const data = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+          }));
+          setNotifications(data);
+          setHasFlaggedIssue(data.some(note => !note.read));
+        }, (err) => {
+          console.error("SalesDetails: Error in notifications listener:", err);
+          setError("Failed to load notifications: " + err.message);
+          setNotifications([]);
+        });
+        return unsubscribe;
       } catch (err) {
-        console.error("SalesDetails: Error fetching notifications:", err);
+        console.error("SalesDetails: Error setting up notifications listener:", err);
         setError("Failed to load notifications: " + err.message);
         setNotifications([]);
       }
     };
 
     fetchSale();
-    fetchNotifications();
-
-    // Set up real-time messages listener and clean up
     const unsubscribeMessages = fetchMessages();
+    const unsubscribeNotifications = fetchNotifications();
+
     return () => {
       if (unsubscribeMessages) {
         console.log("SalesDetails: Cleaning up messages listener for sale:", salesId);
         unsubscribeMessages();
       }
+      if (unsubscribeNotifications) {
+        console.log("SalesDetails: Cleaning up notifications listener for sale:", salesId);
+        unsubscribeNotifications();
+      }
     };
   }, [user, salesId]);
+
+  // Escrow release countdown timer
+  useEffect(() => {
+    if (!saleDetails || !saleDetails.deliveryConfirmedAt || saleDetails.buyerConfirmed || hasFlaggedIssue) {
+      setTimeUntilRelease(null);
+      return;
+    }
+
+    const calculateTimeUntilRelease = () => {
+      const deliveryDate = new Date(saleDetails.deliveryConfirmedAt);
+      const releaseDate = new Date(deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from delivery
+      const now = new Date();
+      const timeDiff = releaseDate - now;
+
+      if (timeDiff <= 0) {
+        setTimeUntilRelease(null);
+        return;
+      }
+
+      const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+      setTimeUntilRelease({ days, hours, minutes, seconds });
+    };
+
+    calculateTimeUntilRelease();
+    const timer = setInterval(calculateTimeUntilRelease, 1000);
+
+    return () => clearInterval(timer);
+  }, [saleDetails, hasFlaggedIssue]);
 
   // Redirect to home if no user, no walletId, or unauthorized role
   useEffect(() => {
@@ -229,7 +283,7 @@ function SalesDetails() {
 
   // Handle sending a message
   const handleSendMessage = async () => {
-    if (!saleDetails || !newMessage.trim() || isSending) return;
+    if (!saleDetails || !messageInput.trim() || isSending) return;
 
     setIsSending(true);
     setError(null);
@@ -240,11 +294,11 @@ function SalesDetails() {
         orderId: salesId,
         senderId: user.walletId,
         receiverId: saleDetails.buyerId,
-        message: newMessage.trim(),
+        message: messageInput.trim(),
         timestamp: new Date().toISOString(),
       };
-      const docRef = await addDoc(collection(db, "messages"), messageData);
-      setNewMessage("");
+      await addDoc(collection(db, "messages"), messageData);
+      setMessageInput("");
       setSuccess("Message sent successfully!");
     } catch (err) {
       console.error("SalesDetails: Error sending message:", err);
@@ -324,6 +378,43 @@ function SalesDetails() {
       setError("Failed to mark order as shipped: " + err.message);
     } finally {
       setIsShipping(false);
+    }
+  };
+
+  // Handle confirming delivery (RWI only)
+  const handleConfirmDelivery = async () => {
+    if (!saleDetails || isConfirmingDelivery || saleDetails.deliveryConfirmedAt) return;
+
+    setIsConfirmingDelivery(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const saleDocRef = doc(db, "transactions", salesId);
+      const updatedData = {
+        shippingStatus: "Delivered",
+        deliveryConfirmedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        timeline: [
+          ...(saleDetails.timeline || []),
+          {
+            title: "Order Delivered",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: "Seller confirmed delivery of the item.",
+          },
+        ],
+      };
+      await updateDoc(saleDocRef, updatedData);
+      setSaleDetails({
+        ...saleDetails,
+        ...updatedData,
+      });
+      setSuccess("Delivery confirmed successfully!");
+    } catch (err) {
+      console.error("SalesDetails: Error confirming delivery:", err);
+      setError("Failed to confirm delivery: " + err.message);
+    } finally {
+      setIsConfirmingDelivery(false);
     }
   };
 
@@ -505,6 +596,38 @@ function SalesDetails() {
                           </MDButton>
                         </MDBox>
                       )}
+                      {/* Confirm Delivery (RWI Only) */}
+                      {saleDetails.type === "rwi" && saleDetails.status === "Shipped" && !saleDetails.deliveryConfirmedAt && (
+                        <MDBox mb={2}>
+                          <MDTypography variant="body1" color="dark" mb={1}>
+                            Confirm Delivery
+                          </MDTypography>
+                          <MDButton
+                            onClick={handleConfirmDelivery}
+                            color="success"
+                            variant="gradient"
+                            disabled={isConfirmingDelivery}
+                            sx={{ width: { xs: "100%", sm: "auto" } }}
+                          >
+                            {isConfirmingDelivery ? "Confirming..." : "Confirm Delivery"}
+                          </MDButton>
+                        </MDBox>
+                      )}
+                      {/* Escrow Release Timer */}
+                      {saleDetails.deliveryConfirmedAt && !saleDetails.buyerConfirmed && (
+                        <MDBox mb={2}>
+                          <MDTypography variant="body1" color="dark" mb={1}>
+                            Escrow Release Timer
+                          </MDTypography>
+                          <MDTypography variant="body2" color={hasFlaggedIssue ? "error" : "info"}>
+                            {hasFlaggedIssue
+                              ? "Timer paused due to active flagged issue."
+                              : timeUntilRelease
+                              ? `Funds release in: ${timeUntilRelease.days}d ${timeUntilRelease.hours}h ${timeUntilRelease.minutes}m ${timeUntilRelease.seconds}s`
+                              : "Funds release pending."}
+                          </MDTypography>
+                        </MDBox>
+                      )}
                       {/* Buyer Confirmation (RWI Only) */}
                       {saleDetails.type === "rwi" && (
                         <MDBox mb={2}>
@@ -539,8 +662,8 @@ function SalesDetails() {
                           Message Buyer
                         </MDTypography>
                         <MDInput
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
+                          value={messageInput}
+                          onChange={(e) => setMessageInput(e.target.value)}
                           placeholder="Type your message..."
                           fullWidth
                           multiline
@@ -554,7 +677,7 @@ function SalesDetails() {
                           onClick={handleSendMessage}
                           color="primary"
                           variant="gradient"
-                          disabled={isSending || !newMessage.trim()}
+                          disabled={isSending || !messageInput.trim()}
                           sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
                         >
                           {isSending ? "Sending..." : "Send Message"}
