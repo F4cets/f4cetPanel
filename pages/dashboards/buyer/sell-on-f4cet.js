@@ -217,7 +217,7 @@ function SellOnF4cet() {
           throw new Error('Transaction failed');
         }
 
-        // Update Firestore
+        // Update Firestore with escrow public key (used for minting function)
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + planDetails.durationDays);
         await setDoc(userDocRef, {
@@ -226,7 +226,7 @@ function SellOnF4cet() {
             type: planType,
             expiry: expiry.toISOString(),
             paymentSignature: signature,
-            escrowPublicKey,
+            escrowPublicKey, // Stored as string for easy retrieval in minting
           },
         }, { merge: true });
 
