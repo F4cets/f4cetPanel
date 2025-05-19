@@ -169,9 +169,12 @@ function SellOnF4cet() {
       const amountSol = 0.001; // Testing: 0.001 SOL (~$0.20 at $200/SOL)
 
       // Call Cloud Run function
-      const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app', {
+      const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Origin': 'https://user.f4cets.market'
+        },
         body: JSON.stringify({
           walletAddress: publicKey.toBase58(),
           amountSol,
@@ -185,7 +188,10 @@ function SellOnF4cet() {
       }
 
       const { transaction, lastValidBlockHeight } = result;
-      const connection = new Connection('YOUR_QUICKNODE_RPC', 'confirmed');
+      const connection = new Connection(
+        process.env.NEXT_PUBLIC_QUICKNODE_RPC || 'https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/',
+        'confirmed'
+      );
       const tx = Transaction.from(Buffer.from(transaction, 'base64'));
       const signedTx = await signTransaction(tx);
       const signature = await connection.sendRawTransaction(signedTx.serialize());
