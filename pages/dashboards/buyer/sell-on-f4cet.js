@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
 import { motion, useAnimation } from "framer-motion";
 import Container from "@mui/material/Container";
@@ -168,62 +168,77 @@ function SellOnF4cet() {
       // Use test amount for now
       const amountSol = 0.001; // Testing: 0.001 SOL (~$0.20 at $200/SOL)
 
-      // Call Cloud Run function
-      const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Origin': 'https://user.f4cets.market'
-        },
-        body: JSON.stringify({
-          walletAddress: publicKey.toBase58(),
-          amountSol,
-          planType,
-        }),
-      });
+      // Check if user already has an escrow wallet
+      const userDocRef = doc(db, "users", user.walletId);
+      const userDoc = await getDoc(userDocRef);
+      let escrowPublicKey = userDoc.exists() && userDoc.data().plan?.escrowPublicKey;
 
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create payment transaction');
+      if (!escrowPublicKey) {
+        // Call Cloud Run function
+        const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Origin': 'https://user.f4cets.market'
+          },
+          body: JSON.stringify({
+            walletAddress: publicKey.toBase58(),
+            amountSol,
+            planType,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to create payment transaction');
+        }
+
+        const { transaction, lastValidBlockHeight, escrowPublicKey: newEscrowPublicKey } = result;
+        escrowPublicKey = newEscrowPublicKey;
+
+        if (!process.env.NEXT_PUBLIC_QUICKNODE_RPC) {
+          throw new Error('NEXT_PUBLIC_QUICKNODE_RPC environment variable not set');
+        }
+
+        const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
+        const tx = Transaction.from(Buffer.from(transaction, 'base64'));
+        const signedTx = await signTransaction(tx);
+        const signature = await connection.sendRawTransaction(signedTx.serialize());
+
+        // Track transaction
+        const { blockhash } = await connection.getLatestBlockhash();
+        const confirmation = await connection.confirmTransaction({
+          signature,
+          blockhash,
+          lastValidBlockHeight,
+        });
+
+        if (confirmation.value.err) {
+          throw new Error('Transaction failed');
+        }
+
+        // Update Firestore
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + planDetails.durationDays);
+        await setDoc(userDocRef, {
+          role: "seller",
+          plan: {
+            type: planType,
+            expiry: expiry.toISOString(),
+            paymentSignature: signature,
+            escrowPublicKey,
+          },
+        }, { merge: true });
+
+        setToastMessage(`Successfully subscribed to ${planType} plan! Seller dashboard activated.`);
+        setToastSeverity("success");
+        setToastOpen(true);
+        router.reload(); // Refresh to show seller dashboard
+      } else {
+        setToastMessage(`You are already a seller with an escrow wallet.`);
+        setToastSeverity("info");
+        setToastOpen(true);
       }
-
-      const { transaction, lastValidBlockHeight } = result;
-      const connection = new Connection(
-        process.env.NEXT_PUBLIC_QUICKNODE_RPC || 'https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/',
-        'confirmed'
-      );
-      const tx = Transaction.from(Buffer.from(transaction, 'base64'));
-      const signedTx = await signTransaction(tx);
-      const signature = await connection.sendRawTransaction(signedTx.serialize());
-
-      // Track transaction
-      const { blockhash } = await connection.getLatestBlockhash();
-      const confirmation = await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight,
-      });
-
-      if (confirmation.value.err) {
-        throw new Error('Transaction failed');
-      }
-
-      // Update Firestore
-      const expiry = new Date();
-      expiry.setDate(expiry.getDate() + planDetails.durationDays);
-      await setDoc(doc(db, "users", user.walletId), {
-        role: "seller",
-        plan: {
-          type: planType,
-          expiry: expiry.toISOString(),
-          paymentSignature: signature,
-        },
-      }, { merge: true });
-
-      setToastMessage(`Successfully subscribed to ${planType} plan! Seller dashboard activated.`);
-      setToastSeverity("success");
-      setToastOpen(true);
-      router.reload(); // Refresh to show seller dashboard
     } catch (error) {
       console.error("Error processing payment:", error);
       setToastMessage(`Payment failed: ${error.message}`);
