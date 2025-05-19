@@ -327,7 +327,7 @@ function SellOnF4cet() {
                       fontSize: { xs: "2.5rem", md: "4.5rem" },
                     }}
                   >
-                    Sell Globally on F4cet
+                    Where Crypto Meets Commerce
                   </MDTypography>
                   <MDTypography
                     variant="h5"
