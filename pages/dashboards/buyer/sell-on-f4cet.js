@@ -29,6 +29,8 @@ import Footer from "/examples/Footer";
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import Image from "next/image";
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 
 function SellOnF4cet() {
   const { user } = useUser();
@@ -42,18 +44,20 @@ function SellOnF4cet() {
   const pricingRef = useRef(null);
   const [controller] = useMaterialUIController();
   const { darkMode } = controller;
+  const { publicKey, signTransaction } = useWallet();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Animation controls
   const monthlyPriceControls = useAnimation();
   const sixMonthPriceControls = useAnimation();
   const yearlyPriceControls = useAnimation();
-  const featureCardControls = useAnimation(); // Shared control for feature cards
+  const featureCardControls = useAnimation();
 
   // Flash animation for price updates
   const flashVariant = {
     flash: {
       backgroundColor: darkMode
-        ? ["rgba(249, 191, 204, 0)", "rgba(249, 191, 204, 0.8)", "rgba(249, 191, 204, 0)"] // Pink #f9bfcc
+        ? ["rgba(249, 191, 204, 0)", "rgba(249, 191, 204, 0.8)", "rgba(249, 191, 204, 0)"]
         : ["rgba(249, 191, 204, 0)", "rgba(249, 191, 204, 0.5)", "rgba(249, 191, 204, 0)"],
       transition: { duration: 1.2 },
     },
@@ -65,7 +69,7 @@ function SellOnF4cet() {
     visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: "easeOut" } },
   };
 
-  // Card grow-shrink animation (slower, synchronized)
+  // Card grow-shrink animation
   const cardVariants = {
     rest: { scale: 1, rotate: 0, boxShadow: "0px 8px 24px rgba(0, 0, 0, 0.15)" },
     hover: {
@@ -76,7 +80,7 @@ function SellOnF4cet() {
     },
     animate: {
       scale: [1, 1.05, 1],
-      transition: { duration: 36, repeat: Infinity, ease: "easeInOut" }, // 75% slower: 36s
+      transition: { duration: 36, repeat: Infinity, ease: "easeInOut" },
     },
   };
 
@@ -144,38 +148,83 @@ function SellOnF4cet() {
     }
   }, [solPrice, monthlyPriceControls, sixMonthPriceControls, yearlyPriceControls]);
 
-  // Secret button handlers
-  const handleYearlyRoleChange = async () => {
-    if (user?.role === "buyer") {
-      try {
-        await setDoc(doc(db, "users", user.walletId), { role: "seller" }, { merge: true });
-        setToastMessage("Role changed to seller!");
-        setToastSeverity("success");
-        setToastOpen(true);
-        router.reload();
-      } catch (error) {
-        console.error("Error changing role to seller:", error);
-        setToastMessage("Failed to change role.");
-        setToastSeverity("error");
-        setToastOpen(true);
-      }
+  // Handle plan selection and payment
+  const handleSelectPlan = async (planType) => {
+    if (!publicKey || !signTransaction) {
+      setToastMessage("Please connect your wallet to proceed.");
+      setToastSeverity("error");
+      setToastOpen(true);
+      return;
     }
-  };
 
-  const handleMonthlyRoleChange = async () => {
-    if (user?.role === "seller") {
-      try {
-        await setDoc(doc(db, "users", user.walletId), { role: "buyer" }, { merge: true });
-        setToastMessage("Role changed to buyer!");
-        setToastSeverity("success");
-        setToastOpen(true);
-        router.reload();
-      } catch (error) {
-        console.error("Error changing role to buyer:", error);
-        setToastMessage("Failed to change role.");
-        setToastSeverity("error");
-        setToastOpen(true);
+    setIsLoading(true);
+    try {
+      const planDetails = {
+        monthly: { usd: 10, durationDays: 30 },
+        sixMonth: { usd: 55, durationDays: 180 },
+        yearly: { usd: 75, durationDays: 365 },
+      }[planType];
+
+      // Use test amount for now
+      const amountSol = 0.001; // Testing: 0.001 SOL (~$0.20 at $200/SOL)
+
+      // Call Cloud Run function
+      const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: publicKey.toBase58(),
+          amountSol,
+          planType,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create payment transaction');
       }
+
+      const { transaction, lastValidBlockHeight } = result;
+      const connection = new Connection('YOUR_QUICKNODE_RPC', 'confirmed');
+      const tx = Transaction.from(Buffer.from(transaction, 'base64'));
+      const signedTx = await signTransaction(tx);
+      const signature = await connection.sendRawTransaction(signedTx.serialize());
+
+      // Track transaction
+      const { blockhash } = await connection.getLatestBlockhash();
+      const confirmation = await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight,
+      });
+
+      if (confirmation.value.err) {
+        throw new Error('Transaction failed');
+      }
+
+      // Update Firestore
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + planDetails.durationDays);
+      await setDoc(doc(db, "users", user.walletId), {
+        role: "seller",
+        plan: {
+          type: planType,
+          expiry: expiry.toISOString(),
+          paymentSignature: signature,
+        },
+      }, { merge: true });
+
+      setToastMessage(`Successfully subscribed to ${planType} plan! Seller dashboard activated.`);
+      setToastSeverity("success");
+      setToastOpen(true);
+      router.reload(); // Refresh to show seller dashboard
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      setToastMessage(`Payment failed: ${error.message}`);
+      setToastSeverity("error");
+      setToastOpen(true);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -385,15 +434,13 @@ function SellOnF4cet() {
                             color: "#f7f2e9",
                             textAlign: "center",
                             py: 2,
-                            cursor: user?.role === "seller" ? "pointer" : "default",
                           }}
-                          onClick={handleMonthlyRoleChange}
                         >
                           <MDTypography
                             variant="h6"
                             sx={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                           >
-                            Monthly {user?.role === "seller" && "(Demo: Click to become Buyer)"}
+                            Monthly
                           </MDTypography>
                         </MDBox>
                         <MDBox p={3} textAlign="center">
@@ -429,8 +476,14 @@ function SellOnF4cet() {
                           >
                             Flexible plan with month-to-month billing.
                           </MDTypography>
-                          <MDButton color="dark" variant="gradient" fullWidth disabled>
-                            Select Plan
+                          <MDButton
+                            color="dark"
+                            variant="gradient"
+                            fullWidth
+                            onClick={() => handleSelectPlan('monthly')}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? "Processing..." : "Select Plan"}
                           </MDButton>
                         </MDBox>
                       </Card>
@@ -497,8 +550,14 @@ function SellOnF4cet() {
                           >
                             Save more with a 6-month commitment.
                           </MDTypography>
-                          <MDButton color="dark" variant="gradient" fullWidth disabled>
-                            Select Plan
+                          <MDButton
+                            color="dark"
+                            variant="gradient"
+                            fullWidth
+                            onClick={() => handleSelectPlan('sixMonth')}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? "Processing..." : "Select Plan"}
                           </MDButton>
                         </MDBox>
                       </Card>
@@ -523,15 +582,13 @@ function SellOnF4cet() {
                             color: "#f7f2e9",
                             textAlign: "center",
                             py: 2,
-                            cursor: user?.role === "buyer" ? "pointer" : "default",
                           }}
-                          onClick={handleYearlyRoleChange}
                         >
                           <MDTypography
                             variant="h6"
                             sx={{ fontFamily: "'Quicksand', sans-serif", fontWeight: 600 }}
                           >
-                            Yearly {user?.role === "buyer" && "(Demo: Click to become Seller)"}
+                            Yearly
                           </MDTypography>
                         </MDBox>
                         <MDBox p={3} textAlign="center">
@@ -567,8 +624,14 @@ function SellOnF4cet() {
                           >
                             Best value for committed sellers.
                           </MDTypography>
-                          <MDButton color="dark" variant="gradient" fullWidth disabled>
-                            Select Plan
+                          <MDButton
+                            color="dark"
+                            variant="gradient"
+                            fullWidth
+                            onClick={() => handleSelectPlan('yearly')}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? "Processing..." : "Select Plan"}
                           </MDButton>
                         </MDBox>
                       </Card>
