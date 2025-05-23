@@ -43,13 +43,14 @@ function SellerDashboard() {
   const [pendingSalesLast30Days, setPendingSalesLast30Days] = useState(0);
   const [shippedNotDelivered, setShippedNotDelivered] = useState(0);
   const [pendingEscrowTransactions, setPendingEscrowTransactions] = useState(0);
-  const [pendingEscrowAmount, setPendingEscrowAmount] = useState(0); // New state for net escrow amount
+  const [pendingEscrowAmount, setPendingEscrowAmount] = useState(0);
   const [salesPaidOutAmount, setSalesPaidOutAmount] = useState(0);
   const [pendingSales, setPendingSales] = useState([]);
   const [itemsShipped, setItemsShipped] = useState([]);
   const [pendingEscrow, setPendingEscrow] = useState([]);
   const [salesPaidOut, setSalesPaidOut] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [expiryTime, setExpiryTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   // Redirect to home if no user or walletId
   useEffect(() => {
@@ -57,6 +58,34 @@ function SellerDashboard() {
       router.replace("/");
     }
   }, [user, router]);
+
+  // Calculate and update countdown timer
+  useEffect(() => {
+    const calculateExpiryTime = () => {
+      if (!user?.plan?.expiry) return;
+
+      const expiryDate = new Date(user.plan.expiry);
+      const now = new Date();
+      const diffMs = expiryDate - now;
+
+      if (diffMs <= 0) {
+        setExpiryTime({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+      setExpiryTime({ days, hours, minutes, seconds });
+    };
+
+    calculateExpiryTime(); // Initial calculation
+    const interval = setInterval(calculateExpiryTime, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [user?.plan?.expiry]);
 
   // Fetch dynamic data from Firestore
   useEffect(() => {
@@ -75,6 +104,11 @@ function SellerDashboard() {
 
         const userData = userDoc.data();
         const storeIds = userData.storeIds || [];
+
+        // Update user context with plan.expiry
+        if (userData.plan?.expiry) {
+          user.plan = userData.plan; // Ensure user.plan.expiry is available for countdown
+        }
 
         // Fetch transactions for the seller's stores
         let pendingSalesData = [];
@@ -118,10 +152,10 @@ function SellerDashboard() {
               date: txDate.toISOString().split('T')[0],
               product: productNames.join(", ") || "Unknown",
               amount: txData.amount || 0,
-              netAmount: netAmount || 0, // Store net amount for escrow
+              netAmount: netAmount || 0,
               status: txData.shippingStatus || "Unknown",
-              clicks: 0, // Placeholder, adjust if tracking clicks
-              purchases: 1, // Each transaction is a purchase
+              clicks: 0,
+              purchases: 1,
               pendingAmount: txData.amount || 0,
             };
 
@@ -136,13 +170,12 @@ function SellerDashboard() {
               if (txData.shippingStatus === "Shipped" && txDate >= thirtyDaysAgo) {
                 shippedNotDeliveredCount += 1;
               }
-              // Include Delivered in shipped count for card
               if (txDate >= thirtyDaysAgo) {
                 shippedNotDeliveredCount += txData.shippingStatus === "Delivered" ? 1 : 0;
               }
             }
             if (!txData.buyerConfirmed) {
-              pendingEscrowData.push({ ...txEntry, amount: netAmount }); // Use net amount for escrow
+              pendingEscrowData.push({ ...txEntry, amount: netAmount });
               if (txDate >= thirtyDaysAgo) {
                 pendingEscrowCount += 1;
                 pendingEscrowNetAmount += netAmount;
@@ -252,7 +285,7 @@ function SellerDashboard() {
           {transaction.netAmount.toFixed(2)}
         </MDTypography>
       ),
-      status: "Pending", // Reflect buyerConfirmed: false
+      status: "Pending",
     })),
   };
 
@@ -274,15 +307,12 @@ function SellerDashboard() {
           </MDTypography>
         </Link>
       ),
-      status: "Paid", // Reflect buyerConfirmed: true
+      status: "Paid",
     })),
   };
 
   // Navigation Handlers
   const handleCreateInventory = () => router.push("/dashboards/seller/createinv");
-  const handleEditInventory = () => router.push("/dashboards/seller/inventory");
-  const handleViewEscrow = () => router.push("/dashboards/seller/escrow");
-  const handleOnboarding = () => router.push("/dashboards/onboarding");
 
   // Ensure user is loaded before rendering
   if (!user || !user.walletId) {
@@ -309,115 +339,61 @@ function SellerDashboard() {
             <MDBox
               display="flex"
               flexDirection={{ xs: "column", sm: "row" }}
-              gap={1}
+              gap={2}
               width={{ xs: "100%", sm: "auto" }}
               justifyContent={{ xs: "center", sm: "flex-end" }}
               alignItems={{ xs: "center", sm: "center" }}
               mx={{ xs: "auto", sm: 0 }}
               textAlign={{ xs: "center", sm: "inherit" }}
             >
-              <Grid container spacing={1} justifyContent="center">
-                <Grid item xs={12} sm="auto">
-                  <MDBox display="flex" gap={1} justifyContent="center">
-                    <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-                      <MDButton
-                        onClick={handleCreateInventory}
-                        variant="gradient"
-                        color="info"
-                        size="medium"
-                        sx={{
-                          px: 2,
-                          py: 1,
-                          fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                          fontWeight: "bold",
-                          borderRadius: "8px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                          background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
-                          width: { xs: "100%", sm: "auto" },
-                          maxWidth: { xs: "300px", sm: "auto" },
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Create Inventory
-                      </MDButton>
-                    </motion.div>
-                    <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-                      <MDButton
-                        onClick={handleEditInventory}
-                        variant="gradient"
-                        color="info"
-                        size="medium"
-                        sx={{
-                          px: 2,
-                          py: 1,
-                          fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                          fontWeight: "bold",
-                          borderRadius: "8px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                          background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
-                          width: { xs: "100%", sm: "auto" },
-                          maxWidth: { xs: "300px", sm: "auto" },
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Inventory
-                      </MDButton>
-                    </motion.div>
-                  </MDBox>
-                </Grid>
-                <Grid item xs={12} sm="auto">
-                  <MDBox display="flex" gap={1} justifyContent="center">
-                    <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-                      <MDButton
-                        onClick={handleViewEscrow}
-                        variant="gradient"
-                        color="info"
-                        size="medium"
-                        sx={{
-                          px: 2,
-                          py: 1,
-                          fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                          fontWeight: "bold",
-                          borderRadius: "8px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                          background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
-                          width: { xs: "100%", sm: "auto" },
-                          maxWidth: { xs: "300px", sm: "auto" },
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        View Escrow
-                      </MDButton>
-                    </motion.div>
-                    <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-                      <MDButton
-                        onClick={handleOnboarding}
-                        variant="gradient"
-                        color="info"
-                        size="medium"
-                        sx={{
-                          px: 2,
-                          py: 1,
-                          fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                          fontWeight: "bold",
-                          borderRadius: "8px",
-                          boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                          background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                          "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
-                          width: { xs: "100%", sm: "auto" },
-                          maxWidth: { xs: "300px", sm: "auto" },
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        Onboarding/Settings
-                      </MDButton>
-                    </motion.div>
-                  </MDBox>
-                </Grid>
-              </Grid>
+              <MDBox
+                display="flex"
+                alignItems="center"
+                sx={{
+                  bgcolor: expiryTime.days < 7 ? "error.light" : "info.light",
+                  borderRadius: "8px",
+                  p: 1,
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+                }}
+              >
+                <Icon sx={{ mr: 1, color: expiryTime.days < 7 ? "error.main" : "info.main" }}>
+                  timer
+                </Icon>
+                <MDTypography
+                  variant="button"
+                  color={expiryTime.days < 7 ? "error" : "dark"}
+                  fontWeight="medium"
+                  sx={{
+                    fontSize: { xs: "0.75rem", sm: "0.85rem" },
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Plan Expires in: {expiryTime.days}d {expiryTime.hours}h {expiryTime.minutes}m {expiryTime.seconds}s
+                </MDTypography>
+              </MDBox>
+              <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
+                <MDButton
+                  onClick={handleCreateInventory}
+                  variant="gradient"
+                  color="info"
+                  size="medium"
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    fontSize: { xs: "0.75rem", sm: "0.85rem" },
+                    fontWeight: "bold",
+                    borderRadius: "8px",
+                    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                    background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
+                    "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
+                    width: { xs: "100%", sm: "auto" },
+                    maxWidth: { xs: "300px", sm: "auto" },
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Create Inventory
+                </MDButton>
+              </motion.div>
             </MDBox>
           </MDBox>
         </MDBox>
