@@ -355,7 +355,7 @@ function SellOnF4cet() {
                     },
                     {
                       title: "Escrow Wallet",
-                      desc: "Securely hold NFTs in your escrow wallet for trusted transactions.",
+                      desc: "Securely holds NFTs in your escrow wallet for trusted transactions.",
                     },
                     {
                       title: "Web3 Payments",
