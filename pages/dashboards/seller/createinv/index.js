@@ -10,6 +10,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 
+// Solana imports
+import { useWallet } from '@solana/wallet-adapter-react';
+import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+
 // User context
 import { useUser } from "/contexts/UserContext";
 
@@ -41,6 +45,7 @@ import Footer from "/examples/Footer";
 
 function CreateInventory() {
   const { user, setUser } = useUser();
+  const { publicKey, signTransaction } = useWallet();
   const router = useRouter();
 
   // Form state
@@ -245,12 +250,17 @@ function CreateInventory() {
       return;
     }
 
+    if (!publicKey || !signTransaction) {
+      setError("Please connect your Solana wallet.");
+      return;
+    }
+
     try {
-      // Generate productId for consistent path
+      // Generate productId
       const productRef = doc(collection(db, "products"));
       const productId = productRef.id;
 
-      // Upload images to Firebase Storage with fixed names (image1, image2, image3)
+      // Upload images to Firebase Storage
       const imageUrls = await Promise.all(
         images.slice(0, 3).map(async (image, index) => {
           const fileExt = image.name.split('.').pop().toLowerCase();
@@ -262,6 +272,51 @@ function CreateInventory() {
           return url;
         })
       );
+
+      // Calculate total quantity
+      const totalQuantity = inventoryType === 'digital' 
+        ? parseInt(form.quantity) 
+        : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
+
+      // Fetch SOL price
+      const solPriceResponse = await fetch('/api/solPrice');
+      if (!solPriceResponse.ok) {
+        throw new Error('Failed to fetch SOL price');
+      }
+      const { price } = await solPriceResponse.json(); // Assume price in USD/SOL (e.g., 150 USD/SOL)
+      const feePerItemUSD = 0.60; // $0.60 per NFT
+      const totalFeeUSD = feePerItemUSD * totalQuantity; // e.g., $12 for 20 NFTs
+      const totalFeeSOL = totalFeeUSD / price; // e.g., 0.08 SOL if price = 150 USD/SOL
+      const f4cetFeeSOL = totalFeeSOL * 0.84; // 84% to F4cets
+      const escrowFeeSOL = totalFeeSOL * 0.16; // 16% to escrow
+
+      // Create Solana transaction
+      const connection = new Connection('https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/', 'confirmed');
+      const f4cetsWallet = new PublicKey('2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53');
+      const escrowWallet = new PublicKey(user.escrowPublicKey); // From users/{walletId}/escrowPublicKey
+
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: f4cetsWallet,
+          lamports: Math.floor(f4cetFeeSOL * LAMPORTS_PER_SOL)
+        }),
+        SystemProgram.transfer({
+          fromPubkey: publicKey,
+          toPubkey: escrowWallet,
+          lamports: Math.floor(escrowFeeSOL * LAMPORTS_PER_SOL)
+        })
+      );
+
+      // Fetch recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash();
+      transaction.recentBlockhash = blockhash;
+      transaction.feePayer = publicKey;
+
+      // Sign and send transaction
+      const signedTransaction = await signTransaction(transaction);
+      const txSignature = await connection.sendRawTransaction(signedTransaction.serialize());
+      await connection.confirmTransaction(txSignature, 'confirmed');
 
       // Prepare product data for Firestore
       const productData = {
@@ -277,7 +332,7 @@ function CreateInventory() {
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        nftMint: `mint-${Math.random().toString(36).substring(2, 10)}`, // Random placeholder
+        nftMint: `mint-${Math.random().toString(36).substring(2, 10)}` // Placeholder, updated by premintnfts
       };
 
       if (inventoryType === "digital") {
@@ -291,7 +346,29 @@ function CreateInventory() {
       console.log("CreateInventory: Saving product data to products/", productId, ":", productData);
       await setDoc(productRef, productData);
 
-      setSuccess("Inventory created successfully!");
+      // Call premintnfts Cloud Function
+      const premintResponse = await fetch('https://us-central1-f4cet-marketplace.cloudfunctions.net/premintnfts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress: user.walletId,
+          storeId,
+          productId,
+          quantity: totalQuantity,
+          name: form.name,
+          imageUrl: imageUrls[0],
+          type: inventoryType,
+          variants: inventoryType === 'rwi' ? inventoryVariants : undefined,
+          feeTxSignature: txSignature
+        })
+      });
+
+      const premintResult = await premintResponse.json();
+      if (!premintResponse.ok) {
+        throw new Error(premintResult.error || 'Failed to pre-mint NFTs');
+      }
+
+      setSuccess("Inventory created and NFTs pre-minted successfully!");
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [] });
       setImages([]);
       setImagePreviews([]);
