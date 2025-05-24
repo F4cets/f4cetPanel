@@ -157,6 +157,13 @@ function SellOnF4cet() {
       return;
     }
 
+    if (!solPrice || solPrice === 0) {
+      setToastMessage("Unable to fetch SOL price. Please try again later.");
+      setToastSeverity("error");
+      setToastOpen(true);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const planDetails = {
@@ -165,8 +172,8 @@ function SellOnF4cet() {
         yearly: { usd: 75, durationDays: 365 },
       }[planType];
 
-      // Use test amount for now
-      const amountSol = 0.001; // Testing: 0.001 SOL (~$0.20 at $200/SOL)
+      // Calculate dynamic SOL amount based on USD price and current SOL price
+      const amountSol = planDetails.usd / solPrice;
 
       // Check if user already has an escrow wallet
       const userDocRef = doc(db, "users", user.walletId);
@@ -174,7 +181,7 @@ function SellOnF4cet() {
       let escrowPublicKey = userDoc.exists() && userDoc.data().plan?.escrowPublicKey;
 
       if (!escrowPublicKey) {
-        // Call Cloud Run function
+        // Call Cloud Run function with dynamic SOL amount
         const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
           method: 'POST',
           headers: { 
@@ -217,7 +224,7 @@ function SellOnF4cet() {
           throw new Error('Transaction failed');
         }
 
-        // Update Firestore with escrow public key (used for minting function)
+        // Update Firestore with escrow public key
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + planDetails.durationDays);
         await setDoc(userDocRef, {
@@ -226,7 +233,7 @@ function SellOnF4cet() {
             type: planType,
             expiry: expiry.toISOString(),
             paymentSignature: signature,
-            escrowPublicKey, // Stored as string for easy retrieval in minting
+            escrowPublicKey,
           },
         }, { merge: true });
 
@@ -355,7 +362,7 @@ function SellOnF4cet() {
                     },
                     {
                       title: "Escrow Wallet",
-                      desc: "Securely holds NFTs in your escrow wallet for trusted transactions.",
+                      desc: "Securely hold NFTs in your escrow wallet for trusted transactions.",
                     },
                     {
                       title: "Web3 Payments",
