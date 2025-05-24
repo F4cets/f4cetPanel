@@ -31,6 +31,7 @@ import Alert from "@mui/material/Alert";
 import Image from "next/image";
 import { useWallet } from '@solana/wallet-adapter-react';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { fetchSolPrice } from "/lib/getSolPrice";
 
 function SellOnF4cet() {
   const { user } = useUser();
@@ -106,22 +107,19 @@ function SellOnF4cet() {
   }, [featureCardControls]);
 
   // Fetch SOL price
-  const fetchSolPrice = async () => {
+  const updateSolPrice = async () => {
     try {
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&t=${Date.now()}`
-      );
-      const data = await response.json();
-      setSolPrice(data.solana.usd);
+      const price = await fetchSolPrice();
+      setSolPrice(price);
     } catch (error) {
-      console.error("Error fetching SOL price:", error);
-      setSolPrice(0);
+      console.error("Error updating SOL price:", error);
+      setSolPrice(200); // Fallback price
     }
   };
 
   // Intersection Observer for pricing visibility
   useEffect(() => {
-    fetchSolPrice();
+    updateSolPrice();
     const observer = new IntersectionObserver(
       ([entry]) => setIsPricingVisible(entry.isIntersecting),
       { threshold: 0 }
@@ -134,7 +132,7 @@ function SellOnF4cet() {
   useEffect(() => {
     let interval;
     if (isPricingVisible) {
-      interval = setInterval(fetchSolPrice, 15000);
+      interval = setInterval(updateSolPrice, 15000);
     }
     return () => interval && clearInterval(interval);
   }, [isPricingVisible]);
@@ -157,13 +155,6 @@ function SellOnF4cet() {
       return;
     }
 
-    if (!solPrice || solPrice === 0) {
-      setToastMessage("Unable to fetch SOL price. Please try again later.");
-      setToastSeverity("error");
-      setToastOpen(true);
-      return;
-    }
-
     setIsLoading(true);
     try {
       const planDetails = {
@@ -172,7 +163,10 @@ function SellOnF4cet() {
         yearly: { usd: 75, durationDays: 365 },
       }[planType];
 
-      // Calculate dynamic SOL amount based on USD price and current SOL price
+      // Calculate dynamic SOL amount based on current price
+      if (!solPrice) {
+        throw new Error("SOL price not available");
+      }
       const amountSol = planDetails.usd / solPrice;
 
       // Check if user already has an escrow wallet
@@ -181,7 +175,7 @@ function SellOnF4cet() {
       let escrowPublicKey = userDoc.exists() && userDoc.data().plan?.escrowPublicKey;
 
       if (!escrowPublicKey) {
-        // Call Cloud Run function with dynamic SOL amount
+        // Call Cloud Run function
         const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
           method: 'POST',
           headers: { 
@@ -240,7 +234,7 @@ function SellOnF4cet() {
         setToastMessage(`Successfully subscribed to ${planType} plan! Seller dashboard activated.`);
         setToastSeverity("success");
         setToastOpen(true);
-        router.reload(); // Refresh to show seller dashboard
+        router.reload();
       } else {
         setToastMessage(`You are already a seller with an escrow wallet.`);
         setToastSeverity("info");
