@@ -105,35 +105,66 @@ function SellOnF4cet() {
     featureCardControls.start("animate");
   }, [featureCardControls]);
 
-  // Fetch SOL price
+  // Fetch SOL price with debugging
   const fetchPrice = async () => {
-    const price = await fetchSolPrice();
-    setSolPrice(price);
+    console.log('SellOnF4cet: Attempting to fetch SOL price');
+    try {
+      const price = await fetchSolPrice();
+      console.log(`SellOnF4cet: Setting solPrice to ${price}`);
+      setSolPrice(price);
+    } catch (error) {
+      console.error('SellOnF4cet: Error fetching SOL price:', error);
+      setSolPrice(200); // Fallback
+    }
   };
 
   // Intersection Observer for pricing visibility
   useEffect(() => {
+    console.log('SellOnF4cet: Setting up Intersection Observer');
     fetchPrice();
     const observer = new IntersectionObserver(
-      ([entry]) => setIsPricingVisible(entry.isIntersecting),
-      { threshold: 0 }
+      ([entry]) => {
+        console.log(`SellOnF4cet: Pricing section visible: ${entry.isIntersecting}`);
+        setIsPricingVisible(entry.isIntersecting);
+      },
+      { threshold: 0.1 } // Trigger when 10% of section is visible
     );
-    if (pricingRef.current) observer.observe(pricingRef.current);
-    return () => pricingRef.current && observer.unobserve(pricingRef.current);
+    const pricingElement = pricingRef.current;
+    if (pricingElement) {
+      observer.observe(pricingElement);
+      console.log('SellOnF4cet: Observer attached to pricingRef');
+    }
+    return () => {
+      if (pricingElement) {
+        observer.unobserve(pricingElement);
+        console.log('SellOnF4cet: Observer detached');
+      }
+    };
   }, []);
 
   // Refresh SOL price every 15 seconds when visible
   useEffect(() => {
+    console.log(`SellOnF4cet: isPricingVisible changed to ${isPricingVisible}`);
     let interval;
     if (isPricingVisible) {
-      interval = setInterval(fetchPrice, 15000);
+      console.log('SellOnF4cet: Starting 15-second price refresh interval');
+      interval = setInterval(() => {
+        console.log('SellOnF4cet: Triggering price refresh');
+        fetchPrice();
+      }, 15000);
     }
-    return () => interval && clearInterval(interval);
+    return () => {
+      if (interval) {
+        console.log('SellOnF4cet: Clearing price refresh interval');
+        clearInterval(interval);
+      }
+    };
   }, [isPricingVisible]);
 
   // Trigger flash animation on price update
   useEffect(() => {
     if (solPrice !== null) {
+      console.log(`SellOnF4cet: solPrice updated to ${solPrice}, triggering animations`);
       monthlyPriceControls.start("flash");
       sixMonthPriceControls.start("flash");
       yearlyPriceControls.start("flash");
@@ -163,6 +194,7 @@ function SellOnF4cet() {
 
       // Calculate dynamic SOL amount based on USD price
       const amountSol = (planDetails.usd / solPrice).toFixed(8);
+      console.log(`SellOnF4cet: Selected ${planType} plan, amount: ${amountSol} SOL`);
 
       // Check if user already has an escrow wallet
       const userDocRef = doc(db, "users", user.walletId);
@@ -170,6 +202,7 @@ function SellOnF4cet() {
       let escrowPublicKey = userDoc.exists() && userDoc.data().plan?.escrowPublicKey;
 
       if (!escrowPublicKey) {
+        console.log('SellOnF4cet: Creating seller payment transaction');
         // Call Cloud Run function
         const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
           method: 'POST',
@@ -191,17 +224,20 @@ function SellOnF4cet() {
 
         const { transaction, lastValidBlockHeight, escrowPublicKey: newEscrowPublicKey } = result;
         escrowPublicKey = newEscrowPublicKey;
+        console.log(`SellOnF4cet: Received escrowPublicKey: ${escrowPublicKey}`);
 
         if (!process.env.NEXT_PUBLIC_QUICKNODE_RPC) {
           throw new Error('NEXT_PUBLIC_QUICKNODE_RPC environment variable not set');
         }
 
+        console.log('SellOnF4cet: Signing and sending transaction');
         const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
         const tx = Transaction.from(Buffer.from(transaction, 'base64'));
         const signedTx = await signTransaction(tx);
         const signature = await connection.sendRawTransaction(signedTx.serialize());
 
         // Track transaction
+        console.log(`SellOnF4cet: Transaction signature: ${signature}`);
         const { blockhash } = await connection.getLatestBlockhash();
         const confirmation = await connection.confirmTransaction({
           signature,
@@ -214,6 +250,7 @@ function SellOnF4cet() {
         }
 
         // Update Firestore with escrow public key
+        console.log('SellOnF4cet: Updating Firestore with plan details');
         const expiry = new Date();
         expiry.setDate(expiry.getDate() + planDetails.durationDays);
         await setDoc(userDocRef, {
@@ -236,7 +273,7 @@ function SellOnF4cet() {
         setToastOpen(true);
       }
     } catch (error) {
-      console.error("Error processing payment:", error);
+      console.error("SellOnF4cet: Error processing payment:", error);
       setToastMessage(`Payment failed: ${error.message}`);
       setToastSeverity("error");
       setToastOpen(true);
