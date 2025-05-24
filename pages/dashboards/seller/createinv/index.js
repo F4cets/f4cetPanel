@@ -361,22 +361,34 @@ function CreateInventory() {
       console.log("CreateInventory: Saving product data to products/", productId, ":", productData);
       await setDoc(productRef, productData);
 
-      // Call premintnfts Cloud Function
-      const premintResponse = await fetch('https://us-central1-f4cet-marketplace.cloudfunctions.net/premintnfts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          walletAddress: user.walletId,
-          storeId,
-          productId,
-          quantity: totalQuantity,
-          name: form.name,
-          imageUrl: imageUrls[0],
-          type: inventoryType,
-          variants: inventoryType === 'rwi' ? inventoryVariants : undefined,
-          feeTxSignature: txSignature
-        })
-      });
+      // Call premintnfts Cloud Run service with retry logic
+      let premintResponse;
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          premintResponse = await fetch('https://premintnfts-232592911911.us-central1.run.app', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              walletAddress: user.walletId,
+              storeId,
+              productId,
+              quantity: totalQuantity,
+              name: form.name,
+              imageUrl: imageUrls[0],
+              type: inventoryType,
+              variants: inventoryType === 'rwi' ? inventoryVariants : undefined,
+              feeTxSignature: txSignature
+            })
+          });
+          break; // Exit retry loop on success
+        } catch (err) {
+          retries--;
+          if (retries === 0) throw err;
+          console.log(`CreateInventory: Retry ${4 - retries} for premintnfts call`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+        }
+      }
 
       const premintResult = await premintResponse.json();
       if (!premintResponse.ok) {
