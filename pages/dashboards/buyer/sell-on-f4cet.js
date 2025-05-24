@@ -54,14 +54,13 @@ function SellOnF4cet() {
   const yearlyPriceControls = useAnimation();
   const featureCardControls = useAnimation();
 
-  // Flash animation for price updates
+  // Flash and pop animation for price updates
   const flashVariant = {
     flash: {
-      backgroundColor: darkMode
-        ? ["rgba(249, 191, 204, 0)", "rgba(249, 191, 204, 0.8)", "rgba(249, 191, 204, 0)"]
-        : ["rgba(249, 191, 204, 0)", "rgba(249, 191, 204, 0.5)", "rgba(249, 191, 204, 0)"],
-      transition: { duration: 1.2 },
-    },
+      color: darkMode ? ["#bcd2d0", "#6FCB9F", "#bcd2d0"] : ["#212121", "#6FCB9F", "#212121"],
+      scale: [1, 1.1, 1],
+      transition: { duration: 0.8, ease: "easeInOut" }
+    }
   };
 
   // Section slide-in animation
@@ -107,19 +106,14 @@ function SellOnF4cet() {
   }, [featureCardControls]);
 
   // Fetch SOL price
-  const updateSolPrice = async () => {
-    try {
-      const price = await fetchSolPrice();
-      setSolPrice(price);
-    } catch (error) {
-      console.error("Error updating SOL price:", error);
-      setSolPrice(200); // Fallback price
-    }
+  const fetchPrice = async () => {
+    const price = await fetchSolPrice();
+    setSolPrice(price);
   };
 
   // Intersection Observer for pricing visibility
   useEffect(() => {
-    updateSolPrice();
+    fetchPrice();
     const observer = new IntersectionObserver(
       ([entry]) => setIsPricingVisible(entry.isIntersecting),
       { threshold: 0 }
@@ -132,7 +126,7 @@ function SellOnF4cet() {
   useEffect(() => {
     let interval;
     if (isPricingVisible) {
-      interval = setInterval(updateSolPrice, 15000);
+      interval = setInterval(fetchPrice, 15000);
     }
     return () => interval && clearInterval(interval);
   }, [isPricingVisible]);
@@ -163,11 +157,12 @@ function SellOnF4cet() {
         yearly: { usd: 75, durationDays: 365 },
       }[planType];
 
-      // Calculate dynamic SOL amount based on current price
       if (!solPrice) {
         throw new Error("SOL price not available");
       }
-      const amountSol = planDetails.usd / solPrice;
+
+      // Calculate dynamic SOL amount based on USD price
+      const amountSol = (planDetails.usd / solPrice).toFixed(8);
 
       // Check if user already has an escrow wallet
       const userDocRef = doc(db, "users", user.walletId);
@@ -480,7 +475,6 @@ function SellOnF4cet() {
                             <MDTypography
                               variant="body2"
                               sx={{
-                                color: darkMode ? "#bcd2d0" : "#212121",
                                 fontFamily: "'Quicksand', sans-serif",
                                 mb: 2,
                               }}
@@ -554,7 +548,6 @@ function SellOnF4cet() {
                             <MDTypography
                               variant="body2"
                               sx={{
-                                color: darkMode ? "#bcd2d0" : "#212121",
                                 fontFamily: "'Quicksand', sans-serif",
                                 mb: 2,
                               }}
@@ -628,7 +621,6 @@ function SellOnF4cet() {
                             <MDTypography
                               variant="body2"
                               sx={{
-                                color: darkMode ? "#bcd2d0" : "#212121",
                                 fontFamily: "'Quicksand', sans-serif",
                                 mb: 2,
                               }}
