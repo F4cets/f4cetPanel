@@ -66,6 +66,7 @@ function CreateInventory() {
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [storeId, setStoreId] = useState(null);
+  const [escrowPublicKey, setEscrowPublicKey] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -104,7 +105,7 @@ function CreateInventory() {
     "Toys & Games",
   ];
 
-  // Check role and fetch storeId
+  // Check role, fetch storeId, and escrowPublicKey
   useEffect(() => {
     const checkRoleAndStore = async () => {
       try {
@@ -114,7 +115,7 @@ function CreateInventory() {
           return;
         }
 
-        console.log("CreateInventory: Fetching user role for wallet:", user.walletId);
+        console.log("CreateInventory: Fetching user data for wallet:", user.walletId);
         const userDoc = await getDoc(doc(db, "users", user.walletId));
         if (!userDoc.exists()) {
           console.log("CreateInventory: No user found in Firestore, redirecting to buyer dashboard");
@@ -141,9 +142,19 @@ function CreateInventory() {
         }
         setStoreId(storeIds[0]); // Use first storeId (single store)
 
+        // Fetch escrowPublicKey from plan
+        const plan = userData.plan || {};
+        if (!plan.escrowPublicKey) {
+          console.log("CreateInventory: No escrow public key found, redirecting to onboarding");
+          router.push("/dashboards/onboarding");
+          return;
+        }
+        setEscrowPublicKey(plan.escrowPublicKey);
+        console.log("CreateInventory: Escrow Public Key:", plan.escrowPublicKey);
+
         setLoading(false);
       } catch (err) {
-        console.error("CreateInventory: Error fetching role/store:", err.message);
+        console.error("CreateInventory: Error fetching role/store/escrow:", err.message);
         setError(err.message);
         setLoading(false);
       }
@@ -258,6 +269,11 @@ function CreateInventory() {
       return;
     }
 
+    if (!escrowPublicKey) {
+      setError("Escrow public key not found. Please complete seller onboarding.");
+      return;
+    }
+
     try {
       // Generate productId
       const productRef = doc(collection(db, "products"));
@@ -292,7 +308,7 @@ function CreateInventory() {
       // Create Solana transaction
       const connection = new Connection('https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/', 'confirmed');
       const f4cetsWallet = new PublicKey('2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53');
-      const escrowWallet = new PublicKey(user.escrowPublicKey); // From users/{walletId}/escrowPublicKey
+      const escrowWallet = new PublicKey(escrowPublicKey);
 
       const transaction = new Transaction().add(
         SystemProgram.transfer({
