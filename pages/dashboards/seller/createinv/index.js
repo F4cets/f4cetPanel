@@ -34,6 +34,7 @@ import Chip from "@mui/material/Chip";
 import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
 import Icon from "@mui/material/Icon";
+import CircularProgress from "@mui/material/CircularProgress";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -71,6 +72,7 @@ function CreateInventory() {
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false); // For spinner
 
   // Category options
   const digitalCategories = [
@@ -235,10 +237,12 @@ function CreateInventory() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setProcessing(true); // Show spinner
 
     // Validate common fields
     if (!form.name || !form.description || !form.price || form.categories.length === 0) {
       setError("Please fill out all required fields and select at least one category.");
+      setProcessing(false);
       return;
     }
 
@@ -246,31 +250,37 @@ function CreateInventory() {
     if (inventoryType === "digital") {
       if (!form.quantity) {
         setError("Please specify the quantity for digital items.");
+        setProcessing(false);
         return;
       }
     } else if (inventoryType === "rwi") {
       if (!form.shippingLocation) {
         setError("Please fill out the shipping location for RWI.");
+        setProcessing(false);
         return;
       }
       if (inventoryVariants.length === 0) {
         setError("Please add at least one size/color/quantity combination for RWI.");
+        setProcessing(false);
         return;
       }
     }
 
     if (images.length === 0) {
       setError("Please upload at least one image.");
+      setProcessing(false);
       return;
     }
 
     if (!publicKey || !signTransaction) {
       setError("Please connect your Solana wallet.");
+      setProcessing(false);
       return;
     }
 
     if (!escrowPublicKey) {
       setError("Escrow public key not found. Please complete seller onboarding.");
+      setProcessing(false);
       return;
     }
 
@@ -401,10 +411,13 @@ function CreateInventory() {
       setImagePreviews([]);
       setInventoryVariants([]);
       setVariantForm({ size: "", color: "", quantity: "" });
-      setTimeout(() => router.push("/dashboards/seller"), 2000);
+      setProcessing(false);
+      // Redirect to inventory details page
+      router.push(`/dashboards/seller/inventory/details/${productId}`);
     } catch (err) {
       console.error("CreateInventory: Error creating inventory:", err);
       setError("Failed to create inventory: " + err.message);
+      setProcessing(false);
     }
   };
 
@@ -513,6 +526,11 @@ function CreateInventory() {
                   >
                     {success}
                   </MDTypography>
+                )}
+                {processing && (
+                  <MDBox display="flex" justifyContent="center" mb={2}>
+                    <CircularProgress color="info" />
+                  </MDBox>
                 )}
                 <form onSubmit={handleSubmit}>
                   <MDBox mb={3} display="flex" alignItems="center">
@@ -889,6 +907,7 @@ function CreateInventory() {
                       type="submit"
                       color="dark"
                       variant="gradient"
+                      disabled={processing}
                       sx={{
                         padding: { xs: "8px 24px", md: "10px 32px" },
                         borderRadius: "8px",
@@ -896,12 +915,13 @@ function CreateInventory() {
                         "&:hover": { transform: "translateY(-2px)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)" },
                       }}
                     >
-                      Create Inventory
+                      {processing ? "Processing..." : "Create Inventory"}
                     </MDButton>
                     <MDButton
                       onClick={handleCancel}
                       color="dark"
                       variant="outlined"
+                      disabled={processing}
                       sx={{
                         padding: { xs: "8px 24px", md: "10px 32px" },
                         borderRadius: "8px",
