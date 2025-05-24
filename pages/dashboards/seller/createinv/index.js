@@ -307,13 +307,13 @@ function CreateInventory() {
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0) 
         : parseInt(form.quantity);
 
-      // Fetch SOL price
-      const price = await fetchSolPrice(); // Fetch from lib/getSolPrice.js
-      const feePerItemUSD = 0.60; // $0.60 per NFT
-      const totalFeeUSD = feePerItemUSD * totalQuantity; // e.g., $12 for 20 NFTs
-      const totalFeeSOL = totalFeeUSD / price; // e.g., 0.08 SOL if price = 150 USD/SOL
-      const f4cetFeeSOL = totalFeeSOL * 0.84; // 84% to F4cets
-      const escrowFeeSOL = totalFeeSOL * 0.16; // 16% to escrow
+      // New fee structure: 0.01 SOL per NFT (50% escrow, 50% F4cets)
+      const feePerItemSOL = 0.01; // Fixed in SOL
+      const f4cetFeeSOL = feePerItemSOL * 0.5; // 0.005 SOL
+      const escrowFeeSOL = feePerItemSOL * 0.5; // 0.005 SOL
+      const totalFeeSOL = feePerItemSOL * totalQuantity;
+      const totalF4cetFeeSOL = f4cetFeeSOL * totalQuantity;
+      const totalEscrowFeeSOL = escrowFeeSOL * totalQuantity;
 
       // Create Solana transaction
       const connection = new Connection('https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/', 'confirmed');
@@ -324,12 +324,12 @@ function CreateInventory() {
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: f4cetsWallet,
-          lamports: Math.floor(f4cetFeeSOL * LAMPORTS_PER_SOL)
+          lamports: Math.floor(totalF4cetFeeSOL * LAMPORTS_PER_SOL)
         }),
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: escrowWallet,
-          lamports: Math.floor(escrowFeeSOL * LAMPORTS_PER_SOL)
+          lamports: Math.floor(totalEscrowFeeSOL * LAMPORTS_PER_SOL)
         })
       );
 
