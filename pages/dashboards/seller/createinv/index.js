@@ -303,9 +303,9 @@ function CreateInventory() {
       );
 
       // Calculate total quantity
-      const totalQuantity = inventoryType === 'digital' 
-        ? parseInt(form.quantity) 
-        : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
+      const totalQuantity = inventoryType === 'rwi' 
+        ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0) 
+        : parseInt(form.quantity);
 
       // Fetch SOL price
       const price = await fetchSolPrice(); // Fetch from lib/getSolPrice.js
@@ -383,11 +383,15 @@ function CreateInventory() {
               walletAddress: user.walletId,
               storeId,
               productId,
-              quantity: totalQuantity,
+              quantity: parseInt(totalQuantity), // Ensure quantity is an integer
               name: form.name,
               imageUrl: imageUrls[0],
               type: inventoryType,
-              variants: inventoryType === 'rwi' ? inventoryVariants : undefined,
+              variants: inventoryType === 'rwi' ? inventoryVariants.map(v => ({
+                size: v.size,
+                color: v.color,
+                quantity: parseInt(v.quantity) // Ensure variant quantities are integers
+              })) : undefined,
               feeTxSignature: txSignature
             })
           });
