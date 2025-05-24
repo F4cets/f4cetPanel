@@ -22,6 +22,9 @@ import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "fireba
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
+// SOL price fetch
+import { fetchSolPrice } from "/lib/getSolPrice";
+
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -279,11 +282,7 @@ function CreateInventory() {
         : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
 
       // Fetch SOL price
-      const solPriceResponse = await fetch('/api/solPrice');
-      if (!solPriceResponse.ok) {
-        throw new Error('Failed to fetch SOL price');
-      }
-      const { price } = await solPriceResponse.json(); // Assume price in USD/SOL (e.g., 150 USD/SOL)
+      const price = await fetchSolPrice(); // Fetch from lib/getSolPrice.js
       const feePerItemUSD = 0.60; // $0.60 per NFT
       const totalFeeUSD = feePerItemUSD * totalQuantity; // e.g., $12 for 20 NFTs
       const totalFeeSOL = totalFeeUSD / price; // e.g., 0.08 SOL if price = 150 USD/SOL
