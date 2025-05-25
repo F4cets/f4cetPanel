@@ -815,7 +815,7 @@ function CreateInventory() {
                             <MDInput
                               label="Color"
                               value={variantForm.color}
-                              onChange={(e) => setForm({ ...form, color: e.target.value })}
+                              onChange={(e) => setVariantForm({ ...form, color: e.target.value })}
                               fullWidth
                               sx={{
                                 "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
