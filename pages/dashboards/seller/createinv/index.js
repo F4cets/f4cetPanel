@@ -147,7 +147,7 @@ function CreateInventory() {
         // Fetch escrowPublicKey from plan
         const plan = userData.plan || {};
         if (!plan.escrowPublicKey) {
-          console.log("CreateInventory: No escrow public key found, redirecting to onboarding.");
+          console.log("CreateInventory: No escrow public key found, redirecting to onboarding");
           router.push("/dashboards/onboarding");
           return;
         }
@@ -164,7 +164,7 @@ function CreateInventory() {
     checkRoleAndStore();
   }, [user, router]);
 
-  // Handle file selection (click or drag-and-drop)
+  // Handle file selection (click or drop)
   const handleFileChange = (files) => {
     const selectedFiles = Array.from(files).filter(file => 
       ['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
@@ -222,7 +222,7 @@ function CreateInventory() {
     setVariantForm({ size: "", color: "", quantity: "" });
   };
 
-  // Handle variant removal
+  // Handle variant removal for RWI
   const handleRemoveVariant = (index) => {
     setInventoryVariants(inventoryVariants.filter((_, i) => i !== index));
   };
@@ -243,7 +243,7 @@ function CreateInventory() {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
-    setProcessing(true);
+    setProcessing(true); // Show backdrop
 
     // Validate common fields
     if (!form.name || !form.description || !form.price || form.categories.length === 0) {
@@ -815,7 +815,7 @@ function CreateInventory() {
                             <MDInput
                               label="Color"
                               value={variantForm.color}
-                              onChange={(e) => setVariantForm({ ...form, color: e.target.value })}
+                              onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })}
                               fullWidth
                               sx={{
                                 "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
