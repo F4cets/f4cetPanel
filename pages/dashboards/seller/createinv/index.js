@@ -70,6 +70,7 @@ function CreateInventory() {
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false); // For spinner
+  const [isSubmitting, setIsSubmitting] = useState(false); // Submission lock
 
   // Category options
   const digitalCategories = [
@@ -232,6 +233,11 @@ function CreateInventory() {
   // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) {
+      setError("Submission in progress, please wait.");
+      return;
+    }
+    setIsSubmitting(true);
     setError(null);
     setSuccess(null);
     setProcessing(true); // Show spinner
@@ -240,6 +246,7 @@ function CreateInventory() {
     if (!form.name || !form.description || !form.price || form.categories.length === 0) {
       setError("Please fill out all required fields and select at least one category.");
       setProcessing(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -248,17 +255,20 @@ function CreateInventory() {
       if (!form.quantity) {
         setError("Please specify the quantity for digital items.");
         setProcessing(false);
+        setIsSubmitting(false);
         return;
       }
     } else if (inventoryType === "rwi") {
       if (!form.shippingLocation) {
         setError("Please fill out the shipping location for RWI.");
         setProcessing(false);
+        setIsSubmitting(false);
         return;
       }
       if (inventoryVariants.length === 0) {
         setError("Please add at least one size/color/quantity combination for RWI.");
         setProcessing(false);
+        setIsSubmitting(false);
         return;
       }
     }
@@ -266,18 +276,21 @@ function CreateInventory() {
     if (images.length === 0) {
       setError("Please upload at least one image.");
       setProcessing(false);
+      setIsSubmitting(false);
       return;
     }
 
     if (!publicKey || !signTransaction) {
       setError("Please connect your Solana wallet.");
       setProcessing(false);
+      setIsSubmitting(false);
       return;
     }
 
     if (!escrowPublicKey) {
       setError("Escrow public key not found. Please complete seller onboarding.");
       setProcessing(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -295,7 +308,7 @@ function CreateInventory() {
           await uploadBytes(imageRef, image);
           const url = await getDownloadURL(imageRef);
           console.log("CreateInventory: Image URL:", url);
-          return url;
+          return { url, fileExt };
         })
       );
 
@@ -304,7 +317,7 @@ function CreateInventory() {
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0) 
         : parseInt(form.quantity);
 
-      // New fee structure: 0.02 SOL per NFT (50% escrow, 50% F4cets)
+      // Fee structure: 0.02 SOL per NFT (50% escrow, 50% F4cets)
       const feePerItemSOL = 0.02; // Fixed in SOL
       const f4cetFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
       const escrowFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
@@ -347,8 +360,9 @@ function CreateInventory() {
         description: form.description,
         price: parseFloat(form.price),
         categories: form.categories,
-        imageUrls,
-        selectedImage: imageUrls[0], // First image for NFT minting
+        imageUrls: imageUrls.map(img => img.url),
+        selectedImage: imageUrls[0].url, // First image for NFT minting
+        selectedImageExt: imageUrls[0].fileExt, // Pass extension for metadata
         storeId,
         sellerId: user.walletId,
         isActive: true,
@@ -382,7 +396,8 @@ function CreateInventory() {
               productId,
               quantity: parseInt(totalQuantity), // Ensure quantity is an integer
               name: form.name,
-              imageUrl: imageUrls[0],
+              imageUrl: imageUrls[0].url,
+              imageExt: imageUrls[0].fileExt, // Pass image extension
               type: inventoryType,
               variants: inventoryType === 'rwi' ? inventoryVariants.map(v => ({
                 size: v.size,
@@ -413,12 +428,14 @@ function CreateInventory() {
       setInventoryVariants([]);
       setVariantForm({ size: "", color: "", quantity: "" });
       setProcessing(false);
+      setIsSubmitting(false);
       // Redirect to inventory details page
       router.push(`/dashboards/seller/inventory/details/${productId}`);
     } catch (err) {
       console.error("CreateInventory: Error creating inventory:", err);
       setError("Failed to create inventory: " + err.message);
       setProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -760,7 +777,7 @@ function CreateInventory() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "rgba(255, 255, 695, 0.5)", padding: "8px", borderRadius: "8px" }}
+                                sx={{ backgroundColor: "rgba(255, 255, 255, 0.5)", padding: "8px", borderRadius: "8px" }}
                               >
                                 <MDTypography variant="body2" sx={{ color: "#344767", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
@@ -854,7 +871,7 @@ function CreateInventory() {
                       Drag & Drop or Click to Upload Images (Max 3)
                     </MDTypography>
                     <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                      (Supports PNG, JPG, up to 5MB each)
+                      (Supports PNG, JPG, WEBP, up to 5MB each)
                     </MDTypography>
                     <MDInput
                       id="imageInput"
@@ -908,7 +925,7 @@ function CreateInventory() {
                       type="submit"
                       color="dark"
                       variant="gradient"
-                      disabled={processing}
+                      disabled={processing || isSubmitting}
                       sx={{
                         padding: { xs: "8px 24px", md: "10px 32px" },
                         borderRadius: "8px",
@@ -922,7 +939,7 @@ function CreateInventory() {
                       onClick={handleCancel}
                       color="dark"
                       variant="outlined"
-                      disabled={processing}
+                      disabled={processing || isSubmitting}
                       sx={{
                         padding: { xs: "8px 24px", md: "10px 32px" },
                         borderRadius: "8px",
