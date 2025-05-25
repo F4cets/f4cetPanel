@@ -410,7 +410,7 @@ function CreateInventory() {
       let retries = 3;
       while (retries > 0) {
         try {
-          premintResponse = await fetch('https://us-central1-f4cet-marketplace.cloudfunctions.net/premintnfts', {
+          premintResponse = await fetch('https://premintnfts-232592911911.us-central1.run.app', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
