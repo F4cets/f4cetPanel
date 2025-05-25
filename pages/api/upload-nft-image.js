@@ -61,10 +61,7 @@ export default async function handler(req, res) {
       stream.end(buffer);
     });
 
-    // Make the file public
-    await nftImageFile.makePublic();
-
-    // Return the public URL
+    // Return the public URL (no makePublic() needed, as bucket has public read access)
     const nftImageUrl = `https://storage.googleapis.com/f4cet-nft-assets/nfts/${storeId}/${productId}/${productId}.${fileExt}`;
     return res.status(200).json({ url: nftImageUrl, fileExt });
   } catch (error) {
