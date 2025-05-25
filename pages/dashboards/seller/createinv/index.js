@@ -871,7 +871,7 @@ function CreateInventory() {
                       Drag & Drop or Click to Upload Images (Max 3)
                     </MDTypography>
                     <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                      (Supports PNG, JPG, WEBP, up to 5MB each)
+                      (1st Image Will Be Your Dynamic NFT, Supports PNG, JPG, Gif, up to 5MB each)
                     </MDTypography>
                     <MDInput
                       id="imageInput"
