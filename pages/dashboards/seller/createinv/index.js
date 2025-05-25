@@ -22,6 +22,9 @@ import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "fireba
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
+// Google Cloud Storage imports
+import { Storage } from '@google-cloud/storage';
+
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -302,29 +305,39 @@ function CreateInventory() {
       const productRef = doc(collection(db, "products"));
       const productId = productRef.id;
 
-      // Upload images to Firebase Storage (products and NFT bucket)
+      // Upload images to Firebase Storage (products bucket)
       const imageUrls = await Promise.all(
         images.slice(0, 3).map(async (image, index) => {
           const fileExt = image.name.split('.').pop().toLowerCase();
-          // Upload to products bucket
-          const productImageRef = ref(storage, `products/${productId}/image${index + 1}.${fileExt}`);
+          const imageName = `image${index + 1}.${fileExt}`; // e.g., image1.webp
+          const productImageRef = ref(storage, `products/${productId}/${imageName}`);
           console.log("CreateInventory: Uploading product image to:", productImageRef.fullPath);
           await uploadBytes(productImageRef, image);
           const url = await getDownloadURL(productImageRef);
           console.log("CreateInventory: Product Image URL:", url);
-
-          // Upload first image to NFT bucket
-          if (index === 0) {
-            const nftImageRef = ref(storage, `nfts/${storeId}/${productId}/${productId}.${fileExt}`);
-            console.log("CreateInventory: Uploading NFT image to:", nftImageRef.fullPath);
-            await uploadBytes(nftImageRef, image);
-            const nftUrl = await getDownloadURL(nftImageRef);
-            console.log("CreateInventory: NFT Image URL:", nftUrl);
-          }
-
           return { url, fileExt };
         })
       );
+
+      // Upload first image to Google Cloud Storage (NFT bucket)
+      const firstImage = images[0];
+      const fileExt = firstImage.name.split('.').pop().toLowerCase();
+      const gcsStorage = new Storage();
+      const bucket = gcsStorage.bucket('f4cet-nft-assets');
+      const nftImageFile = bucket.file(`nfts/${storeId}/${productId}/${productId}.${fileExt}`);
+      console.log("CreateInventory: Uploading NFT image to Google Cloud Storage:", nftImageFile.name);
+      await new Promise((resolve, reject) => {
+        const stream = nftImageFile.createWriteStream({
+          contentType: `image/${fileExt}`,
+          metadata: { cacheControl: 'public, max-age=31536000' }
+        });
+        stream.on('error', reject);
+        stream.on('finish', resolve);
+        stream.end(Buffer.from(await firstImage.arrayBuffer()));
+      });
+      await nftImageFile.makePublic();
+      const nftImageUrl = `https://storage.googleapis.com/f4cet-nft-assets/nfts/${storeId}/${productId}/${productId}.${fileExt}`;
+      console.log("CreateInventory: NFT Image URL:", nftImageUrl);
 
       // Calculate total quantity
       const totalQuantity = inventoryType === 'rwi' 
@@ -375,8 +388,8 @@ function CreateInventory() {
         price: parseFloat(form.price),
         categories: form.categories,
         imageUrls: imageUrls.map(img => img.url),
-        selectedImage: imageUrls[0].url, // First image for NFT minting
-        selectedImageExt: imageUrls[0].fileExt, // Pass extension for metadata
+        selectedImage: nftImageUrl, // Use Google Cloud Storage URL for NFT
+        selectedImageExt: fileExt,
         storeId,
         sellerId: user.walletId,
         isActive: true,
@@ -396,37 +409,37 @@ function CreateInventory() {
       console.log("CreateInventory: Saving product data to products/", productId, ":", productData);
       await setDoc(productRef, productData);
 
-      // Call premintnfts Cloud Run service with retry logic
+      // Call premintnfts Cloud Function with retry logic
       let premintResponse;
       let retries = 3;
       while (retries > 0) {
         try {
-          premintResponse = await fetch('https://premintnfts-232592911911.us-central1.run.app', {
+          premintResponse = await fetch('https://us-central1-f4cet-marketplace.cloudfunctions.net/premintnfts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               walletAddress: user.walletId,
               storeId,
               productId,
-              quantity: parseInt(totalQuantity), // Ensure quantity is an integer
+              quantity: totalQuantity,
               name: form.name,
-              imageUrl: imageUrls[0].url,
-              imageExt: imageUrls[0].fileExt, // Pass image extension
+              imageUrl: nftImageUrl, // Use Google Cloud Storage URL
+              imageExt: fileExt,
               type: inventoryType,
               variants: inventoryType === 'rwi' ? inventoryVariants.map(v => ({
                 size: v.size,
                 color: v.color,
-                quantity: parseInt(v.quantity) // Ensure variant quantities are integers
+                quantity: parseInt(v.quantity)
               })) : undefined,
               feeTxSignature: txSignature
             })
           });
-          break; // Exit retry loop on success
+          break;
         } catch (err) {
           retries--;
           if (retries === 0) throw err;
           console.log(`CreateInventory: Retry ${4 - retries} for premintnfts call`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
