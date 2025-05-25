@@ -32,6 +32,8 @@ import Checkbox from "@mui/material/Checkbox";
 import IconButton from "@mui/material/IconButton";
 import Icon from "@mui/material/Icon";
 import CircularProgress from "@mui/material/CircularProgress";
+import Backdrop from "@mui/material/Backdrop";
+import Typography from "@mui/material/Typography";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -69,7 +71,7 @@ function CreateInventory() {
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false); // For spinner
+  const [processing, setProcessing] = useState(false); // For backdrop
   const [isSubmitting, setIsSubmitting] = useState(false); // Submission lock
 
   // Category options
@@ -145,7 +147,7 @@ function CreateInventory() {
         // Fetch escrowPublicKey from plan
         const plan = userData.plan || {};
         if (!plan.escrowPublicKey) {
-          console.log("CreateInventory: No escrow public key found, redirecting to onboarding");
+          console.log("CreateInventory: No escrow public key found, redirecting to onboarding.");
           router.push("/dashboards/onboarding");
           return;
         }
@@ -162,9 +164,11 @@ function CreateInventory() {
     checkRoleAndStore();
   }, [user, router]);
 
-  // Handle file selection (click or drop)
+  // Handle file selection (click or drag-and-drop)
   const handleFileChange = (files) => {
-    const selectedFiles = Array.from(files);
+    const selectedFiles = Array.from(files).filter(file => 
+      ['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
+    );
     if (selectedFiles.length + images.length > 3) {
       setError("You can upload a maximum of 3 images.");
       return;
@@ -194,8 +198,7 @@ function CreateInventory() {
     setDragActive(false);
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      const validFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
-      handleFileChange(validFiles);
+      handleFileChange(files);
     }
   };
 
@@ -219,7 +222,7 @@ function CreateInventory() {
     setVariantForm({ size: "", color: "", quantity: "" });
   };
 
-  // Handle variant removal for RWI
+  // Handle variant removal
   const handleRemoveVariant = (index) => {
     setInventoryVariants(inventoryVariants.filter((_, i) => i !== index));
   };
@@ -240,7 +243,7 @@ function CreateInventory() {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
-    setProcessing(true); // Show spinner
+    setProcessing(true);
 
     // Validate common fields
     if (!form.name || !form.description || !form.price || form.categories.length === 0) {
@@ -299,15 +302,26 @@ function CreateInventory() {
       const productRef = doc(collection(db, "products"));
       const productId = productRef.id;
 
-      // Upload images to Firebase Storage
+      // Upload images to Firebase Storage (products and NFT bucket)
       const imageUrls = await Promise.all(
         images.slice(0, 3).map(async (image, index) => {
           const fileExt = image.name.split('.').pop().toLowerCase();
-          const imageRef = ref(storage, `products/${productId}/image${index + 1}.${fileExt}`);
-          console.log("CreateInventory: Uploading image to:", imageRef.fullPath);
-          await uploadBytes(imageRef, image);
-          const url = await getDownloadURL(imageRef);
-          console.log("CreateInventory: Image URL:", url);
+          // Upload to products bucket
+          const productImageRef = ref(storage, `products/${productId}/image${index + 1}.${fileExt}`);
+          console.log("CreateInventory: Uploading product image to:", productImageRef.fullPath);
+          await uploadBytes(productImageRef, image);
+          const url = await getDownloadURL(productImageRef);
+          console.log("CreateInventory: Product Image URL:", url);
+
+          // Upload first image to NFT bucket
+          if (index === 0) {
+            const nftImageRef = ref(storage, `nfts/${storeId}/${productId}/${productId}.${fileExt}`);
+            console.log("CreateInventory: Uploading NFT image to:", nftImageRef.fullPath);
+            await uploadBytes(nftImageRef, image);
+            const nftUrl = await getDownloadURL(nftImageRef);
+            console.log("CreateInventory: NFT Image URL:", nftUrl);
+          }
+
           return { url, fileExt };
         })
       );
@@ -429,7 +443,6 @@ function CreateInventory() {
       setVariantForm({ size: "", color: "", quantity: "" });
       setProcessing(false);
       setIsSubmitting(false);
-      // Redirect to inventory details page
       router.push(`/dashboards/seller/inventory/details/${productId}`);
     } catch (err) {
       console.error("CreateInventory: Error creating inventory:", err);
@@ -544,11 +557,6 @@ function CreateInventory() {
                   >
                     {success}
                   </MDTypography>
-                )}
-                {processing && (
-                  <MDBox display="flex" justifyContent="center" mb={2}>
-                    <CircularProgress color="info" />
-                  </MDBox>
                 )}
                 <form onSubmit={handleSubmit}>
                   <MDBox mb={3} display="flex" alignItems="center">
@@ -807,7 +815,7 @@ function CreateInventory() {
                             <MDInput
                               label="Color"
                               value={variantForm.color}
-                              onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })}
+                              onChange={(e) => setForm({ ...form, color: e.target.value })}
                               fullWidth
                               sx={{
                                 "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
@@ -871,7 +879,7 @@ function CreateInventory() {
                       Drag & Drop or Click to Upload Images (Max 3)
                     </MDTypography>
                     <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                      (1st Image Will Be Your Dynamic NFT, Supports PNG, JPG, Gif, up to 5MB each)
+                      (Supports PNG, JPG, WEBP, up to 5MB each)
                     </MDTypography>
                     <MDInput
                       id="imageInput"
@@ -956,6 +964,15 @@ function CreateInventory() {
           </Grid>
         </Grid>
       </MDBox>
+      <Backdrop
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, flexDirection: 'column' }}
+        open={processing}
+      >
+        <CircularProgress color="inherit" size={60} />
+        <Typography variant="h6" sx={{ mt: 2 }}>
+          Minting NFTs, please wait...
+        </Typography>
+      </Backdrop>
       <Footer />
     </DashboardLayout>
   );
