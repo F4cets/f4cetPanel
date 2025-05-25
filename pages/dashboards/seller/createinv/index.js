@@ -107,6 +107,18 @@ function CreateInventory() {
     "Toys & Games",
   ];
 
+  // Calculate total SOL cost (0.02 SOL per NFT)
+  const calculateTotalSolCost = () => {
+    const feePerItemSOL = 0.02;
+    let totalQuantity = 0;
+    if (inventoryType === "rwi") {
+      totalQuantity = inventoryVariants.reduce((sum, v) => sum + (parseInt(v.quantity) || 0), 0);
+    } else {
+      totalQuantity = parseInt(form.quantity) || 0;
+    }
+    return (totalQuantity * feePerItemSOL).toFixed(2);
+  };
+
   // Check role, fetch storeId, and escrowPublicKey
   useEffect(() => {
     const checkRoleAndStore = async () => {
@@ -214,8 +226,8 @@ function CreateInventory() {
 
   // Handle variant addition for RWI
   const handleAddVariant = () => {
-    if (!variantForm.size || !variantForm.color || !variantForm.quantity) {
-      setError("Please fill out all variant fields.");
+    if (!variantForm.size || !variantForm.color || !variantForm.quantity || parseInt(variantForm.quantity) < 1) {
+      setError("Please fill out all variant fields with a quantity of at least 1.");
       return;
     }
     setInventoryVariants([...inventoryVariants, { ...variantForm }]);
@@ -246,8 +258,8 @@ function CreateInventory() {
     setProcessing(true); // Show backdrop
 
     // Validate common fields
-    if (!form.name || !form.description || !form.price || form.categories.length === 0) {
-      setError("Please fill out all required fields and select at least one category.");
+    if (!form.name || !form.description || !form.price || parseFloat(form.price) < 0 || form.categories.length === 0) {
+      setError("Please fill out all required fields with a non-negative price and select at least one category.");
       setProcessing(false);
       setIsSubmitting(false);
       return;
@@ -255,8 +267,8 @@ function CreateInventory() {
 
     // Validate based on inventory type
     if (inventoryType === "digital") {
-      if (!form.quantity) {
-        setError("Please specify the quantity for digital items.");
+      if (!form.quantity || parseInt(form.quantity) < 1) {
+        setError("Please specify a quantity of at least 1 for digital items.");
         setProcessing(false);
         setIsSubmitting(false);
         return;
@@ -616,9 +628,17 @@ function CreateInventory() {
                       label="Price (USDC)"
                       type="number"
                       value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "" || parseFloat(value) >= 0) {
+                          setForm({ ...form, price: value });
+                        } else {
+                          setForm({ ...form, price: "0" });
+                        }
+                      }}
                       fullWidth
                       required
+                      min="0"
                       sx={{
                         "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
                         "& .MuiInputLabel-root": { color: "#344767 !important" },
@@ -633,9 +653,17 @@ function CreateInventory() {
                           label="Quantity"
                           type="number"
                           value={form.quantity}
-                          onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "" || parseInt(value) >= 1) {
+                              setForm({ ...form, quantity: value });
+                            } else {
+                              setForm({ ...form, quantity: "1" });
+                            }
+                          }}
                           fullWidth
                           required
+                          min="1"
                           sx={{
                             "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
                             "& .MuiInputLabel-root": { color: "#344767 !important" },
@@ -838,8 +866,16 @@ function CreateInventory() {
                               label="Quantity"
                               type="number"
                               value={variantForm.quantity}
-                              onChange={(e) => setVariantForm({ ...variantForm, quantity: e.target.value })}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "" || parseInt(value) >= 1) {
+                                  setVariantForm({ ...variantForm, quantity: value });
+                                } else {
+                                  setVariantForm({ ...variantForm, quantity: "1" });
+                                }
+                              }}
                               fullWidth
+                              min="1"
                               sx={{
                                 "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
                                 "& .MuiInputLabel-root": { color: "#344767 !important" },
@@ -936,6 +972,11 @@ function CreateInventory() {
                       ))}
                     </MDBox>
                   )}
+                  <MDBox mb={3} display="flex" justifyContent="center">
+                    <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500 }}>
+                      Total Minting Cost: {calculateTotalSolCost()} SOL
+                    </MDTypography>
+                  </MDBox>
                   <Divider sx={{ mb: 3, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
                   <MDBox display="flex" justifyContent="center" gap={2}>
                     <MDButton
