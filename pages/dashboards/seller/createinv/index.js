@@ -22,9 +22,6 @@ import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "fireba
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
-// Google Cloud Storage imports
-import { Storage } from '@google-cloud/storage';
-
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -319,24 +316,23 @@ function CreateInventory() {
         })
       );
 
-      // Upload first image to Google Cloud Storage (NFT bucket)
+      // Upload first image to Google Cloud Storage via API route
       const firstImage = images[0];
-      const fileExt = firstImage.name.split('.').pop().toLowerCase();
-      const gcsStorage = new Storage();
-      const bucket = gcsStorage.bucket('f4cet-nft-assets');
-      const nftImageFile = bucket.file(`nfts/${storeId}/${productId}/${productId}.${fileExt}`);
-      console.log("CreateInventory: Uploading NFT image to Google Cloud Storage:", nftImageFile.name);
-      await new Promise((resolve, reject) => {
-        const stream = nftImageFile.createWriteStream({
-          contentType: `image/${fileExt}`,
-          metadata: { cacheControl: 'public, max-age=31536000' }
-        });
-        stream.on('error', reject);
-        stream.on('finish', resolve);
-        stream.end(Buffer.from(await firstImage.arrayBuffer()));
+      const formData = new FormData();
+      formData.append('image', firstImage);
+      formData.append('storeId', storeId);
+      formData.append('productId', productId);
+
+      console.log("CreateInventory: Uploading NFT image to API route");
+      const uploadResponse = await fetch('/api/upload-nft-image', {
+        method: 'POST',
+        body: formData,
       });
-      await nftImageFile.makePublic();
-      const nftImageUrl = `https://storage.googleapis.com/f4cet-nft-assets/nfts/${storeId}/${productId}/${productId}.${fileExt}`;
+      const uploadResult = await uploadResponse.json();
+      if (!uploadResponse.ok) {
+        throw new Error(uploadResult.error || 'Failed to upload NFT image');
+      }
+      const { url: nftImageUrl, fileExt } = uploadResult;
       console.log("CreateInventory: NFT Image URL:", nftImageUrl);
 
       // Calculate total quantity
