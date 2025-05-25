@@ -22,9 +22,6 @@ import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "fireba
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
-// SOL price fetch
-import { fetchSolPrice } from "/lib/getSolPrice";
-
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -307,10 +304,10 @@ function CreateInventory() {
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0) 
         : parseInt(form.quantity);
 
-      // New fee structure: 0.01 SOL per NFT (50% escrow, 50% F4cets)
-      const feePerItemSOL = 0.01; // Fixed in SOL
-      const f4cetFeeSOL = feePerItemSOL * 0.5; // 0.005 SOL
-      const escrowFeeSOL = feePerItemSOL * 0.5; // 0.005 SOL
+      // New fee structure: 0.02 SOL per NFT (50% escrow, 50% F4cets)
+      const feePerItemSOL = 0.02; // Fixed in SOL
+      const f4cetFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
+      const escrowFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
       const totalFeeSOL = feePerItemSOL * totalQuantity;
       const totalF4cetFeeSOL = f4cetFeeSOL * totalQuantity;
       const totalEscrowFeeSOL = escrowFeeSOL * totalQuantity;
@@ -763,7 +760,7 @@ function CreateInventory() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "rgba(255, 255, 255, 0.5)", padding: "8px", borderRadius: "8px" }}
+                                sx={{ backgroundColor: "rgba(255, 255, 695, 0.5)", padding: "8px", borderRadius: "8px" }}
                               >
                                 <MDTypography variant="body2" sx={{ color: "#344767", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
