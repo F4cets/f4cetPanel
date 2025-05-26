@@ -208,7 +208,6 @@ function MarketplaceOrderDetails() {
 
     fetchOrder();
     checkFlaggedIssue();
-    // Set up real-time messages listener and clean up
     const unsubscribeMessages = fetchMessages();
     return () => {
       if (unsubscribeMessages) {
@@ -312,6 +311,7 @@ function MarketplaceOrderDetails() {
         ],
       };
       await updateDoc(orderDocRef, updatedData);
+      // TODO: Call releaseFunds Cloud Function (to be implemented)
       setOrderDetails({
         ...orderDetails,
         ...updatedData,
@@ -319,6 +319,43 @@ function MarketplaceOrderDetails() {
       setSuccess("Receipt confirmed! Funds will be released from escrow.");
     } catch (err) {
       console.error("OrderDetails: Error confirming receipt:", err);
+      setError("Failed to confirm receipt: " + err.message);
+    } finally {
+      setIsConfirmingReceipt(false);
+    }
+  };
+
+  // CHANGED: Handle confirming receipt for digital items
+  const handleConfirmDigitalReceipt = async () => {
+    if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
+
+    setIsConfirmingReceipt(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const orderDocRef = doc(db, "transactions", orderId);
+      const updatedData = {
+        buyerConfirmed: true,
+        shippingStatus: "Confirmed",
+        timeline: [
+          ...(orderDetails.timeline || []),
+          {
+            title: "Receipt Confirmed",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: "Buyer confirmed receipt of the digital item.",
+          },
+        ],
+      };
+      await updateDoc(orderDocRef, updatedData);
+      // TODO: Call releaseFunds Cloud Function (to be implemented)
+      setOrderDetails({
+        ...orderDetails,
+        ...updatedData,
+      });
+      setSuccess("Receipt confirmed! Funds will be released from escrow.");
+    } catch (err) {
+      console.error("OrderDetails: Error confirming digital receipt:", err);
       setError("Failed to confirm receipt: " + err.message);
     } finally {
       setIsConfirmingReceipt(false);
@@ -608,6 +645,23 @@ function MarketplaceOrderDetails() {
                           </MDTypography>
                           <MDButton
                             onClick={handleConfirmReceipt}
+                            color="success"
+                            variant="gradient"
+                            disabled={isConfirmingReceipt}
+                            sx={{ width: { xs: "100%", sm: "auto" } }}
+                          >
+                            {isConfirmingReceipt ? "Confirming..." : "Confirm Receipt"}
+                          </MDButton>
+                        </MDBox>
+                      )}
+                      {/* CHANGED: Confirm Receipt (Digital Only) */}
+                      {orderDetails.type === "digital" && !orderDetails.buyerConfirmed && (
+                        <MDBox mb={2}>
+                          <MDTypography variant="body1" color="dark" mb={1}>
+                            Confirm Receipt
+                          </MDTypography>
+                          <MDButton
+                            onClick={handleConfirmDigitalReceipt}
                             color="success"
                             variant="gradient"
                             disabled={isConfirmingReceipt}
