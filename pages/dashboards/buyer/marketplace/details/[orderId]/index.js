@@ -288,7 +288,7 @@ function MarketplaceOrderDetails() {
     }
   };
 
-  // Handle confirming receipt (RWI only)
+  // CHANGED: Handle confirming receipt (RWI only) with releaseFunds call
   const handleConfirmReceipt = async () => {
     if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
@@ -311,21 +311,33 @@ function MarketplaceOrderDetails() {
         ],
       };
       await updateDoc(orderDocRef, updatedData);
-      // TODO: Call releaseFunds Cloud Function (to be implemented)
+
+      // Call releaseFunds Cloud Function
+      const response = await fetch('https://releasefunds-232592911911.us-central1.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, buyerId: user.walletId })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to release funds');
+      }
+      console.log(`Funds released for order ${orderId}, signature: ${result.signature}`);
+
       setOrderDetails({
         ...orderDetails,
         ...updatedData,
       });
-      setSuccess("Receipt confirmed! Funds will be released from escrow.");
+      setSuccess("Receipt confirmed! Funds have been released from escrow.");
     } catch (err) {
       console.error("OrderDetails: Error confirming receipt:", err);
-      setError("Failed to confirm receipt: " + err.message);
+      setError(`Failed to confirm receipt: ${err.message}`);
     } finally {
       setIsConfirmingReceipt(false);
     }
   };
 
-  // CHANGED: Handle confirming receipt for digital items
+  // CHANGED: Handle confirming receipt for digital items with releaseFunds call
   const handleConfirmDigitalReceipt = async () => {
     if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
@@ -348,15 +360,27 @@ function MarketplaceOrderDetails() {
         ],
       };
       await updateDoc(orderDocRef, updatedData);
-      // TODO: Call releaseFunds Cloud Function (to be implemented)
+
+      // Call releaseFunds Cloud Function
+      const response = await fetch('https://releasefunds-232592911911.us-central1.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, buyerId: user.walletId })
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to release funds');
+      }
+      console.log(`Funds released for order ${orderId}, signature: ${result.signature}`);
+
       setOrderDetails({
         ...orderDetails,
         ...updatedData,
       });
-      setSuccess("Receipt confirmed! Funds will be released from escrow.");
+      setSuccess("Receipt confirmed! Funds have been released from escrow.");
     } catch (err) {
       console.error("OrderDetails: Error confirming digital receipt:", err);
-      setError("Failed to confirm receipt: " + err.message);
+      setError(`Failed to confirm receipt: ${err.message}`);
     } finally {
       setIsConfirmingReceipt(false);
     }
@@ -654,7 +678,7 @@ function MarketplaceOrderDetails() {
                           </MDButton>
                         </MDBox>
                       )}
-                      {/* CHANGED: Confirm Receipt (Digital Only) */}
+                      {/* Confirm Receipt (Digital Only) */}
                       {orderDetails.type === "digital" && !orderDetails.buyerConfirmed && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
