@@ -678,8 +678,8 @@ function MarketplaceOrderDetails() {
                           </MDButton>
                         </MDBox>
                       )}
-                      {/* Confirm Receipt (Digital Only) */}
-                      {orderDetails.type === "digital" && !orderDetails.buyerConfirmed && (
+                      {/* CHANGED: Confirm Receipt (Digital Only) with hasFlaggedIssue check */}
+                      {orderDetails.type === "digital" && !orderDetails.buyerConfirmed && !hasFlaggedIssue && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
                             Confirm Receipt
