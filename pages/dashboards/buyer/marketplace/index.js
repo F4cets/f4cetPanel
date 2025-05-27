@@ -185,11 +185,11 @@ function MarketplaceOrders() {
           <Icon
             fontSize="small"
             sx={{
-              color: item.status === "Delivered" ? "success.main" : item.status === "Shipped" ? "info.main" : "error.main",
+              color: item.status === "Delivered" ? "success.main" : item.status === "Shipped" ? "info.main" : item.status === "Confirmed" ? "success.main" : "error.main", // CHANGED: Added Confirmed status
               mr: 1,
             }}
           >
-            {item.status === "Delivered" ? "check_circle" : item.status === "Shipped" ? "local_shipping" : "pending"}
+            {item.status === "Delivered" ? "check_circle" : item.status === "Shipped" ? "local_shipping" : item.status === "Confirmed" ? "check_circle" : "pending"}, // CHANGED: Added Confirmed icon
           </Icon>
           <MDTypography variant="button" color="text">
             {item.status}
