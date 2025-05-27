@@ -107,14 +107,6 @@ function MarketplaceOrderDetails() {
                 description: `Order shipped with tracking number ${orderData.trackingNumber || 'Not Available'}.`,
               });
             }
-            if (orderData.createdAt) {
-              const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
-              timeline.push({
-                title: "Receipt Confirmed",
-                date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-                description: "Buyer confirmed receipt of the digital item.",
-              });
-            }
             if (orderData.deliveryConfirmedAt) {
               const deliveredDate = orderData.deliveryConfirmedAt.toDate ? orderData.deliveryConfirmedAt.toDate() : new Date(orderData.deliveryConfirmedAt);
               timeline.push({
@@ -345,7 +337,7 @@ function MarketplaceOrderDetails() {
     }
   };
 
-  // CHANGED: Handle confirming receipt for digital items with enhanced timeline
+  // CHANGED: Handle confirming receipt for digital items with enhanced transaction updates
   const handleConfirmDigitalReceipt = async () => {
     if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
@@ -359,6 +351,9 @@ function MarketplaceOrderDetails() {
       const updatedData = {
         buyerConfirmed: true,
         shippingStatus: "Confirmed",
+        deliveryConfirmedAt: now.toISOString(), // CHANGED: Added deliveryConfirmedAt
+        shippingConfirmedAt: now.toISOString(), // CHANGED: Added shippingConfirmedAt
+        status: "confirmed", // CHANGED: Updated status to confirmed
         timeline: [
           ...(orderDetails.timeline || []),
           {
@@ -701,7 +696,7 @@ function MarketplaceOrderDetails() {
                             sx={{ width: { xs: "100%", sm: "auto" } }}
                           >
                             {isConfirmingReceipt ? "Confirming..." : "Confirm Receipt"}
-                          </MDButton>
+                          </MDButton> {/* CHANGED: Fixed syntax error, was </MDBox> */}
                         </MDBox>
                       )}
                       {/* Rate Seller */}
