@@ -99,6 +99,14 @@ function MarketplaceOrderDetails() {
                 description: "Order placed successfully.",
               });
             }
+            if (orderData.createdAt) {
+              const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
+              timeline.push({
+                title: "Confirmed",
+                date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Buyer confirmed receipt of the digital item.",
+              });
+            }
             if (orderData.shippingConfirmedAt) {
               const shippedDate = orderData.shippingConfirmedAt.toDate ? orderData.shippingConfirmedAt.toDate() : new Date(orderData.shippingConfirmedAt);
               timeline.push({
@@ -301,6 +309,7 @@ function MarketplaceOrderDetails() {
       const updatedData = {
         buyerConfirmed: true,
         shippingStatus: "Confirmed",
+        status: "Confirmed",
         timeline: [
           ...(orderDetails.timeline || []),
           {
