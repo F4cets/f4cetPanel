@@ -1,6 +1,6 @@
 /**
 =========================================================
-* F4cetPanel - Sell on F4cet Page
+* F4cetPanel - Subscription on F4cet Page
 =========================================================
 
 * Copyright 2025 F4cets Team
@@ -204,7 +204,7 @@ function SellOnF4cet() {
       if (!escrowPublicKey) {
         console.log('SellOnF4cet: Creating seller payment transaction');
         // Call Cloud Run function
-        const response = await fetch('https://create-seller-payment-232592911911.us-central1.run.app/createSellerPayment', {
+        const response = await fetch('https://subscription-232592911911.us-central1.run.app/subscription', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -371,7 +371,7 @@ function SellOnF4cet() {
                       mx: "auto",
                     }}
                   >
-                    Build your Web3 store with RWA NFTs, blockchain inventory, and SOL payments.
+                    Renew your F4cet Web3 store with Dynamic NFT inventory & SOL payments.
                   </MDTypography>
                 </MDBox>
               </MDBox>
@@ -384,7 +384,7 @@ function SellOnF4cet() {
                   {[
                     {
                       title: "Decentralized Inventory",
-                      desc: "Manage blockchain-based RWA NFTs for transparent inventory.",
+                      desc: "Manage blockchain-based RWI NFTs for transparent inventory.",
                     },
                     {
                       title: "Escrow Wallet",
@@ -454,7 +454,7 @@ function SellOnF4cet() {
                       mb: 2,
                     }}
                   >
-                    Choose Your Plan
+                    Renew Your Plan
                   </MDTypography>
                   <MDTypography
                     variant="body1"
@@ -465,7 +465,7 @@ function SellOnF4cet() {
                       mx: "auto",
                     }}
                   >
-                    Start selling with a plan tailored to your needs, payable in SOL.
+                    Keep selling with a plan tailored to your needs, payable in SOL.
                   </MDTypography>
                 </MDBox>
                 <Grid container spacing={3} justifyContent="center">
@@ -722,12 +722,12 @@ function SellOnF4cet() {
                 <MDBox>
                   {[
                     {
-                      q: "What is F4cet’s Web3 platform?",
-                      a: "A decentralized marketplace using blockchain for NFT inventory and SOL payments.",
+                      q: "What plan should I choose?",
+                      a: "Best value is our annual plan, but if you want to do monthly it is a great option too.",
                     },
                     {
-                      q: "How does the escrow wallet work?",
-                      a: "It securely holds your NFT inventory, ensuring trusted transactions.",
+                      q: "Will I maintain the same escrow wallet when renewing?",
+                      a: "Yes, no need for a new escrow wallet.",
                     },
                     {
                       q: "Can I cancel my plan anytime?",
@@ -735,7 +735,7 @@ function SellOnF4cet() {
                     },
                     {
                       q: "What happens after I choose a plan?",
-                      a: "F4cet sets up your seller panel, escrow wallet, and store creation process.",
+                      a: "The F4cet sellers dashboard opens back up for your use.",
                     },
                   ].map((faq, index) => (
                     <motion.div key={index} variants={faqVariants} initial="hidden" animate="visible">

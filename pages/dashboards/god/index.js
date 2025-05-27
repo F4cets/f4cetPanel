@@ -6,10 +6,11 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react"; // CHANGED: Added useRef
 import { db } from "/lib/firebase";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { getFirestore, doc, collection, getDocs, getDoc, query, where } from "firebase/firestore"; // CHANGED: Added doc import
 import Link from "next/link";
+import { fetchSolPrice } from "/lib/getSolPrice";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -19,7 +20,7 @@ import Icon from "@mui/material/Icon";
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
 import MDTypography from "/components/MDTypography";
-import MDButton from "/components/MDButton"; // For future admin flag buttons
+import MDButton from "/components/MDButton";
 import DataTable from "/examples/Tables/DataTable";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -35,19 +36,37 @@ function GodDashboard() {
   const [topItems, setTopItems] = useState({ columns: [], rows: [] });
   const [flaggedStores, setFlaggedStores] = useState({ columns: [], rows: [] });
   const [flaggedItems, setFlaggedItems] = useState({ columns: [], rows: [] });
+  // CHANGED: Added useRef to track fetchData execution
+  const hasFetched = useRef(false);
 
   // Fetch Firestore data
   useEffect(() => {
     const fetchData = async () => {
+      // CHANGED: Skip if already fetched
+      if (hasFetched.current) return;
+      hasFetched.current = true;
+
       try {
-        // Sales: Sum of transaction amounts
+        // Fetch SOL price
+        const solPrice = await fetchSolPrice();
+
+        // Calculate date 30 days ago
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
+
+        // Sales: Sum of transaction amounts in USD for last 30 days
         const transactionsQuery = query(collection(db, "transactions"));
         const transactionsSnapshot = await getDocs(transactionsQuery);
         const totalSales = transactionsSnapshot.docs.reduce((sum, doc) => {
           const data = doc.data();
-          return sum + (data.amount || 0);
+          if (data.createdAt && new Date(data.createdAt) >= thirtyDaysAgo) {
+            const amount = data.amount || 0;
+            return sum + (data.currency === "SOL" ? amount * solPrice : amount);
+          }
+          return sum;
         }, 0);
-        setSales(totalSales);
+        setSales(totalSales.toFixed(2));
 
         // Buyers: Count users with role "buyer"
         const buyersQuery = query(collection(db, "users"), where("role", "==", "buyer"));
@@ -73,13 +92,16 @@ function GodDashboard() {
         const storeRatings = {};
         transactionsSnapshot.forEach((doc) => {
           const data = doc.data();
-          const storeId = data.storeId;
-          if (storeId) {
-            storeRevenue[storeId] = (storeRevenue[storeId] || 0) + (data.amount || 0);
-            if (data.sellerRating) {
-              storeRatings[storeId] = storeRatings[storeId] || { sum: 0, count: 0 };
-              storeRatings[storeId].sum += data.sellerRating;
-              storeRatings[storeId].count += 1;
+          if (data.createdAt && new Date(data.createdAt) >= thirtyDaysAgo) {
+            const storeId = data.storeId;
+            if (storeId) {
+              const amount = data.currency === "SOL" ? (data.amount || 0) * solPrice : (data.amount || 0);
+              storeRevenue[storeId] = (storeRevenue[storeId] || 0) + amount;
+              if (data.sellerRating) {
+                storeRatings[storeId] = storeRatings[storeId] || { sum: 0, count: 0 };
+                storeRatings[storeId].sum += data.sellerRating;
+                storeRatings[storeId].count += 1;
+              }
             }
           }
         });
@@ -87,7 +109,7 @@ function GodDashboard() {
         const storeRows = [];
         storesSnapshot.forEach((doc) => {
           const data = doc.data();
-          const storeId = data.storeId || doc.id; // Fallback to doc.id if storeId is missing
+          const storeId = data.storeId || doc.id;
           const revenue = storeRevenue[storeId] || 0;
           const avgRating = storeRatings[storeId]
             ? (storeRatings[storeId].sum / storeRatings[storeId].count).toFixed(1)
@@ -114,17 +136,23 @@ function GodDashboard() {
             { Header: "Total Sales", accessor: "totalSales", width: "30%" },
             { Header: "Avg. Rating", accessor: "avgRating", width: "30%" },
           ],
-          rows: storeRows.slice(0, 5),
+          rows: storeRows.slice(0, 10),
         });
 
         // Top Selling Items
         const productRevenue = {};
         transactionsSnapshot.forEach((doc) => {
           const data = doc.data();
-          if (Array.isArray(data.productIds)) {
-            data.productIds.forEach((productId) => {
-              productRevenue[productId] = (productRevenue[productId] || 0) + (data.amount / data.productIds.length);
-            });
+          if (data.createdAt && new Date(data.createdAt) >= thirtyDaysAgo) {
+            if (Array.isArray(data.productIds)) {
+              const amountPerProduct = (data.amount || 0) / data.productIds.length;
+              data.productIds.forEach((productId) => {
+                if (!productRevenue[productId]) {
+                  productRevenue[productId] = { amount: 0, currency: data.currency || "USDC" };
+                }
+                productRevenue[productId].amount += amountPerProduct;
+              });
+            }
           }
         });
 
@@ -134,9 +162,12 @@ function GodDashboard() {
         productsSnapshot.forEach((doc) => {
           const data = doc.data();
           const productId = doc.id;
-          const revenue = productRevenue[productId] || 0;
-          if (revenue > 0) {
+          const revenueData = productRevenue[productId];
+          if (revenueData && revenueData.amount > 0) {
             const storeDoc = storesSnapshot.docs.find(s => s.id === data.storeId);
+            const revenueDisplay = revenueData.currency === "SOL"
+              ? `${revenueData.amount.toFixed(8)} SOL`
+              : `$${revenueData.amount.toLocaleString()}`;
             productRows.push({
               itemName: (
                 <Link href={`/dashboards/god/products/edit/${productId}`}>
@@ -146,19 +177,20 @@ function GodDashboard() {
                 </Link>
               ),
               storeName: storeDoc ? storeDoc.data().name : "Unknown",
-              revenue: `$${revenue.toLocaleString()}`,
+              revenue: revenueDisplay,
+              revenueUSD: revenueData.currency === "SOL" ? revenueData.amount * solPrice : revenueData.amount,
             });
           }
         });
 
-        productRows.sort((a, b) => parseFloat(b.revenue.replace(/[$,]/g, '')) - parseFloat(a.revenue.replace(/[$,]/g, '')));
+        productRows.sort((a, b) => b.revenueUSD - a.revenueUSD);
         setTopItems({
           columns: [
             { Header: "Item Name", accessor: "itemName", width: "40%" },
             { Header: "Store Name", accessor: "storeName", width: "30%" },
             { Header: "Revenue", accessor: "revenue", width: "30%" },
           ],
-          rows: productRows.slice(0, 5),
+          rows: productRows.slice(0, 10),
         });
 
         // Flagged Stores and Items
@@ -169,14 +201,14 @@ function GodDashboard() {
 
         for (const notifDoc of notificationsSnapshot.docs) {
           const notifData = notifDoc.data();
-          const flaggedBy = notifData.flaggedBy || "unknown"; // Track user who flagged
+          const flaggedBy = notifData.flaggedBy || "unknown";
           const txDocRef = doc(db, "transactions", notifData.orderId);
           const txDoc = await getDoc(txDocRef);
           if (txDoc.exists()) {
             const txData = txDoc.data();
             const storeId = txData.storeId;
             const storeDoc = storesSnapshot.docs.find(s => s.id === storeId);
-            if (storeDoc && storeDoc.data().isActive !== false) { // Only include active stores
+            if (storeDoc && storeDoc.data().isActive !== false) {
               const storeName = storeDoc.data().name;
               flaggedStoreIssues[storeId] = flaggedStoreIssues[storeId] || { count: 0, uniqueUsers: new Set(), reasons: [], firstFlagged: null };
               flaggedStoreIssues[storeId].uniqueUsers.add(flaggedBy);
@@ -190,7 +222,7 @@ function GodDashboard() {
             if (Array.isArray(txData.productIds)) {
               txData.productIds.forEach((productId) => {
                 const productDoc = productsSnapshot.docs.find(p => p.id === productId);
-                if (productDoc && productDoc.data().isActive !== false) { // Only include active products
+                if (productDoc && productDoc.data().isActive !== false) {
                   const productName = productDoc.data().name;
                   flaggedItemIssues[productId] = flaggedItemIssues[productId] || { count: 0, uniqueUsers: new Set(), reasons: [], firstFlagged: null, storeName };
                   flaggedItemIssues[productId].uniqueUsers.add(flaggedBy);
@@ -207,7 +239,7 @@ function GodDashboard() {
         }
 
         const flaggedStoreRows = Object.entries(flaggedStoreIssues)
-          .filter(([_, issue]) => issue.uniqueUsers.size >= 3) // Only show stores with 3+ unique user flags
+          .filter(([_, issue]) => issue.uniqueUsers.size >= 3)
           .map(([storeId, issue]) => ({
             storeName: (
               <Link href={`/dashboards/god/stores/edit/${storeId}`}>
@@ -234,7 +266,7 @@ function GodDashboard() {
         });
 
         const flaggedItemRows = Object.entries(flaggedItemIssues)
-          .filter(([_, issue]) => issue.uniqueUsers.size >= 3) // Only show items with 3+ unique user flags
+          .filter(([_, issue]) => issue.uniqueUsers.size >= 3)
           .map(([productId, issue]) => ({
             itemName: (
               <Link href={`/dashboards/god/products/edit/${productId}`}>
@@ -311,7 +343,7 @@ function GodDashboard() {
       await addDoc(collection(db, "notifications"), {
         orderId,
         userId: sellerId,
-        flaggedBy: user.walletId, // Track flagging user
+        flaggedBy: user.walletId,
         type: "issue",
         description: issueDescription,
         timestamp: new Date().toISOString(),
@@ -347,8 +379,8 @@ function GodDashboard() {
                   </MDBox>
                   <MDBox>
                     <MDTypography variant="h6" color="dark">Sales</MDTypography>
-                    <MDTypography variant="h4" color="info">${sales.toLocaleString()}</MDTypography>
-                    <MDTypography variant="caption" color="text">Total Sales</MDTypography>
+                    <MDTypography variant="h4" color="info">${sales}</MDTypography>
+                    <MDTypography variant="caption" color="text">Total Sales (Last 30 Days)</MDTypography>
                   </MDBox>
                 </MDBox>
               </Card>
@@ -432,7 +464,7 @@ function GodDashboard() {
             <Card>
               <MDBox pt={3} px={3}>
                 <MDTypography variant="h6" fontWeight="medium">
-                  Top Selling Stores
+                  Top 10 Selling Stores
                 </MDTypography>
               </MDBox>
               <MDBox py={1}>
@@ -450,7 +482,7 @@ function GodDashboard() {
             <Card>
               <MDBox pt={3} px={3}>
                 <MDTypography variant="h6" fontWeight="medium">
-                  Top Selling Items
+                  Top 10 Selling Items
                 </MDTypography>
               </MDBox>
               <MDBox py={1}>

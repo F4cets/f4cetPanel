@@ -12,7 +12,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 
 // Firebase imports
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"; // Ensure doc is imported
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
 // User context
@@ -63,8 +63,15 @@ function SalesDashboard() {
           where("sellerId", "==", user.walletId)
         );
         const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+          console.log("SalesDashboard: No transactions found for seller:", user.walletId);
+          setSalesData([]);
+          setLoading(false);
+          return;
+        }
         const data = await Promise.all(querySnapshot.docs.map(async (txDoc) => {
           const txData = txDoc.data();
+          console.log("SalesDashboard: Transaction data:", { id: txDoc.id, ...txData });
           // Fetch product name from products collection
           let itemName = "Unknown Product";
           if (txData.productIds?.[0]) {
@@ -79,8 +86,19 @@ function SalesDashboard() {
               console.warn(`SalesDashboard: Error fetching product ${txData.productIds[0]}:`, productErr);
             }
           }
-          // Map status: use shippingStatus, map Delivered + buyerConfirmed to Paid
-          const displayStatus = txData.shippingStatus?.toLowerCase() === "delivered" && txData.buyerConfirmed
+          // CHANGED: Handle string createdAt
+          let createdAtDate;
+          try {
+            createdAtDate = txData.createdAt
+              ? new Date(txData.createdAt).toISOString().split("T")[0]
+              : "N/A";
+          } catch (dateErr) {
+            console.warn(`SalesDashboard: Error parsing createdAt for tx ${txDoc.id}:`, dateErr);
+            createdAtDate = "N/A";
+          }
+          // Map status: Confirmed + buyerConfirmed or Delivered + buyerConfirmed to paid
+          const displayStatus = ((txData.shippingStatus?.toLowerCase() === "delivered" && txData.buyerConfirmed) ||
+                               (txData.shippingStatus?.toLowerCase() === "confirmed" && txData.buyerConfirmed))
             ? "paid"
             : txData.shippingStatus?.toLowerCase() || "pending";
           return {
@@ -90,7 +108,7 @@ function SalesDashboard() {
             currency: txData.currency || "USDC",
             buyerWallet: txData.buyerId || "N/A",
             status: displayStatus,
-            createdAt: txData.createdAt?.toDate().toISOString().split("T")[0] || "N/A",
+            createdAt: createdAtDate,
             shippingLocation: txData.type === "digital" ? "Digital" : txData.shippingAddress || "N/A",
             trackingNumber: txData.trackingNumber || "N/A",
           };

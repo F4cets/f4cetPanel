@@ -3,11 +3,11 @@
 * F4cetPanel - Seller Dashboard Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -20,6 +20,9 @@ import { useUser } from "/contexts/UserContext";
 // Firestore imports
 import { getFirestore, doc, getDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "/lib/firebase";
+
+// Import fetchSolPrice for SOL-to-USD conversion
+import { fetchSolPrice } from "/lib/getSolPrice";
 
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
@@ -37,6 +40,14 @@ import DataTable from "/examples/Tables/DataTable";
 // @mui icons
 import Icon from "@mui/material/Icon";
 
+// CHANGED: Add CSS keyframes for flashing animation
+const flashingStyle = `
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+`;
+
 function SellerDashboard() {
   const { user } = useUser();
   const router = useRouter();
@@ -51,12 +62,25 @@ function SellerDashboard() {
   const [salesPaidOut, setSalesPaidOut] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
   const [expiryTime, setExpiryTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const hasFetched = useRef(false);
+  // CHANGED: Add loading state for user check
+  const [isCheckingPlan, setIsCheckingPlan] = useState(true);
 
-  // Redirect to home if no user or walletId
+  // CHANGED: Enhanced redirect to subscription page if plan expired
   useEffect(() => {
     if (!user || !user.walletId) {
       router.replace("/");
+      setIsCheckingPlan(false);
+      return;
     }
+    if (user.plan?.expiry) {
+      const expiryDate = new Date(user.plan.expiry);
+      const now = new Date();
+      if (expiryDate < now) {
+        router.replace("/dashboards/seller/subscription");
+      }
+    }
+    setIsCheckingPlan(false); // CHANGED: Mark check complete
   }, [user, router]);
 
   // Calculate and update countdown timer
@@ -90,13 +114,17 @@ function SellerDashboard() {
   // Fetch dynamic data from Firestore
   useEffect(() => {
     const fetchSellerData = async () => {
-      if (!user || !user.walletId || isFetching) return;
+      if (!user || !user.walletId || isFetching || hasFetched.current) return;
       setIsFetching(true);
+      hasFetched.current = true;
       const walletId = user.walletId;
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       try {
+        // Fetch current SOL price once
+        const solPrice = await fetchSolPrice();
+
         // Fetch user data
         const userDocRef = doc(db, "users", walletId);
         const userDoc = await getDoc(userDocRef);
@@ -157,6 +185,7 @@ function SellerDashboard() {
               clicks: 0,
               purchases: 1,
               pendingAmount: txData.amount || 0,
+              currency: txData.currency || "USDC",
             };
 
             // Categorize transactions
@@ -178,12 +207,20 @@ function SellerDashboard() {
               pendingEscrowData.push({ ...txEntry, amount: netAmount });
               if (txDate >= thirtyDaysAgo) {
                 pendingEscrowCount += 1;
-                pendingEscrowNetAmount += netAmount;
+                if (txData.currency === "SOL") {
+                  pendingEscrowNetAmount += (txData.amount * 0.96) * solPrice;
+                } else if (txData.currency === "USDC") {
+                  pendingEscrowNetAmount += txData.amount * 0.96;
+                }
               }
             } else if (txData.buyerConfirmed) {
               salesPaidOutData.push(txEntry);
               if (txDate >= thirtyDaysAgo) {
-                paidOutAmount += txData.amount || 0;
+                if (txData.currency === "SOL") {
+                  paidOutAmount += (txData.amount || 0) * solPrice;
+                } else if (txData.currency === "USDC") {
+                  paidOutAmount += txData.amount || 0;
+                }
               }
             }
           }
@@ -207,7 +244,7 @@ function SellerDashboard() {
     };
 
     fetchSellerData();
-  }, [user, isFetching]);
+  }, [user]);
 
   // Animation variants for buttons
   const buttonVariants = {
@@ -258,6 +295,11 @@ function SellerDashboard() {
             {order.id}
           </MDTypography>
         </Link>
+      ),
+      amount: (
+        <MDTypography variant="button" color="text">
+          {order.netAmount.toFixed(2)}
+        </MDTypography>
       ),
     })),
   };
@@ -314,8 +356,8 @@ function SellerDashboard() {
   // Navigation Handlers
   const handleCreateInventory = () => router.push("/dashboards/seller/createinv");
 
-  // Ensure user is loaded before rendering
-  if (!user || !user.walletId) {
+  // CHANGED: Prevent rendering until plan check completes
+  if (isCheckingPlan || !user || !user.walletId) {
     return null; // Or a loading spinner
   }
 
@@ -324,6 +366,7 @@ function SellerDashboard() {
   return (
     <DashboardLayout>
       <DashboardNavbar />
+      <style>{flashingStyle}</style>
       <MDBox py={3}>
         <MDBox maxWidth="1200px" mx="auto" mb={3}>
           <MDBox
@@ -366,11 +409,35 @@ function SellerDashboard() {
                   sx={{
                     fontSize: { xs: "0.75rem", sm: "0.85rem" },
                     whiteSpace: "nowrap",
+                    animation: expiryTime.days <= 7 ? "flash 1.5s infinite" : "none",
                   }}
                 >
                   Plan Expires in: {expiryTime.days}d {expiryTime.hours}h {expiryTime.minutes}m {expiryTime.seconds}s
                 </MDTypography>
               </MDBox>
+              {expiryTime.days <= 7 && (
+                <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
+                  <MDButton
+                    onClick={() => router.push("/dashboards/seller/subscription")}
+                    variant="gradient"
+                    color="error"
+                    size="medium"
+                    sx={{
+                      px: 2,
+                      py: 1,
+                      fontSize: { xs: "0.75rem", sm: "0.85rem" },
+                      fontWeight: "bold",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                      width: { xs: "100%", sm: "auto" },
+                      maxWidth: { xs: "300px", sm: "auto" },
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Renew Subscription
+                  </MDButton>
+                </motion.div>
+              )}
               <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
                 <MDButton
                   onClick={handleCreateInventory}

@@ -3,7 +3,7 @@
 * F4cetPanel - Seller Onboarding Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 import { useState, useEffect } from "react";

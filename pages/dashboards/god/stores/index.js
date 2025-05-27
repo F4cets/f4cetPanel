@@ -15,7 +15,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 
 // Firebase imports
-import { collection, query, getDocs, addDoc, limit, startAfter, orderBy } from "firebase/firestore";
+import { collection, query, getDocs, addDoc, limit, startAfter, orderBy, doc, getDoc, setDoc, runTransaction } from "firebase/firestore"; // CHANGED: Added doc, getDoc, setDoc, runTransaction
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -34,6 +34,10 @@ import Checkbox from "@mui/material/Checkbox";
 import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
+import Select from "@mui/material/Select"; // CHANGED: Added Select
+import MenuItem from "@mui/material/MenuItem"; // CHANGED: Added MenuItem
+import InputLabel from "@mui/material/InputLabel"; // CHANGED: Added InputLabel
+import FormControl from "@mui/material/FormControl"; // CHANGED: Added FormControl
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -89,6 +93,7 @@ function StoreSearch() {
     categories: [],
     thumbnailImage: null,
     backgroundImage: null,
+    planType: "monthly", // CHANGED: Added planType
   });
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [backgroundPreview, setBackgroundPreview] = useState(null);
@@ -193,6 +198,7 @@ function StoreSearch() {
       categories: [],
       thumbnailImage: null,
       backgroundImage: null,
+      planType: "monthly", // CHANGED: Reset planType
     });
     setThumbnailPreview(null);
     setBackgroundPreview(null);
@@ -263,8 +269,16 @@ function StoreSearch() {
   };
 
   const handleCreateStore = async () => {
-    if (!createForm.storeName || !createForm.walletId || !createForm.shortDescription || !createForm.shopEmail || !createForm.categories.length || isCreating) {
-      setError("Please fill in all required fields: Store Name, Wallet ID, Short Description, Shop Email, and at least one category.");
+    // CHANGED: Updated validation to include planType
+    if (!createForm.storeName || !createForm.walletId || !createForm.shortDescription || !createForm.shopEmail || !createForm.categories.length || !createForm.planType || isCreating) {
+      setError("Please fill in all required fields: Store Name, Wallet ID, Short Description, Shop Email, at least one category, and Plan Type.");
+      return;
+    }
+
+    // CHANGED: Validate wallet ID format (base58, ~44 characters)
+    const walletIdRegex = /^[1-9A-HJ-NP-Za-km-z]{42,44}$/;
+    if (!walletIdRegex.test(createForm.walletId)) {
+      setError("Invalid wallet ID format.");
       return;
     }
 
@@ -273,70 +287,127 @@ function StoreSearch() {
     setSuccess(null);
 
     try {
-      // Sanitize store name for storage path
-      const sanitizedStoreName = createForm.storeName.replace(/[^a-zA-Z0-9-_]/g, '');
-      let thumbnailUrl = "";
-      let backgroundUrl = "";
-
-      // Upload thumbnail if provided
-      if (createForm.thumbnailImage) {
-        const extension = createForm.thumbnailImage.name.split('.').pop();
-        const thumbnailRef = ref(storage, `stores/${sanitizedStoreName}/thumbnail.${extension}`);
-        console.log("Uploading thumbnail to:", thumbnailRef.fullPath); // Debugging
-        await uploadBytes(thumbnailRef, createForm.thumbnailImage);
-        thumbnailUrl = await getDownloadURL(thumbnailRef);
-        console.log("Thumbnail uploaded, URL:", thumbnailUrl); // Debugging
+      // CHANGED: Check if wallet already has a store
+      const userDocRef = doc(db, "users", createForm.walletId);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists() && userDoc.data().storeIds?.length > 0) {
+        throw new Error("This wallet is already linked to a store.");
       }
 
-      // Upload banner if provided
-      if (createForm.backgroundImage) {
-        const extension = createForm.backgroundImage.name.split('.').pop();
-        const backgroundRef = ref(storage, `stores/${sanitizedStoreName}/banner.${extension}`);
-        console.log("Uploading banner to:", backgroundRef.fullPath); // Debugging
-        await uploadBytes(backgroundRef, createForm.backgroundImage);
-        backgroundUrl = await getDownloadURL(backgroundRef);
-        console.log("Banner uploaded, URL:", backgroundUrl); // Debugging
+      // CHANGED: Get or create escrow wallet
+      let escrowPublicKey = userDoc.exists() && userDoc.data().plan?.escrowPublicKey;
+      if (!escrowPublicKey) {
+        const response = await fetch('https://create-store-escrow-232592911911.us-central1.run.app/createStoreEscrow', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletId: createForm.walletId,
+            planType: createForm.planType,
+          }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || 'Failed to create escrow wallet');
+        }
+
+        escrowPublicKey = result.escrowPublicKey;
       }
 
-      const newStore = {
-        name: createForm.storeName,
-        sellerId: createForm.walletId,
-        description: createForm.shortDescription,
-        businessInfo: {
-          sellerEmail: createForm.shopEmail,
-          sellerName: "",
-          shippingAddress: "",
-          taxId: "",
-        },
-        categories: createForm.categories,
-        thumbnailUrl,
-        bannerUrl: backgroundUrl,
-        escrowId: "",
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        flagCount: 0,
-      };
-      const docRef = await addDoc(collection(db, "stores"), newStore);
-      setStores([...stores, {
-        id: docRef.id,
-        storeName: newStore.name,
-        walletId: newStore.sellerId,
-        shortDescription: newStore.description,
-        shopEmail: newStore.businessInfo.sellerEmail,
-        subheading: "",
-        categories: newStore.categories,
-        thumbnailUrl: newStore.thumbnailUrl,
-        backgroundUrl: newStore.bannerUrl,
-        removed: !newStore.isActive,
-        flagCount: newStore.flagCount,
-        flagReasons: [],
-      }]);
+      // CHANGED: Calculate plan expiry
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + { monthly: 30, sixMonth: 180, yearly: 365 }[createForm.planType]);
+
+      // CHANGED: Use transaction for atomic updates
+      const newStoreId = `store-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      await runTransaction(db, async (transaction) => {
+        // Upload images
+        let thumbnailUrl = "";
+        let backgroundUrl = "";
+        const sanitizedStoreName = createForm.storeName.replace(/[^a-zA-Z0-9-_]/g, '');
+
+        if (createForm.thumbnailImage) {
+          const extension = createForm.thumbnailImage.name.split('.').pop();
+          const thumbnailRef = ref(storage, `stores/${sanitizedStoreName}/thumbnail.${extension}`);
+          await uploadBytes(thumbnailRef, createForm.thumbnailImage);
+          thumbnailUrl = await getDownloadURL(thumbnailRef);
+        }
+
+        if (createForm.backgroundImage) {
+          const extension = createForm.backgroundImage.name.split('.').pop();
+          const backgroundRef = ref(storage, `stores/${sanitizedStoreName}/banner.${extension}`);
+          await uploadBytes(backgroundRef, createForm.backgroundImage);
+          backgroundUrl = await getDownloadURL(backgroundRef);
+        }
+
+        // Create store document
+        const newStore = {
+          name: createForm.storeName,
+          sellerId: createForm.walletId,
+          description: createForm.shortDescription,
+          businessInfo: {
+            sellerEmail: createForm.shopEmail,
+            sellerName: "",
+            shippingAddress: "",
+            taxId: "",
+          },
+          categories: createForm.categories,
+          thumbnailUrl,
+          bannerUrl: backgroundUrl,
+          escrowId: escrowPublicKey, // CHANGED: Set escrowId
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          flagCount: 0,
+        };
+        const storeDocRef = doc(db, "stores", newStoreId);
+        transaction.set(storeDocRef, newStore);
+
+        // Update or create user document
+        const userData = userDoc.exists() ? userDoc.data() : {
+          walletId: createForm.walletId,
+          role: "seller",
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          storeIds: [],
+          plan: {},
+        };
+        transaction.set(userDocRef, {
+          ...userData,
+          role: "seller",
+          storeIds: [newStoreId],
+          plan: {
+            escrowPublicKey,
+            type: createForm.planType,
+            expiry: expiry.toISOString(),
+            paymentSignature: "", // CHANGED: No payment
+          },
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+
+        // Update local state
+        setStores([...stores, {
+          id: newStoreId,
+          storeName: newStore.name,
+          walletId: newStore.sellerId,
+          shortDescription: newStore.description,
+          shopEmail: newStore.businessInfo.sellerEmail,
+          subheading: "",
+          categories: newStore.categories,
+          thumbnailUrl: newStore.thumbnailUrl,
+          backgroundUrl: newStore.bannerUrl,
+          removed: !newStore.isActive,
+          flagCount: newStore.flagCount,
+          flagReasons: [],
+        }]);
+      });
+
       setSuccess("Store created successfully!");
       handleCloseCreateModal();
     } catch (err) {
       console.error("Error creating store:", err);
-      setError("Failed to create store: " + err.message);
+      setError(`Failed to create store: ${err.message}`);
     } finally {
       setIsCreating(false);
     }
@@ -925,6 +996,45 @@ function StoreSearch() {
                   },
                 }}
               />
+            </MDBox>
+            {/* CHANGED: Added Plan Type Selection */}
+            <MDBox mb={2}>
+              <FormControl fullWidth required>
+                <InputLabel id="plan-type-label">Plan Type</InputLabel>
+                <Select
+                  labelId="plan-type-label"
+                  value={createForm.planType}
+                  label="Plan Type"
+                  onChange={(e) => handleCreateFormChange("planType", e.target.value)}
+                  sx={{
+                    "& .MuiInputBase-input": {
+                      padding: { xs: "10px", md: "12px" },
+                      color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                    },
+                    "& .MuiInputLabel-root": {
+                      color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                    },
+                    "& .MuiInputLabel-root.Mui-focused": {
+                      color: theme => theme.palette.mode === 'dark' ? '#fff !important' : '#344767 !important',
+                    },
+                    "& .MuiOutlinedInput-root": {
+                      "& fieldset": {
+                        borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd',
+                      },
+                      "&:hover fieldset": {
+                        borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5',
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5',
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem value="monthly">Monthly (30 days)</MenuItem>
+                  <MenuItem value="sixMonth">6 Months (180 days)</MenuItem>
+                  <MenuItem value="yearly">Yearly (365 days)</MenuItem>
+                </Select>
+              </FormControl>
             </MDBox>
             <MDBox mb={2}>
               <MDTypography

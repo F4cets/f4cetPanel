@@ -3,7 +3,7 @@
 * F4cetPanel - Marketplace Order Details Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
