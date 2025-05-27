@@ -107,6 +107,14 @@ function MarketplaceOrderDetails() {
                 description: `Order shipped with tracking number ${orderData.trackingNumber || 'Not Available'}.`,
               });
             }
+            if (orderData.createdAt) {
+              const createdDate = orderData.createdAt.toDate ? orderData.createdAt.toDate() : new Date(orderData.createdAt);
+              timeline.push({
+                title: "Receipt Confirmed",
+                date: `${createdDate.toISOString().split('T')[0]} ${createdDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+                description: "Buyer confirmed receipt of the digital item.",
+              });
+            }
             if (orderData.deliveryConfirmedAt) {
               const deliveredDate = orderData.deliveryConfirmedAt.toDate ? orderData.deliveryConfirmedAt.toDate() : new Date(orderData.deliveryConfirmedAt);
               timeline.push({
