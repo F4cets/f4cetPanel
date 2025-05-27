@@ -288,7 +288,7 @@ function MarketplaceOrderDetails() {
     }
   };
 
-  // CHANGED: Handle confirming receipt (RWI only) with releaseFunds call
+  // Handle confirming receipt (RWI only) with releaseFunds call
   const handleConfirmReceipt = async () => {
     if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
@@ -337,7 +337,7 @@ function MarketplaceOrderDetails() {
     }
   };
 
-  // CHANGED: Handle confirming receipt for digital items with releaseFunds call
+  // CHANGED: Handle confirming receipt for digital items with enhanced timeline
   const handleConfirmDigitalReceipt = async () => {
     if (!orderDetails || isConfirmingReceipt || orderDetails.buyerConfirmed) return;
 
@@ -347,6 +347,7 @@ function MarketplaceOrderDetails() {
 
     try {
       const orderDocRef = doc(db, "transactions", orderId);
+      const now = new Date();
       const updatedData = {
         buyerConfirmed: true,
         shippingStatus: "Confirmed",
@@ -354,7 +355,7 @@ function MarketplaceOrderDetails() {
           ...(orderDetails.timeline || []),
           {
             title: "Receipt Confirmed",
-            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            date: `${now.toISOString().split("T")[0]} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
             description: "Buyer confirmed receipt of the digital item.",
           },
         ],
@@ -678,7 +679,7 @@ function MarketplaceOrderDetails() {
                           </MDButton>
                         </MDBox>
                       )}
-                      {/* CHANGED: Confirm Receipt (Digital Only) with hasFlaggedIssue check */}
+                      {/* Confirm Receipt (Digital Only) with hasFlaggedIssue check */}
                       {orderDetails.type === "digital" && !orderDetails.buyerConfirmed && !hasFlaggedIssue && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
