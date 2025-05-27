@@ -21,6 +21,9 @@ import { useUser } from "/contexts/UserContext";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
 
+// Import fetchSolPrice for SOL-to-USD conversion
+import { fetchSolPrice } from "/lib/getSolPrice";
+
 // NextJS Material Dashboard 2 PRO examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
@@ -78,6 +81,9 @@ function BuyerDashboard() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       try {
+        // Fetch current SOL price
+        const solPrice = await fetchSolPrice();
+
         // Fetch affiliate clicks from subcollection
         const clicksQuery = query(collection(db, `users/${walletId}/affiliateClicks`));
         const clicksSnapshot = await getDocs(clicksQuery);
@@ -93,6 +99,8 @@ function BuyerDashboard() {
         setAffiliateClicksLast30Days(recentClicks.length);
 
         // Affiliate Activity
+        // CHANGED: Sort recentClicks by timestamp (newest first)
+        recentClicks.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         const affiliateActivityData = recentClicks.map(click => ({
           id: click.id,
           affiliateName: click.affiliateName || "Unknown",
@@ -128,7 +136,11 @@ function BuyerDashboard() {
         for (const transaction of transactions.filter(t => t.createdAt >= thirtyDaysAgo)) {
           if (transaction.type === "rwi" || transaction.type === "digital") {
             purchaseCount += 1;
-            purchaseAmount += transaction.amount || 0;
+            if (transaction.currency === "SOL") {
+              purchaseAmount += (transaction.amount || 0) * solPrice;
+            } else if (transaction.currency === "USDC") {
+              purchaseAmount += transaction.amount || 0;
+            }
           }
           // Fetch product names for each productId
           const productNames = await Promise.all(
