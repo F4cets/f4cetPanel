@@ -14,12 +14,13 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
-// Axios for API calls
+// Axios for HTTP requests
 import axios from "axios";
+import xml2js from "xml2js";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -139,17 +140,11 @@ function AccountSettings() {
         },
       });
 
-      setSuccess("Profile updated successfully! NFT verification pending if not already verified.");
+      setSuccess("Profile updated successfully!");
     } catch (err) {
       console.error("Error updating profile:", err);
       setError("Failed to update profile: " + err.message);
     }
-  };
-
-  // Validate Solana address (44-character Base58)
-  const isValidSolanaAddress = (address) => {
-    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{44}$/;
-    return base58Regex.test(address);
   };
 
   // Handle NFT verification
@@ -162,39 +157,38 @@ function AccountSettings() {
       return;
     }
 
-    if (!isValidSolanaAddress(form.nftMintAddress)) {
-      setError("Invalid NFT mint address format. Must be a 44-character Solana address.");
-      return;
-    }
-
     try {
-      const response = await axios.post(
-        'https://nftverify-232592911911.us-central1.run.app',
+      // Step 1: Soft check - Fetch mint list from Google Cloud Storage
+      const mintListUrl = "https://storage.googleapis.com/tangemv1/";
+      const response = await axios.get(mintListUrl);
+      const xmlData = response.data;
+
+      // Parse XML to extract mint addresses
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const result = await parser.parseStringPromise(xmlData);
+      const contents = result.ListBucketResult.Contents;
+      const validMints = Array.isArray(contents)
+        ? contents.map((item) => item.Key.replace(/\.json$/, ""))
+        : [contents.Key.replace(/\.json$/, "")];
+
+      // Verify mintAddress is in the list
+      if (!validMints.includes(form.nftMintAddress)) {
+        setError("NFT mint address is not in the valid V1 mint list.");
+        return;
+      }
+
+      // Step 2: Call nftVerify Cloud Run function
+      const verifyResponse = await axios.post(
+        "https://nftverify-232592911911.us-central1.run.app",
         {
           walletAddress: user.walletId,
           mintAddress: form.nftMintAddress,
         },
-        {
-          headers: { 'Content-Type': 'application/json' },
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      if (response.data.success) {
-        // Update Firestore with verified status
-        await setDoc(
-          doc(db, 'users', user.walletId),
-          {
-            profile: {
-              ...user.profile,
-              nftMintAddress: form.nftMintAddress,
-              nftVerified: true,
-              nftVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-          },
-          { merge: true }
-        );
-
-        // Update user context
+      if (verifyResponse.data.success) {
+        // Update user context and Firebase
         setUser({
           ...user,
           profile: {
@@ -205,13 +199,25 @@ function AccountSettings() {
           },
         });
 
-        setSuccess(response.data.message);
+        await setDoc(
+          doc(db, "users", user.walletId),
+          {
+            profile: {
+              nftMintAddress: form.nftMintAddress,
+              nftVerified: true,
+              nftVerifiedAt: serverTimestamp(), // Use client-side serverTimestamp
+            },
+          },
+          { merge: true }
+        );
+
+        setSuccess("NFT ownership verified successfully!");
       } else {
-        setError(response.data.error || 'NFT verification failed.');
+        setError(verifyResponse.data.error || "Failed to verify NFT ownership.");
       }
     } catch (err) {
-      console.error('Error verifying NFT:', err);
-      setError(err.response?.data?.error || 'Failed to verify NFT. Please try again.');
+      console.error("Error verifying NFT:", err);
+      setError("Failed to verify NFT: " + (err.response?.data?.error || err.message));
     }
   };
 
@@ -383,7 +389,7 @@ function AccountSettings() {
                       value={form.nftMintAddress}
                       onChange={(e) => setForm({ ...form, nftMintAddress: e.target.value })}
                       fullWidth
-                      placeholder="Enter NFT mint address (e.g., 7GyvxxxxxySaR)"
+                      placeholder="Enter NFT mint address (e.g., 7GyvpxxxxxaySaR)"
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
