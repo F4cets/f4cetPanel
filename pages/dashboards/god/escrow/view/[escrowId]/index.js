@@ -3,7 +3,7 @@
 * F4cetPanel - God Escrow View Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -12,8 +12,11 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "/lib/firebase";
+
+// Import fetchSolPrice
+import { fetchSolPrice } from "/lib/getSolPrice";
 
 // User context
 import { useUser } from "/contexts/UserContext";
@@ -33,40 +36,10 @@ import MDTypography from "/components/MDTypography";
 import MDButton from "/components/MDButton";
 import DataTable from "/examples/Tables/DataTable";
 
-// NextJS Material Dashboard 2 PRO examples
+// NextJS Material Dashboard 2 PRO Examples
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
-
-// Dummy Data
-const dummyEscrowWallet = {
-  escrowId: "escrow123",
-  publicKey: "SolanaPublicKey123",
-  walletId: "sellerWallet456",
-  storeId: "store123",
-  storeName: "FashionHub",
-  solBalance: 5.0,
-  usdcBalance: 100.0,
-  nftInventory: ["NFT001", "NFT002"],
-  status: "Active",
-  pendingSol: 1.0,
-  pendingUsdc: 50.0,
-  createdAt: new Date("2025-03-20").toISOString(),
-};
-
-const dummyPendingPayments = [
-  { id: "ESC001", date: "2025-03-20", buyerId: "0x123...456", product: "Ebook: Web3 Guide", amount: 20, currency: "USDC", status: "Pending" },
-  { id: "ESC002", date: "2025-03-19", buyerId: "0x789...012", product: "Strong Hold Hoodie", amount: 30, currency: "USDC", status: "Pending" },
-];
-
-const dummyNFTInventory = [
-  { id: "NFT001", date: "2025-03-20", product: "Ebook: Web3 Guide", invId: "INV002", quantity: 100, status: "Held" },
-  { id: "NFT002", date: "2025-03-19", product: "Strong Hold Hoodie", invId: "INV001", quantity: 17, status: "Held" },
-];
-
-const dummyTransactionHistory = [
-  { id: "TX001", type: "Fund Release", amount: 50, currency: "USDC", destinationWallet: "sellerWallet456", status: "Completed", createdAt: "2025-03-18" },
-];
 
 function EscrowView() {
   const { user } = useUser();
@@ -74,111 +47,336 @@ function EscrowView() {
   const { escrowId } = router.query;
   const [escrowWallet, setEscrowWallet] = useState(null);
   const [pendingPayments, setPendingPayments] = useState([]);
-  const [nftInventory, setNftInventory] = useState([]);
+  const [inventoryData, setInventoryData] = useState([]);
+  const [inventoryCount, setInventoryCount] = useState(0);
   const [transactionHistory, setTransactionHistory] = useState([]);
   const [openReleaseModal, setOpenReleaseModal] = useState(false);
   const [isReleasing, setIsReleasing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Fetch escrow wallet and related data from Firestore
+  // Fetch all data in a single useEffect
   useEffect(() => {
-    const fetchEscrowWallet = async () => {
+    const fetchData = async () => {
       if (!user || !user.walletId || !escrowId) return;
 
+      setError(null); // Clear previous errors
+
+      // Fetch SOL price once
+      let solPrice = 200; // Fallback
       try {
-        // Find the user with the escrow wallet
-        const usersCollection = collection(db, "users");
-        const usersSnapshot = await getDocs(usersCollection);
+        solPrice = await fetchSolPrice();
+        console.log("Fetched SOL price:", solPrice);
+      } catch (err) {
+        console.error("Error fetching SOL price:", err.message);
+      }
+
+      // Fetch escrow wallet
+      try {
+        console.log("Querying users for escrowPublicKey:", escrowId);
+        const usersQuery = query(
+          collection(db, "users"),
+          where("plan.escrowPublicKey", "==", escrowId)
+        );
+        const usersSnapshot = await getDocs(usersQuery);
         let escrowData = null;
-        for (const userDoc of usersSnapshot.docs) {
-          const escrowDoc = doc(db, `users/${userDoc.id}/escrowWallets`, escrowId);
-          const escrowSnapshot = await getDoc(escrowDoc);
-          if (escrowSnapshot.exists()) {
-            escrowData = {
-              escrowId: escrowSnapshot.id,
-              walletId: userDoc.id,
-              ...escrowSnapshot.data(),
-            };
-            break;
+
+        if (!usersSnapshot.empty) {
+          const userDoc = usersSnapshot.docs[0];
+          const userData = userDoc.data();
+          const walletId = userDoc.id;
+          const storeIds = userData.storeIds || [];
+          let storeName = "Unnamed Store";
+          let storeId = "";
+
+          if (storeIds.length > 0) {
+            storeId = storeIds[0];
+            const storeDocRef = doc(db, "stores", storeId);
+            const storeDoc = await getDoc(storeDocRef);
+            storeName = storeDoc.exists() ? storeDoc.data().name || "Unnamed Store" : "Unnamed Store";
+          }
+
+          let solBalance = 0;
+          let usdcBalance = 0;
+          let pendingSol = 0;
+          let pendingUsdc = 0;
+
+          // Query transactions by escrowWallet or sellerEscrowWallet
+          const transactionsQuery = query(
+            collection(db, "transactions"),
+            where("sellerEscrowWallet", "==", escrowId)
+          );
+          const transactionsSnapshot = await getDocs(transactionsQuery);
+          console.log("Found transactions:", transactionsSnapshot.size, transactionsSnapshot.docs.map(d => ({
+            id: d.id,
+            amount: d.data().amount,
+            currency: d.data().currency,
+            buyerConfirmed: d.data().buyerConfirmed,
+            escrowWallet: d.data().escrowWallet,
+            sellerEscrowWallet: d.data().sellerEscrowWallet
+          })));
+
+          for (const txDoc of transactionsSnapshot.docs) {
+            const txData = txDoc.data();
+            const amount = txData.amount || 0;
+            if (txData.currency === "SOL" && txData.buyerConfirmed === false) {
+              solBalance += amount;
+              pendingSol += amount;
+              pendingUsdc += (amount * 0.96) * solPrice;
+            } else if (txData.currency === "USDC" && txData.buyerConfirmed === false) {
+              usdcBalance += amount;
+              pendingUsdc += amount * 0.96;
+            }
+          }
+
+          escrowData = {
+            escrowId,
+            publicKey: escrowId,
+            walletId,
+            storeId,
+            storeName,
+            solBalance,
+            usdcBalance,
+            pendingSol,
+            pendingUsdc,
+            status: solBalance > 0 || usdcBalance > 0 ? "Active" : "Released",
+            createdAt: new Date().toISOString(),
+          };
+          console.log("Escrow data:", escrowData);
+          setEscrowWallet(escrowData);
+        } else {
+          console.log("No user found with escrowPublicKey:", escrowId);
+          setError("Escrow wallet not found.");
+          setEscrowWallet(null);
+        }
+      } catch (err) {
+        console.error("Error fetching escrow wallet:", err.message);
+        setError("Failed to load escrow wallet: " + err.message);
+        setEscrowWallet(null);
+      }
+
+      // Fetch pending payments
+      try {
+        console.log("Querying transactions for pending payments, escrowId:", escrowId);
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("sellerEscrowWallet", "==", escrowId),
+          where("buyerConfirmed", "==", false)
+        );
+        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const paymentsData = [];
+
+        console.log("Pending payments transactions:", transactionsSnapshot.size, transactionsSnapshot.docs.map(d => ({
+          id: d.id,
+          amount: d.data().amount,
+          currency: d.data().currency,
+          buyerConfirmed: d.data().buyerConfirmed,
+          sellerEscrowWallet: d.data().sellerEscrowWallet,
+          productIds: d.data().productIds
+        })));
+
+        for (const txDoc of transactionsSnapshot.docs) {
+          const txData = txDoc.data();
+          const productIds = Array.isArray(txData.productIds) ? txData.productIds : [];
+          const productNames = [];
+
+          for (const product of productIds) {
+            if (product?.productId) {
+              const productDocRef = doc(db, "products", product.productId);
+              const productDoc = await getDoc(productDocRef);
+              productNames.push(productDoc.exists() ? productDoc.data().name || "Unknown" : "Unknown");
+            } else {
+              productNames.push("Unknown");
+            }
+          }
+
+          let netAmount = txData.amount * 0.96; // Apply 4% F4cets fee
+          const currency = txData.currency || "USDC";
+          if (currency === "SOL") {
+            netAmount = (netAmount * solPrice).toFixed(2);
+          } else {
+            netAmount = netAmount.toFixed(2);
+          }
+
+          paymentsData.push({
+            id: txDoc.id,
+            date: txData.createdAt ? new Date(txData.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+            product: productNames.join(", ") || "Unknown",
+            amount: netAmount,
+            currency,
+            status: "Pending",
+          });
+        }
+
+        console.log("Pending payments:", paymentsData);
+        setPendingPayments(paymentsData);
+      } catch (err) {
+        console.error("Error fetching pending payments:", err.message);
+        setPendingPayments([]);
+      }
+    };
+
+    // Fetch inventory
+    const fetchInventory = async () => {
+      if (!escrowWallet?.storeId) {
+        console.log("No storeId, skipping inventory fetch");
+        setInventoryData([]);
+        return;
+      }
+
+      try {
+        console.log("Querying products for storeId:", escrowWallet.storeId);
+        const productsQuery = query(
+          collection(db, "products"),
+          where("storeId", "==", escrowWallet.storeId)
+        );
+        const querySnapshot = await getDocs(productsQuery);
+        let totalCount = 0;
+        const data = querySnapshot.docs.map(doc => {
+          const productData = doc.data();
+          let itemCount = 0;
+          if (productData.type === "digital") {
+            itemCount = parseInt(productData.quantity, 10) || 0;
+          } else if (productData.type === "rwi") {
+            itemCount = productData.variants?.reduce((sum, v) => {
+              const qty = parseInt(v.quantity, 10) || 0;
+              return sum + qty;
+            }, 0) || 0;
+          }
+          totalCount += itemCount;
+          return {
+            id: doc.id,
+            ...productData,
+            createdAt: productData.createdAt?.toDate().toISOString().split("T")[0] || new Date().toISOString().split("T")[0],
+          };
+        });
+
+        console.log("Inventory products:", data, "Total count:", totalCount);
+        setInventoryData(data);
+        setInventoryCount(totalCount);
+        if (data.length === 0) {
+          setError("No products found in escrow for this store.");
+        }
+      } catch (err) {
+        console.error("Error fetching inventory:", err.message);
+        setError("Failed to load inventory: " + err.message);
+        setInventoryData([]);
+        setInventoryCount(0);
+      }
+    };
+
+    // Fetch transaction history
+    const fetchTransactionHistory = async () => {
+      if (!escrowId || !escrowWallet?.storeId || !escrowWallet?.walletId) {
+        console.log("Missing escrowId, storeId, or walletId, skipping transaction history");
+        return;
+      }
+
+      try {
+        console.log("Querying transactions for storeId:", escrowWallet.storeId);
+        const transactionsQuery = query(
+          collection(db, "transactions"),
+          where("storeId", "==", escrowWallet.storeId)
+        );
+        const transactionsSnapshot = await getDocs(transactionsQuery);
+        const transactionsData = [];
+
+        for (const txDoc of transactionsSnapshot.docs) {
+          const txData = txDoc.data();
+          const productIds = Array.isArray(txData.productIds) ? txData.productIds : [];
+          const transfers = Array.isArray(txData.transfers) ? txData.transfers : [];
+          let isRelevant = txData.escrowWallet === escrowId ||
+                           productIds.some(p => p && p.sellerEscrowWallet === escrowId) ||
+                           txData.sellerId === escrowWallet.walletId;
+
+          if (isRelevant) {
+            const productNames = [];
+            for (const product of productIds) {
+              if (product?.productId) {
+                const productDocRef = doc(db, "products", product.productId);
+                const productDoc = await getDoc(productDocRef);
+                productNames.push(productDoc.exists() ? productDoc.data().name || "Unknown" : "Unknown");
+              } else {
+                productNames.push("Unknown");
+              }
+            }
+
+            const fundRelease = transfers.find(t => t?.type === "fund_release");
+            if (fundRelease) {
+              transactionsData.push({
+                id: txDoc.id,
+                type: "Fund Release",
+                amount: fundRelease.amount || 0,
+                currency: fundRelease.currency || "USDC",
+                destinationWallet: fundRelease.to || txData.sellerId || "Unknown",
+                sellerId: txData.sellerId || "Unknown",
+                status: fundRelease.status || "Completed",
+                createdAt: fundRelease.timestamp || txData.createdAt || new Date().toISOString(),
+                product: productNames.join(", ") || "N/A",
+              });
+            } else {
+              transactionsData.push({
+                id: txDoc.id,
+                type: txData.type || "Purchase",
+                amount: txData.amount || 0,
+                currency: txData.currency || "USDC",
+                destinationWallet: txData.sellerId || "Unknown",
+                sellerId: txData.sellerId || "Unknown",
+                status: txData.status || "Pending",
+                createdAt: txData.createdAt || new Date().toISOString(),
+                product: productNames.join(", ") || "N/A",
+              });
+            }
           }
         }
 
-        if (escrowData) {
-          setEscrowWallet(escrowData);
-        } else {
-          setError("Escrow wallet not found. Using sample data.");
-          setEscrowWallet(dummyEscrowWallet);
+        console.log("Transaction history:", transactionsData);
+        setTransactionHistory(transactionsData);
+      } catch (err) {
+        console.error("Error fetching transaction history:", err.message);
+        setError("Failed to load transaction history: " + err.message);
+        setTransactionHistory([]);
+      }
+    };
+
+    // Run all fetches if user and escrowId are available
+    if (user && user.walletId && escrowId) {
+      fetchData().then(() => {
+        if (escrowWallet?.storeId) {
+          fetchInventory();
+          fetchTransactionHistory();
         }
-      } catch (err) {
-        console.error("Error fetching escrow wallet:", err);
-        setError("Failed to load escrow wallet. Using sample data.");
-        setEscrowWallet(dummyEscrowWallet);
-      }
-    };
+      });
+    }
+  }, [user, escrowId, escrowWallet?.storeId, escrowWallet?.walletId]);
 
-    const fetchPendingPayments = async () => {
-      // Placeholder: Fetch pending payments (to be implemented with Solana integration)
-      setPendingPayments(dummyPendingPayments);
-    };
-
-    const fetchNFTInventory = async () => {
-      // Placeholder: Fetch NFT inventory (to be implemented with Solana integration)
-      setNftInventory(dummyNFTInventory);
-    };
-
-    const fetchTransactionHistory = async () => {
-      if (!escrowWallet) return;
-
-      try {
-        const transactionsCollection = collection(db, `users/${escrowWallet.walletId}/escrowWallets/${escrowId}/transactions`);
-        const transactionsSnapshot = await getDocs(transactionsCollection);
-        const transactionsData = transactionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setTransactionHistory(transactionsData.length > 0 ? transactionsData : dummyTransactionHistory);
-      } catch (err) {
-        console.error("Error fetching transaction history:", err);
-        setTransactionHistory(dummyTransactionHistory);
-      }
-    };
-
-    fetchEscrowWallet();
-    fetchPendingPayments();
-    fetchNFTInventory();
-    fetchTransactionHistory();
-  }, [user, escrowId, escrowWallet]);
-
-  // Redirect to home if no user, no walletId, or unauthorized role
+  // Redirect unauthorized users
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "god") {
       router.replace("/");
     }
   }, [user, router]);
 
-  // Handle fund release (placeholder for Google Cloud Function)
+  // Handle fund release
   const handleReleaseFunds = async () => {
-    if (!escrowWallet || isReleasing || escrowWallet.id === dummyEscrowWallet.escrowId) return;
+    if (!escrowWallet || isReleasing) return;
 
     setIsReleasing(true);
     setError(null);
     setSuccess(null);
 
     try {
-      // Placeholder: Call Google Cloud Function to release funds
-      // e.g., await releaseFunds(escrowWallet.publicKey, escrowWallet.walletId, escrowWallet.pendingSol, escrowWallet.pendingUsdc);
+      // TODO: Integrate Google Cloud Function for fund release
+      // e.g., await fetch('https://release-funds-xxx.run.app', { method: 'POST', body: JSON.stringify({ escrowId: escrowWallet.publicKey, walletId: escrowWallet.walletId, sol: escrowWallet.pendingSol, usdc: escrowWallet.pendingUsdc }) });
 
-      // Update Firestore (simulate fund release)
-      const escrowDoc = doc(db, `users/${escrowWallet.walletId}/escrowWallets`, escrowId);
-      await updateDoc(escrowDoc, {
-        status: "Released",
-        pendingSol: 0,
-        pendingUsdc: 0,
+      // Simulate Firestore update
+      const userDocRef = doc(db, "users", escrowWallet.walletId);
+      await updateDoc(userDocRef, {
+        "plan.status": "Released",
+        "plan.pendingSol": 0,
+        "plan.pendingUsdc": 0,
       });
 
-      // Log transaction
-      const transactionsCollection = collection(db, `users/${escrowWallet.walletId}/escrowWallets/${escrowId}/transactions`);
       const transaction = {
         type: "Fund Release",
         amount: escrowWallet.pendingUsdc,
@@ -187,7 +385,6 @@ function EscrowView() {
         status: "Completed",
         createdAt: new Date().toISOString(),
       };
-      const docRef = await addDoc(transactionsCollection, transaction);
 
       setEscrowWallet({
         ...escrowWallet,
@@ -197,28 +394,27 @@ function EscrowView() {
       });
       setTransactionHistory([
         ...transactionHistory,
-        { id: docRef.id, ...transaction },
+        { id: `TX-${Date.now()}`, ...transaction },
       ]);
       setSuccess("Funds released successfully!");
       setOpenReleaseModal(false);
     } catch (err) {
-      console.error("Error releasing funds:", err);
+      console.error("Error releasing funds:", err.message);
       setError("Failed to release funds: " + err.message);
     } finally {
       setIsReleasing(false);
     }
   };
 
-  // Handle modal
+  // Modal handlers
   const handleOpenReleaseModal = () => setOpenReleaseModal(true);
   const handleCloseReleaseModal = () => setOpenReleaseModal(false);
 
-  // Ensure user is loaded and authorized before rendering
+  // Guard clauses
   if (!user || !user.walletId || user.role !== "god") {
-    return null; // Or a loading spinner
+    return null; // Redirect handled by useEffect
   }
 
-  // Handle invalid or missing escrowId
   if (!escrowId) {
     return (
       <DashboardLayout>
@@ -233,14 +429,13 @@ function EscrowView() {
     );
   }
 
-  // Handle no escrow wallet (e.g., still loading)
   if (!escrowWallet) {
     return (
       <DashboardLayout>
         <DashboardNavbar />
         <MDBox py={3}>
           <MDTypography variant="body2" color="text">
-            Loading escrow details...
+            {error || "Loading escrow details..."}
           </MDTypography>
         </MDBox>
         <Footer />
@@ -251,29 +446,29 @@ function EscrowView() {
   // Pending Payments Table
   const pendingPaymentsTableData = {
     columns: [
-      { Header: "Escrow ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Buyer ID", accessor: "buyerId", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Amount", accessor: "amount", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
+      { Header: "Transaction ID", accessor: "id", width: "20%" },
+      { Header: "Date", accessor: "date", width: "20%" },
+      { Header: "Product", accessor: "product", width: "20%" },
+      { Header: "Amount ($)", accessor: "amount", width: "20%" },
+      { Header: "Status", accessor: "status", width: "20%" },
     ],
-    rows: pendingPayments.map(item => ({
+    rows: pendingPayments.length > 0 ? pendingPayments.map(item => ({
       ...item,
+      id: (
+        <Link href={`/dashboards/seller/sales/details/${item.id}`}>
+          <MDTypography variant="button" color="info" fontWeight="medium">
+            {item.id}
+          </MDTypography>
+        </Link>
+      ),
       amount: (
         <MDTypography variant="button" color="text">
-          {item.amount} {item.currency}
+          {item.amount}
         </MDTypography>
       ),
       status: (
         <MDBox display="flex" alignItems="center">
-          <Icon
-            fontSize="small"
-            sx={{
-              color: "warning.main",
-              mr: 1,
-            }}
-          >
+          <Icon fontSize="small" sx={{ color: "warning.main", mr: 1 }}>
             hourglass_empty
           </Icon>
           <MDTypography variant="button" color="text">
@@ -281,58 +476,79 @@ function EscrowView() {
           </MDTypography>
         </MDBox>
       ),
-    })),
+    })) : [],
   };
 
-  // NFT Inventory Table
-  const nftInventoryTableData = {
+  // Inventory Table
+  const inventoryTableData = {
     columns: [
-      { Header: "NFT ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Inventory ID", accessor: "invId", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Quantity", accessor: "quantity", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
+      { Header: "Name", accessor: "name", width: "20%" },
+      { Header: "Type", accessor: "type", width: "10%" },
+      { Header: "Price (USDC)", accessor: "price", width: "10%" },
+      { Header: "Quantity/Variants", accessor: "quantityVariants", width: "20%" },
+      { Header: "Categories", accessor: "categories", width: "20%" },
+      { Header: "Status", accessor: "status", width: "10%" },
+      { Header: "Date", accessor: "createdAt", width: "10%" },
     ],
-    rows: nftInventory.map(item => ({
+    rows: inventoryData.length > 0 ? inventoryData.map(item => ({
       ...item,
-      invId: (
-        <MDTypography variant="button" color="info" fontWeight="medium">
-          {item.invId}
+      name: item.id ? (
+        <Link href={`/dashboards/god/products/edit/${item.id}`}>
+          <MDTypography variant="button" color="info" fontWeight="medium">
+            {item.name || "N/A"}
+          </MDTypography>
+        </Link>
+      ) : (
+        <MDTypography variant="button" color="error">Invalid Name</MDTypography>
+      ),
+      type: (
+        <MDTypography variant="button" color="text">{item.type === "digital" ? "Digital" : item.type === "rwi" ? "RWI" : "N/A"}</MDTypography>
+      ),
+      price: (
+        <MDTypography variant="button" color="text">{item.price ? `${item.price} USDC` : "N/A"}</MDTypography>
+      ),
+      quantityVariants: (
+        <MDTypography variant="button" color="text">
+          {item.type === "digital" ? item.quantity || "N/A" : 
+            item.variants?.map(v => `${v.quantity} (${v.size}, ${v.color})`).join(", ") || "N/A"}
         </MDTypography>
+      ),
+      categories: (
+        <MDTypography variant="button" color="text">{item.categories?.join(", ") || "N/A"}</MDTypography>
       ),
       status: (
         <MDBox display="flex" alignItems="center">
-          <Icon
-            fontSize="small"
-            sx={{
-              color: "info.main",
-              mr: 1,
-            }}
-          >
-            lock
+          <Icon fontSize="small" sx={{ color: item.isActive ? "success.main" : "error.main", mr: 1 }}>
+            {item.isActive ? "check_circle" : "cancel"}
           </Icon>
-          <MDTypography variant="button" color="text">
-            {item.status}
-          </MDTypography>
+          <MDTypography variant="button" color="text">{item.isActive ? "Active" : "Removed"}</MDTypography>
         </MDBox>
       ),
-    })),
+    })) : [],
   };
 
   // Transaction History Table
   const transactionHistoryTableData = {
     columns: [
-      { Header: "Transaction ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Type", accessor: "type", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Amount", accessor: "amount", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Currency", accessor: "currency", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Destination Wallet", accessor: "destinationWallet", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "createdAt", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Transaction ID", accessor: "id", width: "15%" },
+      { Header: "Type", accessor: "type", width: "15%" },
+      { Header: "Amount", accessor: "amount", width: "15%" },
+      { Header: "Currency", accessor: "currency", width: "10%" },
+      { Header: "Destination Wallet", accessor: "destinationWallet", width: "15%" },
+      { Header: "Seller ID", accessor: "sellerId", width: "15%" },
+      { Header: "Status", accessor: "status", width: "10%" },
+      { Header: "Date", accessor: "createdAt", width: "15%" },
+      { Header: "Product", accessor: "product", width: "20%" },
     ],
-    rows: transactionHistory.map(tx => ({
+    rows: transactionHistory.length > 0 ? transactionHistory.map(tx => ({
       ...tx,
+      id: (
+        <Link href={`/dashboards/god/products/edit/${tx.id}`}>
+          <MDTypography variant="button" color="info" fontWeight="medium">
+            {tx.id}
+          </MDTypography>
+        </Link>
+      ),
       amount: (
         <MDTypography variant="button" color="text">
           {tx.amount} {tx.currency}
@@ -343,23 +559,27 @@ function EscrowView() {
           {tx.destinationWallet.slice(0, 6)}...{tx.destinationWallet.slice(-4)}
         </MDTypography>
       ),
+      sellerId: (
+        <MDTypography variant="button" color="text">
+          {tx.sellerId.slice(0, 6)}...{tx.sellerId.slice(-4)}
+        </MDTypography>
+      ),
       status: (
         <MDBox display="flex" alignItems="center">
-          <Icon
-            fontSize="small"
-            sx={{
-              color: tx.status === "Completed" ? "success.main" : "warning.main",
-              mr: 1,
-            }}
-          >
-            {tx.status === "Completed" ? "check_circle" : "hourglass_empty"}
+          <Icon fontSize="small" sx={{ color: tx.status === "Completed" ? "success.main" : "warning.main", mr: 1 }}>
+            {tx.status === "completed" ? "check_circle" : "hourglass_empty"}
           </Icon>
           <MDTypography variant="button" color="text">
             {tx.status}
           </MDTypography>
         </MDBox>
       ),
-    })),
+      product: (
+        <MDTypography variant="button" color="text">
+          {tx.product}
+        </MDTypography>
+      ),
+    })) : [],
   };
 
   return (
@@ -388,7 +608,7 @@ function EscrowView() {
               variant="gradient"
               color="info"
               onClick={handleOpenReleaseModal}
-              disabled={isReleasing || escrowWallet.status === "Released" || escrowWallet.id === dummyEscrowWallet.escrowId}
+              disabled={isReleasing || escrowWallet.status === "Released"}
             >
               Release Funds
             </MDButton>
@@ -418,7 +638,7 @@ function EscrowView() {
                     SOL Balance
                   </MDTypography>
                   <MDTypography variant="h4" color="info">
-                    {escrowWallet.solBalance} SOL
+                    {escrowWallet.solBalance.toFixed(4)} SOL
                   </MDTypography>
                   <MDTypography variant="caption" color="text">
                     In Escrow
@@ -448,7 +668,7 @@ function EscrowView() {
                     USDC Balance
                   </MDTypography>
                   <MDTypography variant="h4" color="info">
-                    ${escrowWallet.usdcBalance}
+                    ${escrowWallet.usdcBalance.toFixed(2)}
                   </MDTypography>
                   <MDTypography variant="caption" color="text">
                     In Escrow
@@ -478,7 +698,7 @@ function EscrowView() {
                     NFT Inventory
                   </MDTypography>
                   <MDTypography variant="h4" color="info">
-                    {escrowWallet.nftInventory.length}
+                    {inventoryCount}
                   </MDTypography>
                   <MDTypography variant="caption" color="text">
                     Items Held
@@ -508,7 +728,7 @@ function EscrowView() {
                     Pending Release
                   </MDTypography>
                   <MDTypography variant="h4" color="info">
-                    ${escrowWallet.pendingUsdc}
+                    ${escrowWallet.pendingUsdc.toFixed(2)}
                   </MDTypography>
                   <MDTypography variant="caption" color="text">
                     USDC
@@ -528,20 +748,21 @@ function EscrowView() {
                 <MDTypography variant="h5" color="dark" mb={2}>
                   Pending Escrow Payments
                 </MDTypography>
-                <DataTable
-                  table={pendingPaymentsTableData}
-                  entriesPerPage={false}
-                  canSearch={false}
-                  sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
-                  }}
-                />
+                {pendingPayments.length === 0 ? (
+                  <MDTypography variant="body2" color="text">
+                    No pending payments found.
+                  </MDTypography>
+                ) : (
+                  <DataTable
+                    table={pendingPaymentsTableData}
+                    entriesPerPage={false}
+                    canSearch={false}
+                    sx={{
+                      "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                      "& .MuiTablePagination-root": { display: "none !important" },
+                    }}
+                  />
+                )}
               </MDBox>
             </Card>
           </Grid>
@@ -553,20 +774,21 @@ function EscrowView() {
                 <MDTypography variant="h5" color="dark" mb={2}>
                   NFT Inventory in Escrow
                 </MDTypography>
-                <DataTable
-                  table={nftInventoryTableData}
-                  entriesPerPage={false}
-                  canSearch={false}
-                  sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
-                  }}
-                />
+                {inventoryData.length === 0 ? (
+                  <MDTypography variant="body2" color="text">
+                    No inventory items found.
+                  </MDTypography>
+                ) : (
+                  <DataTable
+                    table={inventoryTableData}
+                    entriesPerPage={false}
+                    canSearch={false}
+                    sx={{
+                      "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                      "& .MuiTablePagination-root": { display: "none !important" },
+                    }}
+                  />
+                )}
               </MDBox>
             </Card>
           </Grid>
@@ -578,20 +800,21 @@ function EscrowView() {
                 <MDTypography variant="h5" color="dark" mb={2}>
                   Transaction History
                 </MDTypography>
-                <DataTable
-                  table={transactionHistoryTableData}
-                  entriesPerPage={false}
-                  canSearch={false}
-                  sx={{
-                    "& th": {
-                      paddingRight: "20px !important",
-                      paddingLeft: "20px !important",
-                    },
-                    "& .MuiTablePagination-root": {
-                      display: "none !important",
-                    },
-                  }}
-                />
+                {transactionHistory.length === 0 ? (
+                  <MDTypography variant="body2" color="text">
+                    No transaction history found.
+                  </MDTypography>
+                ) : (
+                  <DataTable
+                    table={transactionHistoryTableData}
+                    entriesPerPage={false}
+                    canSearch={false}
+                    sx={{
+                      "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
+                      "& .MuiTablePagination-root": { display: "none !important" },
+                    }}
+                  />
+                )}
               </MDBox>
             </Card>
           </Grid>
@@ -602,7 +825,7 @@ function EscrowView() {
           <DialogTitle>Confirm Fund Release</DialogTitle>
           <DialogContent>
             <MDTypography variant="body2" mb={2}>
-              Release {escrowWallet.pendingSol} SOL and ${escrowWallet.pendingUsdc} USDC to {escrowWallet.walletId.slice(0, 6)}...{escrowWallet.walletId.slice(-4)}?
+              Release {escrowWallet.pendingSol.toFixed(4)} SOL and ${escrowWallet.pendingUsdc.toFixed(2)} USDC to {escrowWallet.walletId.slice(0, 6)}...{escrowWallet.walletId.slice(-4)}?
             </MDTypography>
             {error && (
               <MDTypography variant="body2" color="error" mb={2}>

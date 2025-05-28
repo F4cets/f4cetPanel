@@ -3,7 +3,7 @@
 * F4cetPanel - God Escrow Search Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -12,7 +12,7 @@ import { useRouter } from "next/router";
 import Link from "next/link";
 
 // Firebase imports
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore"; // CHANGED: Added doc, getDoc
 import { db } from "/lib/firebase";
 
 // User context
@@ -33,38 +33,6 @@ import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
 
-// Dummy Data
-const dummyEscrowWallets = [
-  {
-    escrowId: "escrow123",
-    publicKey: "SolanaPublicKey123",
-    walletId: "sellerWallet456",
-    storeId: "store123",
-    storeName: "FashionHub",
-    solBalance: 5.0,
-    usdcBalance: 100.0,
-    nftInventory: ["NFT001", "NFT002"],
-    status: "Active",
-    pendingSol: 1.0,
-    pendingUsdc: 50.0,
-    createdAt: new Date("2025-03-20").toISOString(),
-  },
-  {
-    escrowId: "escrow456",
-    publicKey: "SolanaPublicKey456",
-    walletId: "sellerWallet789",
-    storeId: "store456",
-    storeName: "TechTrend",
-    solBalance: 3.0,
-    usdcBalance: 200.0,
-    nftInventory: ["NFT003"],
-    status: "Flagged",
-    pendingSol: 0.5,
-    pendingUsdc: 100.0,
-    createdAt: new Date("2025-03-19").toISOString(),
-  },
-];
-
 function EscrowSearch() {
   const { user } = useUser();
   const router = useRouter();
@@ -78,25 +46,53 @@ function EscrowSearch() {
       if (!user || !user.walletId) return;
 
       try {
+        // CHANGED: Query users with escrowPublicKey
         const usersCollection = collection(db, "users");
         const usersSnapshot = await getDocs(usersCollection);
         const escrowWalletsData = [];
+
         for (const userDoc of usersSnapshot.docs) {
-          const escrowCollection = collection(db, `users/${userDoc.id}/escrowWallets`);
-          const escrowSnapshot = await getDocs(escrowCollection);
-          escrowSnapshot.forEach(doc => {
+          const userData = userDoc.data();
+          const walletId = userDoc.id;
+          const escrowPublicKey = userData.plan?.escrowPublicKey;
+
+          // Skip users without escrowPublicKey
+          if (!escrowPublicKey) continue;
+
+          // Get storeIds
+          const storeIds = userData.storeIds || [];
+
+          // Fetch store names for each storeId
+          for (const storeId of storeIds) {
+            const storeDocRef = doc(db, "stores", storeId);
+            const storeDoc = await getDoc(storeDocRef);
+            const storeName = storeDoc.exists() ? storeDoc.data().name || "Unnamed Store" : "Unnamed Store";
+
             escrowWalletsData.push({
-              escrowId: doc.id,
-              walletId: userDoc.id,
-              ...doc.data(),
+              escrowId: escrowPublicKey,
+              publicKey: escrowPublicKey,
+              walletId: walletId,
+              storeId: storeId,
+              storeName: storeName,
+              solBalance: 0, // Placeholder
+              usdcBalance: 0, // Placeholder
+              nftInventory: [], // Placeholder
+              status: "Active", // Placeholder
+              pendingSol: 0, // Placeholder
+              pendingUsdc: 0, // Placeholder
+              createdAt: new Date().toISOString(), // Placeholder
             });
-          });
+          }
         }
-        setEscrowWallets(escrowWalletsData.length > 0 ? escrowWalletsData : dummyEscrowWallets);
+
+        setEscrowWallets(escrowWalletsData);
+        if (escrowWalletsData.length === 0) {
+          setError("No escrow wallets found.");
+        }
       } catch (err) {
         console.error("Error fetching escrow wallets:", err);
-        setError("Failed to load escrow wallets. Using sample data.");
-        setEscrowWallets(dummyEscrowWallets);
+        setError("Failed to load escrow wallets.");
+        setEscrowWallets([]);
       }
     };
 

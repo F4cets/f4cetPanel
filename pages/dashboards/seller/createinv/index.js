@@ -1020,7 +1020,7 @@ function CreateInventory() {
       >
         <CircularProgress color="inherit" size={60} />
         <Typography variant="h6" sx={{ mt: 2 }}>
-          Minting NFTs, please wait...
+          Minting Your Dynamic Core NFTs, please wait...
         </Typography>
       </Backdrop>
       <Footer />

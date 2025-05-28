@@ -222,6 +222,23 @@ const routes = () => [
   },
   {
     type: "collapse",
+    name: "Transactions",
+    key: "transactions",
+    icon: <Icon fontSize="medium">money</Icon>,
+    route: "/dashboards/god/transactions",
+    noCollapse: true,
+    roles: ["god"],
+    collapse: [
+      {
+        name: "view-transactions",
+        key: "view-transactions",
+        route: "/dashboards/god/affiliates/details/[txId]",
+        roles: ["god"],
+      },
+    ],
+  },
+  {
+    type: "collapse",
     name: "Escrow Accounts",
     key: "escrow-accounts",
     icon: <Icon fontSize="medium">account_balance_wallet</Icon>,
