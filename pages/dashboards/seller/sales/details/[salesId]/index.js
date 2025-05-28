@@ -115,7 +115,12 @@ function SalesDetails() {
               });
             }
             if (saleData.buyerConfirmed) {
-              const confirmedDate = saleData.updatedAt?.toDate() || new Date();
+              // CHANGED: Safely handle updatedAt as Timestamp or string
+              const confirmedDate = saleData.updatedAt
+                ? (typeof saleData.updatedAt.toDate === 'function'
+                  ? saleData.updatedAt.toDate()
+                  : new Date(saleData.updatedAt))
+                : new Date();
               timeline.push({
                 title: "Receipt Confirmed",
                 date: `${confirmedDate.toISOString().split('T')[0]} ${confirmedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,

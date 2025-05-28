@@ -136,7 +136,6 @@ function SellerEscrow() {
           if (productData.type === "digital") {
             quantity = productData.quantity || 0;
           } else if (productData.type === "rwi" && Array.isArray(productData.variants) && productData.variants.length > 0) {
-            // Sum quantities from variants for RWI products
             quantity = productData.variants.reduce((sum, variant) => {
               const variantQty = parseInt(variant.quantity, 10);
               return sum + (isNaN(variantQty) ? 0 : variantQty);
@@ -153,13 +152,19 @@ function SellerEscrow() {
               invId: productDoc.id,
               quantity,
               status: productData.isActive ? "Active" : "Removed",
+              type: productData.type, // CHANGED: Added type for metric calculation
             });
           }
         }
 
         // Calculate metrics
-        const digitalCount = transactions.filter(tx => tx.type === "digital").length;
-        const rwiCount = transactions.filter(tx => tx.type === "rwi").length;
+        // CHANGED: Count quantities from escrowNFTInventory instead of transactions
+        const digitalCount = products
+          .filter(item => item.type === "digital")
+          .reduce((sum, item) => sum + item.quantity, 0);
+        const rwiCount = products
+          .filter(item => item.type === "rwi")
+          .reduce((sum, item) => sum + item.quantity, 0);
         const totalItems = transactions.length;
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
 
