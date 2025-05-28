@@ -20,7 +20,6 @@ import { db, storage } from "/lib/firebase";
 
 // Axios for HTTP requests
 import axios from "axios";
-import xml2js from "xml2js";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -158,26 +157,7 @@ function AccountSettings() {
     }
 
     try {
-      // Step 1: Soft check - Fetch mint list from Google Cloud Storage
-      const mintListUrl = "https://storage.googleapis.com/tangemv1/";
-      const response = await axios.get(mintListUrl);
-      const xmlData = response.data;
-
-      // Parse XML to extract mint addresses
-      const parser = new xml2js.Parser({ explicitArray: false });
-      const result = await parser.parseStringPromise(xmlData);
-      const contents = result.ListBucketResult.Contents;
-      const validMints = Array.isArray(contents)
-        ? contents.map((item) => item.Key.replace(/\.json$/, ""))
-        : [contents.Key.replace(/\.json$/, "")];
-
-      // Verify mintAddress is in the list
-      if (!validMints.includes(form.nftMintAddress)) {
-        setError("NFT mint address is not in the valid V1 mint list.");
-        return;
-      }
-
-      // Step 2: Call nftVerify Cloud Run function
+      // Call nftVerify Cloud Run function
       const verifyResponse = await axios.post(
         "https://nftverify-232592911911.us-central1.run.app",
         {
@@ -205,7 +185,7 @@ function AccountSettings() {
             profile: {
               nftMintAddress: form.nftMintAddress,
               nftVerified: true,
-              nftVerifiedAt: serverTimestamp(), // Use client-side serverTimestamp
+              nftVerifiedAt: serverTimestamp(),
             },
           },
           { merge: true }
@@ -389,7 +369,7 @@ function AccountSettings() {
                       value={form.nftMintAddress}
                       onChange={(e) => setForm({ ...form, nftMintAddress: e.target.value })}
                       fullWidth
-                      placeholder="Enter NFT mint address (e.g., 7GyvpxxxxxaySaR)"
+                      placeholder="Enter NFT mint address (e.g., 7Gyvp22EGuPisfRNZVAN1zj3iDMgE7LqpVSThzBaySaR)"
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
