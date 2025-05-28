@@ -43,6 +43,7 @@
     "@solana/wallet-adapter-react-ui": "^0.9.36",
     "@solana/wallet-adapter-wallets": "^0.19.33",
     "@solana/web3.js": "^1.98.0",
+    "axios": "^1.9.0",
     "chart.js": "4.4.0",
     "chroma-js": "2.4.2",
     "draft-convert": "^2.1.13",

@@ -18,6 +18,9 @@ import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
+// Axios for API calls
+import axios from "axios";
+
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -41,6 +44,7 @@ function AccountSettings() {
   const [form, setForm] = useState({
     name: "",
     email: "",
+    nftMintAddress: "",
   });
   const [avatar, setAvatar] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -56,6 +60,7 @@ function AccountSettings() {
       setForm({
         name: user.profile.name || "",
         email: user.profile.email || "",
+        nftMintAddress: user.profile.nftMintAddress || "",
       });
       setPreview(user.profile.avatar || "/assets/images/default-avatar.png");
     }
@@ -111,9 +116,13 @@ function AccountSettings() {
       await setDoc(
         doc(db, "users", user.walletId),
         {
-          name: form.name,
-          email: form.email,
-          avatar: avatarUrl,
+          profile: {
+            name: form.name,
+            email: form.email,
+            avatar: avatarUrl,
+            nftMintAddress: form.nftMintAddress,
+            nftVerified: user.profile.nftVerified || false,
+          },
         },
         { merge: true }
       );
@@ -125,13 +134,84 @@ function AccountSettings() {
           name: form.name,
           email: form.email,
           avatar: avatarUrl,
+          nftMintAddress: form.nftMintAddress,
+          nftVerified: user.profile.nftVerified || false,
         },
       });
 
-      setSuccess("Profile updated successfully!");
+      setSuccess("Profile updated successfully! NFT verification pending if not already verified.");
     } catch (err) {
       console.error("Error updating profile:", err);
       setError("Failed to update profile: " + err.message);
+    }
+  };
+
+  // Validate Solana address (44-character Base58)
+  const isValidSolanaAddress = (address) => {
+    const base58Regex = /^[1-9A-HJ-NP-Za-km-z]{44}$/;
+    return base58Regex.test(address);
+  };
+
+  // Handle NFT verification
+  const handleVerifyNFT = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!form.nftMintAddress) {
+      setError("Please enter an NFT mint address.");
+      return;
+    }
+
+    if (!isValidSolanaAddress(form.nftMintAddress)) {
+      setError("Invalid NFT mint address format. Must be a 44-character Solana address.");
+      return;
+    }
+
+    try {
+      const response = await axios.post(
+        'https://nftverify-232592911911.us-central1.run.app',
+        {
+          walletAddress: user.walletId,
+          mintAddress: form.nftMintAddress,
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+
+      if (response.data.success) {
+        // Update Firestore with verified status
+        await setDoc(
+          doc(db, 'users', user.walletId),
+          {
+            profile: {
+              ...user.profile,
+              nftMintAddress: form.nftMintAddress,
+              nftVerified: true,
+              nftVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+          },
+          { merge: true }
+        );
+
+        // Update user context
+        setUser({
+          ...user,
+          profile: {
+            ...user.profile,
+            nftMintAddress: form.nftMintAddress,
+            nftVerified: true,
+            nftVerifiedAt: new Date().toISOString(),
+          },
+        });
+
+        setSuccess(response.data.message);
+      } else {
+        setError(response.data.error || 'NFT verification failed.');
+      }
+    } catch (err) {
+      console.error('Error verifying NFT:', err);
+      setError(err.response?.data?.error || 'Failed to verify NFT. Please try again.');
     }
   };
 
@@ -157,7 +237,7 @@ function AccountSettings() {
                   mb={{ xs: 2, md: 3 }} 
                   sx={{ 
                     fontWeight: 600, 
-                    color: "#344767", // Dark text
+                    color: "#344767",
                     textAlign: { xs: "center", md: "left" }
                   }}
                 >
@@ -169,7 +249,7 @@ function AccountSettings() {
                     color="error" 
                     mb={2} 
                     sx={{ 
-                      color: "#d32f2f", // Keep error red, but explicitly set
+                      color: "#d32f2f",
                       textAlign: { xs: "center", md: "left" } 
                     }}
                   >
@@ -182,7 +262,7 @@ function AccountSettings() {
                     color="success" 
                     mb={2} 
                     sx={{ 
-                      color: "#2e7d32", // Keep success green, but explicitly set
+                      color: "#2e7d32",
                       textAlign: { xs: "center", md: "left" } 
                     }}
                   >
@@ -221,7 +301,7 @@ function AccountSettings() {
                     <MDTypography 
                       variant="body2" 
                       sx={{ 
-                        color: dragActive ? "#3f51b5" : "#344767", // Dark text, primary on drag
+                        color: dragActive ? "#3f51b5" : "#344767",
                         mb: 1 
                       }}
                     >
@@ -230,7 +310,7 @@ function AccountSettings() {
                     <MDTypography 
                       variant="caption" 
                       sx={{ 
-                        color: "#344767", // Dark text
+                        color: "#344767",
                         display: "block", 
                         mb: 1 
                       }}
@@ -256,13 +336,17 @@ function AccountSettings() {
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
-                          color: "#344767", // Dark text for input
+                          color: "#344767",
                         },
                         "& .MuiInputLabel-root": {
-                          color: "#344767 !important", // Dark label
+                          color: "#344767 !important",
                         },
                         "& .MuiInputLabel-root.Mui-focused": {
-                          color: "#344767 !important", // Dark label when focused
+                          color: "#344767 !important",
+                        },
+                        "& .MuiInputBase-input::placeholder": {
+                          color: "#344767 !important",
+                          opacity: 0.6,
                         },
                       }}
                     />
@@ -278,16 +362,63 @@ function AccountSettings() {
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
-                          color: "#344767", // Dark text for input
+                          color: "#344767",
                         },
                         "& .MuiInputLabel-root": {
-                          color: "#344767 !important", // Dark label
+                          color: "#344767 !important",
                         },
                         "& .MuiInputLabel-root.Mui-focused": {
-                          color: "#344767 !important", // Dark label when focused
+                          color: "#344767 !important",
+                        },
+                        "& .MuiInputBase-input::placeholder": {
+                          color: "#344767 !important",
+                          opacity: 0.6,
                         },
                       }}
                     />
+                  </MDBox>
+                  <MDBox mb={3}>
+                    <MDInput
+                      label="V1 NFT Verification"
+                      value={form.nftMintAddress}
+                      onChange={(e) => setForm({ ...form, nftMintAddress: e.target.value })}
+                      fullWidth
+                      placeholder="Enter NFT mint address (e.g., 7Gyvp22EGuPisfRNZVAN1zj3iDMgE7LqpVSThzBaySaR)"
+                      sx={{
+                        "& .MuiInputBase-input": {
+                          padding: { xs: "10px", md: "12px" },
+                          color: "#344767",
+                        },
+                        "& .MuiInputLabel-root": {
+                          color: "#344767 !important",
+                        },
+                        "& .MuiInputLabel-root.Mui-focused": {
+                          color: "#344767 !important",
+                        },
+                        "& .MuiInputBase-input::placeholder": {
+                          color: "#344767 !important",
+                          opacity: 0.6,
+                        },
+                      }}
+                    />
+                  </MDBox>
+                  <MDBox display="flex" justifyContent="center" mb={3}>
+                    <MDButton 
+                      onClick={handleVerifyNFT}
+                      color="secondary"
+                      variant="gradient"
+                      sx={{ 
+                        padding: { xs: "8px 24px", md: "10px 32px" },
+                        borderRadius: "8px",
+                        transition: "all 0.3s ease",
+                        "&:hover": {
+                          transform: "translateY(-2px)",
+                          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+                        },
+                      }}
+                    >
+                      Verify NFT
+                    </MDButton>
                   </MDBox>
                   <MDBox display="flex" justifyContent="center">
                     <MDButton 
