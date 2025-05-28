@@ -383,7 +383,7 @@ function AccountSettings() {
                       value={form.nftMintAddress}
                       onChange={(e) => setForm({ ...form, nftMintAddress: e.target.value })}
                       fullWidth
-                      placeholder="Enter NFT mint address (e.g., 7Gyvp22EGuPisfRNZVAN1zj3iDMgE7LqpVSThzBaySaR)"
+                      placeholder="Enter NFT mint address (e.g., 7GyvxxxxxySaR)"
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
