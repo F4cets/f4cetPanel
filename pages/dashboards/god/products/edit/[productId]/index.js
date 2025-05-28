@@ -288,6 +288,7 @@ function EditProduct() {
         return;
       }
       const storeData = storeDoc.data();
+      const sellerId = storeData.sellerId;
 
       // Determine productId
       const targetProductId = productId === "new" ? doc(collection(db, "products")).id : productId;
@@ -306,6 +307,58 @@ function EditProduct() {
             return url;
           })
         );
+      }
+
+      // CHANGED: Handle NFT minting for new products
+      let mintedNfts = [];
+      if (productId === "new" && imageUrls.length > 0) {
+        // Upload first image to Google Cloud Storage for NFT metadata
+        const firstImage = images[0];
+        const formData = new FormData();
+        formData.append("image", firstImage);
+        formData.append("storeId", form.storeId);
+        formData.append("productId", targetProductId);
+
+        const uploadResponse = await fetch("https://user.f4cets.market/api/upload-nft-image", {
+          method: "POST",
+          body: formData,
+        });
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(`Failed to upload NFT image: ${errorData.error || uploadResponse.statusText}`);
+        }
+        const { imageUrl, fileExt } = await uploadResponse.json();
+        console.log("EditProduct: NFT image uploaded:", imageUrl);
+
+        // Prepare premintnfts parameters
+        const quantity = inventoryType === "digital"
+          ? parseInt(form.quantity)
+          : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
+        const premintParams = {
+          walletAddress: sellerId, // Use sellerId as walletAddress
+          storeId: form.storeId,
+          productId: targetProductId,
+          quantity,
+          name: form.name,
+          imageUrl,
+          imageExt,
+          type: inventoryType,
+          variants: inventoryType === "rwi" ? inventoryVariants : [],
+          feeTxSignature: `fee-${Math.random().toString(36).substring(2, 10)}`, // Placeholder
+        };
+
+        // Call premintnfts
+        const premintResponse = await fetch("https://premintnfts-232592911911.us-central1.run.app", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(premintParams),
+        });
+        if (!premintResponse.ok) {
+          const errorData = await premintResponse.json();
+          throw new Error(`Failed to mint NFTs: ${errorData.error || premintResponse.statusText}`);
+        }
+        mintedNfts = await premintResponse.json();
+        console.log("EditProduct: Minted NFTs:", mintedNfts);
       }
 
       // Prepare product data
@@ -333,10 +386,24 @@ function EditProduct() {
       // Save or update product
       if (productId === "new") {
         productData.createdAt = serverTimestamp();
-        productData.nftMint = `mint-${Math.random().toString(36).substring(2, 10)}`;
+        // CHANGED: Remove placeholder nftMint, rely on premintnfts
         console.log("EditProduct: Creating new product at products/", targetProductId, ":", productData);
         await setDoc(doc(db, "products", targetProductId), productData);
-        setSuccess("Product created successfully!");
+
+        // CHANGED: Save minted NFTs to Firestore
+        for (const nft of mintedNfts) {
+          await setDoc(doc(db, `products/${targetProductId}/nfts`, nft.mintAddress), {
+            mintAddress: nft.mintAddress,
+            metadataUri: nft.metadataUri,
+            productId: targetProductId,
+            storeId: form.storeId,
+            status: "Ordered",
+            createdAt: serverTimestamp(),
+          });
+          console.log("EditProduct: Saved NFT:", nft.mintAddress);
+        }
+
+        setSuccess("Product created and NFTs minted successfully!");
       } else {
         console.log("EditProduct: Updating product at products/", targetProductId, ":", productData);
         await updateDoc(doc(db, "products", productId), productData);
