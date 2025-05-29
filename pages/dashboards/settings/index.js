@@ -188,6 +188,15 @@ function AccountSettings() {
       return;
     }
 
+    // Check for duplicate NFT
+    const existingNft = (user.profile.nfts || []).find(
+      (nft) => nft.mintAddress === form.nftMintAddress
+    );
+    if (existingNft) {
+      setError("This NFT has already been verified.");
+      return;
+    }
+
     try {
       // Call nftVerify Cloud Run function
       const verifyResponse = await axios.post(
@@ -202,7 +211,7 @@ function AccountSettings() {
       if (verifyResponse.data.success) {
         // Determine NFT type (mock logic, replace with actual API check)
         const nftType = verifyResponse.data.nftType || "V1"; // Mock; update API to return "V1", "V2", or "V3"
-        const sellerFee = nftType === "V1" ? 0.02 : nftType === "V2" ? 0.032 : 0.04; // 2%, 3.2%, 4%
+        const sellerDiscount = nftType === "V1" ? 0.50 : nftType === "V2" ? 0.20 : 0.00; // 50%, 20%, 0%
         const buyerDiscount = 0.10; // 10% for all types
         const leasable = nftType !== "V3"; // V1/V2 leasable, V3 not
 
@@ -214,7 +223,7 @@ function AccountSettings() {
             type: nftType,
             verified: true,
             verifiedAt: new Date().toISOString(),
-            sellerFee,
+            sellerDiscount,
             buyerDiscount,
             leasable,
           },
@@ -257,7 +266,7 @@ function AccountSettings() {
     columns: [
       { Header: "Mint Address", accessor: "mintAddress", width: "20%" },
       { Header: "Type", accessor: "type", width: "10%" },
-      { Header: "Seller Fee", accessor: "sellerFee", width: "15%" },
+      { Header: "Seller Discount", accessor: "sellerDiscount", width: "15%" },
       { Header: "Buyer Discount", accessor: "buyerDiscount", width: "15%" },
       { Header: "Leasable", accessor: "leasable", width: "10%" },
       { Header: "Verified At", accessor: "verifiedAt", width: "20%" },
@@ -270,7 +279,7 @@ function AccountSettings() {
         </MDTypography>
       ),
       type: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{nft.type}</MDTypography>,
-      sellerFee: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{(nft.sellerFee * 100).toFixed(1)}%</MDTypography>,
+      sellerDiscount: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{(nft.sellerDiscount * 100).toFixed(1)}%</MDTypography>,
       buyerDiscount: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{(nft.buyerDiscount * 100).toFixed(1)}%</MDTypography>,
       leasable: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{nft.leasable ? "Yes" : "No"}</MDTypography>,
       verifiedAt: (

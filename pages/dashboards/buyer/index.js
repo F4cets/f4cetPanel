@@ -379,7 +379,7 @@ function BuyerDashboard() {
                         maxWidth: { xs: "300px", sm: "auto" },
                       }}
                     >
-                      Lease
+                      Lease NFTs
                     </MDButton>
                   </motion.div>
                 </MDBox>
