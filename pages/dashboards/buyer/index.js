@@ -59,11 +59,11 @@ function BuyerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(null);
 
-  // Debug user.profile.nftVerified
+  // Debug user.profile.nfts
   useEffect(() => {
     console.log('User Data:', user);
     console.log('Profile:', user?.profile);
-    console.log('nftVerified:', user?.profile?.nftVerified);
+    console.log('NFTs:', user?.profile?.nfts);
   }, [user]);
 
   // Handle navigation to the sell-on-f4cet page
@@ -305,6 +305,10 @@ function BuyerDashboard() {
     })),
   };
 
+  // Check for verified V1 and V2 NFTs
+  const hasV1Verified = user?.profile?.nfts?.some(nft => nft.type === "V1" && nft.verified);
+  const hasV2Verified = user?.profile?.nfts?.some(nft => nft.type === "V2" && nft.verified);
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
@@ -321,22 +325,40 @@ function BuyerDashboard() {
               {user?.walletId ? user.walletId.slice(0, 6) + "..." + user.walletId.slice(-4) : "User"} -- User Dashboard
             </MDTypography>
             <MDBox display="flex" alignItems="center" gap={2}>
-              {user?.profile?.nftVerified && (
-                <>
-                  <MDBox display="flex" flexDirection="column" alignItems="center">
-                    <Avatar
-                      src="/assets/images/v1.png"
-                      sx={{
-                        width: { xs: 40, sm: 48 },
-                        height: { xs: 40, sm: 48 },
-                        border: "2px solid #fff",
-                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-                      }}
-                    />
-                    <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
-                      V1 Verified
-                    </MDTypography>
-                  </MDBox>
+              {(hasV1Verified || hasV2Verified) && (
+                <MDBox display="flex" alignItems="center" gap={2}>
+                  {hasV1Verified && (
+                    <MDBox display="flex" flexDirection="column" alignItems="center">
+                      <Avatar
+                        src="/assets/images/v1.png"
+                        sx={{
+                          width: { xs: 40, sm: 48 },
+                          height: { xs: 40, sm: 48 },
+                          border: "2px solid #fff",
+                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                        }}
+                      />
+                      <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
+                        V1 Verified
+                      </MDTypography>
+                    </MDBox>
+                  )}
+                  {hasV2Verified && (
+                    <MDBox display="flex" flexDirection="column" alignItems="center">
+                      <Avatar
+                        src="/assets/images/v2.png"
+                        sx={{
+                          width: { xs: 40, sm: 48 },
+                          height: { xs: 40, sm: 48 },
+                          border: "2px solid #fff",
+                          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                        }}
+                      />
+                      <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
+                        V2 Verified
+                      </MDTypography>
+                    </MDBox>
+                  )}
                   <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
                     <MDButton
                       onClick={handleLease}
@@ -357,10 +379,10 @@ function BuyerDashboard() {
                         maxWidth: { xs: "300px", sm: "auto" },
                       }}
                     >
-                      Lease NFT
+                      Lease
                     </MDButton>
                   </motion.div>
-                </>
+                </MDBox>
               )}
               {user?.role !== "seller" && (
                 <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
