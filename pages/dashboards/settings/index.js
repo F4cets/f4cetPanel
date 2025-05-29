@@ -26,6 +26,12 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Divider from "@mui/material/Divider";
 import Avatar from "@mui/material/Avatar";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -60,7 +66,7 @@ function AccountSettings() {
       setForm({
         name: user.profile.name || "",
         email: user.profile.email || "",
-        nftMintAddress: user.profile.nftMintAddress || "",
+        nftMintAddress: "",
       });
       setPreview(user.profile.avatar || "/assets/images/default-avatar.png");
     }
@@ -120,8 +126,7 @@ function AccountSettings() {
             name: form.name,
             email: form.email,
             avatar: avatarUrl,
-            nftMintAddress: form.nftMintAddress,
-            nftVerified: user.profile.nftVerified || false,
+            nfts: user.profile.nfts || [], // Preserve existing NFTs
           },
         },
         { merge: true }
@@ -134,8 +139,7 @@ function AccountSettings() {
           name: form.name,
           email: form.email,
           avatar: avatarUrl,
-          nftMintAddress: form.nftMintAddress,
-          nftVerified: user.profile.nftVerified || false,
+          nfts: user.profile.nfts || [],
         },
       });
 
@@ -168,30 +172,49 @@ function AccountSettings() {
       );
 
       if (verifyResponse.data.success) {
-        // Update user context and Firebase
-        setUser({
-          ...user,
-          profile: {
-            ...user.profile,
-            nftMintAddress: form.nftMintAddress,
-            nftVerified: true,
-            nftVerifiedAt: new Date().toISOString(),
-          },
-        });
+        // Determine NFT type (mock logic, replace with actual API check)
+        const nftType = verifyResponse.data.nftType || "V1"; // Mock; update API to return "V1", "V2", or "V3"
+        const sellerFee = nftType === "V1" ? 0.02 : nftType === "V2" ? 0.032 : 0.04; // 2%, 3.2%, 4%
+        const buyerDiscount = 0.05; // 5% for all types
+        const leasable = nftType !== "V3"; // V1/V2 leasable, V3 not
 
+        // Update nfts array
+        const updatedNfts = [
+          ...(user.profile.nfts || []),
+          {
+            mintAddress: form.nftMintAddress,
+            type: nftType,
+            verified: true,
+            verifiedAt: new Date().toISOString(),
+            sellerFee,
+            buyerDiscount,
+            leasable,
+          },
+        ];
+
+        // Update Firestore
         await setDoc(
           doc(db, "users", user.walletId),
           {
             profile: {
-              nftMintAddress: form.nftMintAddress,
-              nftVerified: true,
-              nftVerifiedAt: serverTimestamp(),
+              nfts: updatedNfts,
             },
           },
           { merge: true }
         );
 
-        setSuccess("NFT ownership verified successfully!");
+        // Update user context
+        setUser({
+          ...user,
+          profile: {
+            ...user.profile,
+            nfts: updatedNfts,
+          },
+        });
+
+        // Clear input
+        setForm({ ...form, nftMintAddress: "" });
+        setSuccess(`NFT (${nftType}) verified successfully!`);
       } else {
         setError(verifyResponse.data.error || "Failed to verify NFT ownership.");
       }
@@ -210,7 +233,7 @@ function AccountSettings() {
       <DashboardNavbar />
       <MDBox py={{ xs: 2, md: 3 }}>
         <Grid container spacing={3} justifyContent="center">
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={8}>
             <Card sx={{ 
               background: "linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)", 
               borderRadius: "16px", 
@@ -365,11 +388,11 @@ function AccountSettings() {
                   </MDBox>
                   <MDBox mb={3}>
                     <MDInput
-                      label="V1 NFT Verification"
+                      label="NFT Mint Address (V1, V2, or V3)"
                       value={form.nftMintAddress}
                       onChange={(e) => setForm({ ...form, nftMintAddress: e.target.value })}
                       fullWidth
-                      placeholder="Enter NFT mint address (e.g., 7Gyvp22EGuPisfRNZVAN1zj3iDMgE7LqpVSThzBaySaR)"
+                      placeholder="Enter NFT mint address (e.g., 7GyvpxxxxxBaySaR)"
                       sx={{
                         "& .MuiInputBase-input": {
                           padding: { xs: "10px", md: "12px" },
@@ -405,6 +428,60 @@ function AccountSettings() {
                     >
                       Verify NFT
                     </MDButton>
+                  </MDBox>
+                  <Divider sx={{ mb: 3, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
+                  <MDBox mb={3}>
+                    <MDTypography 
+                      variant="h6" 
+                      sx={{ 
+                        color: "#344767", 
+                        mb: 2,
+                        textAlign: { xs: "center", md: "left" }
+                      }}
+                    >
+                      Verified NFTs
+                    </MDTypography>
+                    <TableContainer sx={{ mx: { md: "auto" }, maxWidth: { xs: "100%", md: "100%" }, overflowX: "auto" }}>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Mint Address</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Type</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Seller Fee</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Buyer Discount</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Leasable</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Verified At</TableCell>
+                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Status</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {(user.profile.nfts || []).map((nft, index) => (
+                            <TableRow key={index}>
+                              <TableCell sx={{ color: "#344767" }}>
+                                {nft.mintAddress.slice(0, 6) + "..." + nft.mintAddress.slice(-4)}
+                              </TableCell>
+                              <TableCell sx={{ color: "#344767" }}>{nft.type}</TableCell>
+                              <TableCell sx={{ color: "#344767" }}>{(nft.sellerFee * 100).toFixed(1)}%</TableCell>
+                              <TableCell sx={{ color: "#344767" }}>{(nft.buyerDiscount * 100).toFixed(1)}%</TableCell>
+                              <TableCell sx={{ color: "#344767" }}>{nft.leasable ? "Yes" : "No"}</TableCell>
+                              <TableCell sx={{ color: "#344767" }}>
+                                {new Date(nft.verifiedAt).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell sx={{ color: "#344767" }}>
+                                {nft.verified ? "Verified" : "Pending"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          {(!user.profile.nfts || user.profile.nfts.length === 0) && (
+                            <TableRow>
+                              <TableCell colSpan={7} sx={{ textAlign: "center", color: "#ffffff" }}>
+                                No verified NFTs
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </MDBox>
                   <MDBox display="flex" justifyContent="center">
                     <MDButton 

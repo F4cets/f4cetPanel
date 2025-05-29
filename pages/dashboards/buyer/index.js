@@ -71,6 +71,11 @@ function BuyerDashboard() {
     router.push("/dashboards/buyer/sell-on-f4cet");
   };
 
+  // Handle navigation to the lease page
+  const handleLease = () => {
+    router.push("/dashboards/buyer/lease");
+  };
+
   // Redirect to home if no user or walletId
   useEffect(() => {
     if (!user || !user.walletId) {
@@ -181,7 +186,7 @@ function BuyerDashboard() {
     }
   }, [user, router]);
 
-  // Animation variants for the button
+  // Animation variants for buttons
   const buttonVariants = {
     rest: {
       scale: 1,
@@ -317,20 +322,45 @@ function BuyerDashboard() {
             </MDTypography>
             <MDBox display="flex" alignItems="center" gap={2}>
               {user?.profile?.nftVerified && (
-                <MDBox display="flex" flexDirection="column" alignItems="center">
-                  <Avatar
-                    src="/assets/images/v1.png"
-                    sx={{
-                      width: { xs: 40, sm: 48 },
-                      height: { xs: 40, sm: 48 },
-                      border: "2px solid #fff",
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-                    }}
-                  />
-                  <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
-                    V1 Verified
-                  </MDTypography>
-                </MDBox>
+                <>
+                  <MDBox display="flex" flexDirection="column" alignItems="center">
+                    <Avatar
+                      src="/assets/images/v1.png"
+                      sx={{
+                        width: { xs: 40, sm: 48 },
+                        height: { xs: 40, sm: 48 },
+                        border: "2px solid #fff",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                      }}
+                    />
+                    <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
+                      V1 Verified
+                    </MDTypography>
+                  </MDBox>
+                  <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
+                    <MDButton
+                      onClick={handleLease}
+                      variant="gradient"
+                      color="info"
+                      size="large"
+                      sx={{
+                        px: 4,
+                        py: 1.5,
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                        background: "linear-gradient(45deg, #6FCB9F 30%, #8FD3B2 90%)",
+                        "&:hover": {
+                          background: "linear-gradient(45deg, #5DBA8F 30%, #7AC4A2 90%)",
+                        },
+                        width: { xs: "100%", sm: "auto" },
+                        maxWidth: { xs: "300px", sm: "auto" },
+                      }}
+                    >
+                      Lease NFT
+                    </MDButton>
+                  </motion.div>
+                </>
               )}
               {user?.role !== "seller" && (
                 <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
