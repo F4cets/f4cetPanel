@@ -14,7 +14,7 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -67,6 +67,38 @@ function AccountSettings() {
       setPreview(user.profile.avatar || "/assets/images/default-avatar.png");
     }
   }, [user, router]);
+
+  // Fetch user profile from Firestore on page load
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user || !user.walletId) return;
+
+      try {
+        const userDocRef = doc(db, "users", user.walletId);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const profile = userDoc.data().profile || {};
+          setUser({
+            ...user,
+            profile: {
+              ...user.profile,
+              nfts: profile.nfts || [],
+              name: profile.name || "",
+              email: profile.email || "",
+              avatar: profile.avatar || "/assets/images/default-avatar.png",
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+        setError("Failed to load user profile.");
+      }
+    };
+
+    if (user?.walletId) {
+      fetchUserProfile();
+    }
+  }, [user?.walletId, setUser]);
 
   // Handle file selection (click or drop)
   const handleFileChange = (file) => {
@@ -171,7 +203,7 @@ function AccountSettings() {
         // Determine NFT type (mock logic, replace with actual API check)
         const nftType = verifyResponse.data.nftType || "V1"; // Mock; update API to return "V1", "V2", or "V3"
         const sellerFee = nftType === "V1" ? 0.02 : nftType === "V2" ? 0.032 : 0.04; // 2%, 3.2%, 4%
-        const buyerDiscount = 0.05; // 5% for all types
+        const buyerDiscount = 0.10; // 10% for all types
         const leasable = nftType !== "V3"; // V1/V2 leasable, V3 not
 
         // Update nfts array
