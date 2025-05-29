@@ -40,6 +40,7 @@ import DataTable from "/examples/Tables/DataTable";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Divider from "@mui/material/Divider";
+import Avatar from "@mui/material/Avatar";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -57,6 +58,13 @@ function BuyerDashboard() {
   const [menu, setMenu] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(null);
+
+  // Debug user.profile.nftVerified
+  useEffect(() => {
+    console.log('User Data:', user);
+    console.log('Profile:', user?.profile);
+    console.log('nftVerified:', user?.profile?.nftVerified);
+  }, [user]);
 
   // Handle navigation to the sell-on-f4cet page
   const handleSellOnF4cet = () => {
@@ -99,7 +107,6 @@ function BuyerDashboard() {
         setAffiliateClicksLast30Days(recentClicks.length);
 
         // Affiliate Activity
-        // CHANGED: Sort recentClicks by timestamp (newest first)
         recentClicks.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         const affiliateActivityData = recentClicks.map(click => ({
           id: click.id,
@@ -107,13 +114,13 @@ function BuyerDashboard() {
           sortAffiliateName: click.affiliateName || "Unknown",
           date: click.timestamp.toISOString().split("T")[0],
           clicks: 1,
-          purchases: 0, // Placeholder (WNDO not implemented)
-          pendingWndo: 0, // Placeholder (WNDO not implemented)
+          purchases: 0,
+          pendingWndo: 0,
           status: "clicked",
         }));
         console.log("Affiliate activity before sorting:", affiliateActivityData);
         setAffiliateActivity(affiliateActivityData);
-        setPendingWndoRewards(0); // Placeholder until WNDO implemented
+        setPendingWndoRewards(0);
 
         // Marketplace Purchases
         const transactionsQuery = query(
@@ -125,7 +132,7 @@ function BuyerDashboard() {
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt
-            ? new Date(doc.data().createdAt) // Handle string createdAt
+            ? new Date(doc.data().createdAt)
             : new Date(),
         }));
         console.log("Marketplace transactions:", transactions);
@@ -142,7 +149,6 @@ function BuyerDashboard() {
               purchaseAmount += transaction.amount || 0;
             }
           }
-          // Fetch product names for each productId
           const productNames = await Promise.all(
             (transaction.productIds || []).map(async (productId) => {
               const productDocRef = doc(db, "products", productId);
@@ -309,31 +315,49 @@ function BuyerDashboard() {
             <MDTypography variant="h4" color="dark">
               {user?.walletId ? user.walletId.slice(0, 6) + "..." + user.walletId.slice(-4) : "User"} -- User Dashboard
             </MDTypography>
-            {user?.role !== "seller" && (
-              <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
-                <MDButton
-                  onClick={handleSellOnF4cet}
-                  variant="gradient"
-                  color="info"
-                  size="large"
-                  sx={{
-                    px: 4,
-                    py: 1.5,
-                    fontWeight: "bold",
-                    borderRadius: "12px",
-                    boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                    background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                    "&:hover": {
-                      background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
-                    },
-                    width: { xs: "100%", sm: "auto" },
-                    maxWidth: { xs: "300px", sm: "auto" },
-                  }}
-                >
-                  Sell on F4cet
-                </MDButton>
-              </motion.div>
-            )}
+            <MDBox display="flex" alignItems="center" gap={2}>
+              {user?.profile?.nftVerified && (
+                <MDBox display="flex" flexDirection="column" alignItems="center">
+                  <Avatar
+                    src="/assets/images/v1.png"
+                    sx={{
+                      width: { xs: 40, sm: 48 },
+                      height: { xs: 40, sm: 48 },
+                      border: "2px solid #fff",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+                    }}
+                  />
+                  <MDTypography variant="caption" color="text" fontWeight="medium" mt={0.5}>
+                    V1 Verified
+                  </MDTypography>
+                </MDBox>
+              )}
+              {user?.role !== "seller" && (
+                <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
+                  <MDButton
+                    onClick={handleSellOnF4cet}
+                    variant="gradient"
+                    color="info"
+                    size="large"
+                    sx={{
+                      px: 4,
+                      py: 1.5,
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
+                      background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
+                      "&:hover": {
+                        background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)",
+                      },
+                      width: { xs: "100%", sm: "auto" },
+                      maxWidth: { xs: "300px", sm: "auto" },
+                    }}
+                  >
+                    Sell on F4cet
+                  </MDButton>
+                </motion.div>
+              )}
+            </MDBox>
           </MDBox>
         </MDBox>
 

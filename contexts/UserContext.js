@@ -10,14 +10,14 @@ import { createContext, useContext, useState, useEffect } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "/lib/firebase";
-import { useRouter } from "next/router"; // CHANGED: Added useRouter
+import { useRouter } from "next/router";
 
 const UserContext = createContext(null);
 
 export function UserContextProvider({ children }) {
   const { publicKey, connected } = useWallet();
   const [user, setUser] = useState(null);
-  const router = useRouter(); // CHANGED: Added router
+  const router = useRouter();
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -29,26 +29,48 @@ export function UserContextProvider({ children }) {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const data = userDoc.data();
+            // Fetch the profile map directly
+            const profileData = data.profile || {};
             setUser({
               walletId,
               role: data.role || "buyer",
               profile: {
-                name: data.name || "User",
-                avatar: data.avatar || "/assets/images/default-avatar.png",
-                email: data.email || "",
+                name: profileData.name || "User",
+                avatar: profileData.avatar || "/assets/images/default-avatar.png",
+                email: profileData.email || "",
+                nftVerified: profileData.nftVerified || false,
+                nftMintAddress: profileData.nftMintAddress || "",
+                nftVerifiedAt: profileData.nftVerifiedAt || null,
               },
-              plan: data.plan || {}, // CHANGED: Added plan data
+              plan: data.plan || {},
             });
-            console.log("UserContext: User data fetched:", { walletId, role: data.role, plan: data.plan });
+            console.log("UserContext: User data fetched:", {
+              walletId,
+              role: data.role,
+              profile: {
+                name: profileData.name,
+                avatar: profileData.avatar,
+                email: profileData.email,
+                nftVerified: profileData.nftVerified,
+                nftMintAddress: profileData.nftMintAddress,
+                nftVerifiedAt: profileData.nftVerifiedAt,
+              },
+              plan: data.plan,
+            });
           } else {
             console.log("UserContext: No user found, creating new user with role: buyer");
-            // Create a new user document if none exists
             const newUser = {
               walletId,
               role: "buyer",
+              profile: {
+                name: "User",
+                avatar: "/assets/images/default-avatar.png",
+                email: "",
+                nftVerified: false,
+                nftMintAddress: "",
+                nftVerifiedAt: null,
+              },
               email: "",
-              name: "User",
-              avatar: "/assets/images/default-avatar.png",
               avatarUrl: "",
               createdAt: new Date(),
               updatedAt: new Date(),
@@ -57,7 +79,7 @@ export function UserContextProvider({ children }) {
               affiliateClicks: [],
               purchases: [],
               rewards: 0,
-              plan: {}, // CHANGED: Added empty plan
+              plan: {},
             };
             await setDoc(userDocRef, newUser);
             setUser({
@@ -67,6 +89,9 @@ export function UserContextProvider({ children }) {
                 name: "User",
                 avatar: "/assets/images/default-avatar.png",
                 email: "",
+                nftVerified: false,
+                nftMintAddress: "",
+                nftVerifiedAt: null,
               },
               plan: {},
             });
@@ -84,7 +109,7 @@ export function UserContextProvider({ children }) {
     fetchUser();
   }, [connected, publicKey]);
 
-  // CHANGED: Redirect sellers with expired plans
+  // Redirect sellers with expired plans
   useEffect(() => {
     if (user?.role === "seller" && user?.plan?.expiry) {
       const expiryDate = new Date(user.plan.expiry);
