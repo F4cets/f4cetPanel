@@ -26,12 +26,7 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Divider from "@mui/material/Divider";
 import Avatar from "@mui/material/Avatar";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import Icon from "@mui/material/Icon";
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -43,6 +38,7 @@ import MDButton from "/components/MDButton";
 import DashboardLayout from "/examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "/examples/Navbars/DashboardNavbar";
 import Footer from "/examples/Footer";
+import DataTable from "/examples/Tables/DataTable";
 
 function AccountSettings() {
   const { user, setUser } = useUser();
@@ -222,6 +218,51 @@ function AccountSettings() {
       console.error("Error verifying NFT:", err);
       setError("Failed to verify NFT: " + (err.response?.data?.error || err.message));
     }
+  };
+
+  // Table data for verified NFTs
+  const tableData = {
+    columns: [
+      { Header: "Mint Address", accessor: "mintAddress", width: "20%" },
+      { Header: "Type", accessor: "type", width: "10%" },
+      { Header: "Seller Fee", accessor: "sellerFee", width: "15%" },
+      { Header: "Buyer Discount", accessor: "buyerDiscount", width: "15%" },
+      { Header: "Leasable", accessor: "leasable", width: "10%" },
+      { Header: "Verified At", accessor: "verifiedAt", width: "20%" },
+      { Header: "Status", accessor: "status", width: "10%" },
+    ],
+    rows: (user.profile.nfts || []).map((nft) => ({
+      mintAddress: (
+        <MDTypography variant="button" sx={{ color: "#ffffff" }}>
+          {nft.mintAddress.slice(0, 6) + "..." + nft.mintAddress.slice(-4)}
+        </MDTypography>
+      ),
+      type: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{nft.type}</MDTypography>,
+      sellerFee: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{(nft.sellerFee * 100).toFixed(1)}%</MDTypography>,
+      buyerDiscount: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{(nft.buyerDiscount * 100).toFixed(1)}%</MDTypography>,
+      leasable: <MDTypography variant="button" sx={{ color: "#ffffff" }}>{nft.leasable ? "Yes" : "No"}</MDTypography>,
+      verifiedAt: (
+        <MDTypography variant="button" sx={{ color: "#ffffff" }}>
+          {new Date(nft.verifiedAt).toLocaleDateString()}
+        </MDTypography>
+      ),
+      status: (
+        <MDBox display="flex" alignItems="center">
+          <Icon
+            fontSize="small"
+            sx={{
+              color: nft.verified ? "success.main" : "info.main",
+              mr: 1,
+            }}
+          >
+            {nft.verified ? "check_circle" : "pending"}
+          </Icon>
+          <MDTypography variant="button" sx={{ color: "#ffffff" }}>
+            {nft.verified ? "Verified" : "Pending"}
+          </MDTypography>
+        </MDBox>
+      ),
+    })),
   };
 
   if (!user || !user.walletId) {
@@ -441,47 +482,34 @@ function AccountSettings() {
                     >
                       Verified NFTs
                     </MDTypography>
-                    <TableContainer sx={{ mx: { md: "auto" }, maxWidth: { xs: "100%", md: "100%" }, overflowX: "auto" }}>
-                      <Table>
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Mint Address</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Type</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Seller Fee</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Buyer Discount</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Leasable</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Verified At</TableCell>
-                            <TableCell sx={{ color: "#ffffff", fontWeight: 600 }}>Status</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {(user.profile.nfts || []).map((nft, index) => (
-                            <TableRow key={index}>
-                              <TableCell sx={{ color: "#344767" }}>
-                                {nft.mintAddress.slice(0, 6) + "..." + nft.mintAddress.slice(-4)}
-                              </TableCell>
-                              <TableCell sx={{ color: "#344767" }}>{nft.type}</TableCell>
-                              <TableCell sx={{ color: "#344767" }}>{(nft.sellerFee * 100).toFixed(1)}%</TableCell>
-                              <TableCell sx={{ color: "#344767" }}>{(nft.buyerDiscount * 100).toFixed(1)}%</TableCell>
-                              <TableCell sx={{ color: "#344767" }}>{nft.leasable ? "Yes" : "No"}</TableCell>
-                              <TableCell sx={{ color: "#344767" }}>
-                                {new Date(nft.verifiedAt).toLocaleDateString()}
-                              </TableCell>
-                              <TableCell sx={{ color: "#344767" }}>
-                                {nft.verified ? "Verified" : "Pending"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          {(!user.profile.nfts || user.profile.nfts.length === 0) && (
-                            <TableRow>
-                              <TableCell colSpan={7} sx={{ textAlign: "center", color: "#ffffff" }}>
-                                No verified NFTs
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
+                    <Card sx={{ background: "transparent", boxShadow: "none" }}>
+                      <DataTable
+                        table={tableData}
+                        entriesPerPage={{ default: user.profile.nfts?.length || 100 }}
+                        canSearch={false}
+                        canSort={true}
+                        sx={{
+                          "& th": {
+                            paddingRight: "20px !important",
+                            paddingLeft: "20px !important",
+                            color: "#ffffff !important",
+                          },
+                          "& td": {
+                            color: "#ffffff !important",
+                          },
+                          "& .MuiTablePagination-root": {
+                            display: "none !important",
+                          },
+                        }}
+                      />
+                      {(!user.profile.nfts || user.profile.nfts.length === 0) && (
+                        <MDBox textAlign="center" py={2}>
+                          <MDTypography variant="body2" sx={{ color: "#ffffff" }}>
+                            No verified NFTs
+                          </MDTypography>
+                        </MDBox>
+                      )}
+                    </Card>
                   </MDBox>
                   <MDBox display="flex" justifyContent="center">
                     <MDButton 
