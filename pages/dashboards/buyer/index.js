@@ -46,7 +46,7 @@ import Avatar from "@mui/material/Avatar";
 import Icon from "@mui/material/Icon";
 
 function BuyerDashboard() {
-  const { user } = useUser();
+  const { user, setUser } = useUser();
   const router = useRouter();
   const [affiliateClicksLast30Days, setAffiliateClicksLast30Days] = useState(0);
   const [pendingWndoRewards, setPendingWndoRewards] = useState(0);
@@ -55,6 +55,7 @@ function BuyerDashboard() {
   const [affiliateActivity, setAffiliateActivity] = useState([]);
   const [marketplaceOrders, setMarketplaceOrders] = useState([]);
   const [isFetching, setIsFetching] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [menu, setMenu] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState(null);
@@ -65,6 +66,44 @@ function BuyerDashboard() {
     console.log('Profile:', user?.profile);
     console.log('NFTs:', user?.profile?.nfts);
   }, [user]);
+
+  // Fetch user profile from Firestore on wallet connection
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user || !user.walletId) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const userDocRef = doc(db, "users", user.walletId);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const profile = userDoc.data().profile || {};
+          setUser({
+            ...user,
+            profile: {
+              ...user.profile,
+              nfts: profile.nfts || [],
+              name: profile.name || "",
+              email: profile.email || "",
+              avatar: profile.avatar || "/assets/images/default-avatar.png",
+            },
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user?.walletId) {
+      fetchUserProfile();
+    } else {
+      setIsLoading(false);
+    }
+  }, [user?.walletId, setUser]);
 
   // Handle navigation to the sell-on-f4cet page
   const handleSellOnF4cet = () => {
@@ -181,10 +220,10 @@ function BuyerDashboard() {
       }
     };
 
-    if (user?.walletId) {
+    if (user?.walletId && !isLoading) {
       fetchBuyerData();
     }
-  }, [user, router]);
+  }, [user, router, isLoading]);
 
   // Animation variants for buttons
   const buttonVariants = {
@@ -308,6 +347,10 @@ function BuyerDashboard() {
   // Check for verified V1 and V2 NFTs
   const hasV1Verified = user?.profile?.nfts?.some(nft => nft.type === "V1" && nft.verified);
   const hasV2Verified = user?.profile?.nfts?.some(nft => nft.type === "V2" && nft.verified);
+
+  if (isLoading) {
+    return null; // Or add a loading spinner
+  }
 
   return (
     <DashboardLayout>
