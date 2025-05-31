@@ -55,6 +55,12 @@ const routes = () => [
         route: "/dashboards/buyer/sell-on-f4cet",
         roles: ["buyer"],
       },
+      {
+        name: "Sell on F4cet",
+        key: "lease-nfts",
+        route: "/dashboards/buyer/lease",
+        roles: ["buyer", "seller"],
+      },
     ],
   },
   {
@@ -112,6 +118,12 @@ const routes = () => [
         route: "/dashboards/seller/sales/details/[salesId]",
         roles: ["seller"],
       },
+      {
+        name: "Lease",
+        key: "lease",
+        route: "/dashboards/seller/lease",
+        roles: ["seller"],
+      },
     ],
   },
   {
@@ -159,6 +171,7 @@ const routes = () => [
     noCollapse: true,
     roles: ["seller"],
   },
+
   { type: "title", title: "Admin", key: "title-admin", roles: ["god"] },
   {
     type: "collapse",

@@ -40,7 +40,6 @@ import DataTable from "/examples/Tables/DataTable";
 // @mui icons
 import Icon from "@mui/material/Icon";
 
-// CHANGED: Add CSS keyframes for flashing animation
 const flashingStyle = `
   @keyframes flash {
     0%, 100% { opacity: 1; }
@@ -63,10 +62,9 @@ function SellerDashboard() {
   const [isFetching, setIsFetching] = useState(false);
   const [expiryTime, setExpiryTime] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const hasFetched = useRef(false);
-  // CHANGED: Add loading state for user check
   const [isCheckingPlan, setIsCheckingPlan] = useState(true);
 
-  // CHANGED: Enhanced redirect to subscription page if plan expired
+  // Redirect to subscription page if plan expired
   useEffect(() => {
     if (!user || !user.walletId) {
       router.replace("/");
@@ -80,7 +78,7 @@ function SellerDashboard() {
         router.replace("/dashboards/seller/subscription");
       }
     }
-    setIsCheckingPlan(false); // CHANGED: Mark check complete
+    setIsCheckingPlan(false);
   }, [user, router]);
 
   // Calculate and update countdown timer
@@ -105,8 +103,8 @@ function SellerDashboard() {
       setExpiryTime({ days, hours, minutes, seconds });
     };
 
-    calculateExpiryTime(); // Initial calculation
-    const interval = setInterval(calculateExpiryTime, 1000); // Update every second
+    calculateExpiryTime();
+    const interval = setInterval(calculateExpiryTime, 1000);
 
     return () => clearInterval(interval);
   }, [user?.plan?.expiry]);
@@ -122,10 +120,8 @@ function SellerDashboard() {
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
       try {
-        // Fetch current SOL price once
         const solPrice = await fetchSolPrice();
 
-        // Fetch user data
         const userDocRef = doc(db, "users", walletId);
         const userDoc = await getDoc(userDocRef);
         if (!userDoc.exists()) return;
@@ -133,12 +129,10 @@ function SellerDashboard() {
         const userData = userDoc.data();
         const storeIds = userData.storeIds || [];
 
-        // Update user context with plan.expiry
         if (userData.plan?.expiry) {
-          user.plan = userData.plan; // Ensure user.plan.expiry is available for countdown
+          user.plan = userData.plan;
         }
 
-        // Fetch transactions for the seller's stores
         let pendingSalesData = [];
         let itemsShippedData = [];
         let pendingEscrowData = [];
@@ -162,7 +156,6 @@ function SellerDashboard() {
             const txDate = txData.createdAt.toDate ? txData.createdAt.toDate() : new Date();
             const productIds = txData.productIds || [];
 
-            // Fetch product names
             const productNames = [];
             for (const productId of productIds) {
               const productDocRef = doc(db, "products", productId);
@@ -172,7 +165,6 @@ function SellerDashboard() {
               }
             }
 
-            // Calculate net amount (minus 4% F4cet fee)
             const netAmount = txData.amount * 0.96;
 
             const txEntry = {
@@ -188,7 +180,6 @@ function SellerDashboard() {
               currency: txData.currency || "USDC",
             };
 
-            // Categorize transactions
             if (txData.shippingStatus === "Pending") {
               pendingSalesData.push(txEntry);
               if (txDate >= thirtyDaysAgo) {
@@ -226,7 +217,6 @@ function SellerDashboard() {
           }
         }
 
-        // Update state
         setPendingSales(pendingSalesData);
         setItemsShipped(itemsShippedData);
         setPendingEscrow(pendingEscrowData);
@@ -353,12 +343,8 @@ function SellerDashboard() {
     })),
   };
 
-  // Navigation Handlers
-  const handleCreateInventory = () => router.push("/dashboards/seller/createinv");
-
-  // CHANGED: Prevent rendering until plan check completes
   if (isCheckingPlan || !user || !user.walletId) {
-    return null; // Or a loading spinner
+    return null;
   }
 
   const walletId = user.walletId;
@@ -440,7 +426,7 @@ function SellerDashboard() {
               )}
               <motion.div variants={buttonVariants} initial="rest" whileHover="hover">
                 <MDButton
-                  onClick={handleCreateInventory}
+                  onClick={() => router.push("/dashboards/seller/lease")}
                   variant="gradient"
                   color="info"
                   size="medium"
@@ -451,16 +437,25 @@ function SellerDashboard() {
                     fontWeight: "bold",
                     borderRadius: "8px",
                     boxShadow: "0 4px 15px rgba(0, 0, 0, 0.2)",
-                    background: "linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)",
-                    "&:hover": { background: "linear-gradient(45deg, #1976D2 30%, #1E88E5 90%)" },
+                    background: "linear-gradient(45deg, #6FCB9F 30%, #8FD3B2 90%)",
+                    "&:hover": {
+                      background: "linear-gradient(45deg, #5DBA8F 30%, #7AC4A2 90%)",
+                    },
                     width: { xs: "100%", sm: "auto" },
                     maxWidth: { xs: "300px", sm: "auto" },
                     whiteSpace: "nowrap",
                   }}
                 >
-                  Create Inventory
+                  Lease NFTs
                 </MDButton>
               </motion.div>
+              <MDTypography
+                variant="caption"
+                color="text"
+                sx={{ fontSize: { xs: "0.65rem", sm: "0.75rem" }, mt: { xs: 1, sm: 0 } }}
+              >
+                Up to 50% off seller fees with V1/V2 NFTs
+              </MDTypography>
             </MDBox>
           </MDBox>
         </MDBox>
