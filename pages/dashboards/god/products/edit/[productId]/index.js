@@ -14,12 +14,9 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, setDoc, collection, serverTimestamp, getDocs, query, where, deleteDoc } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage";
+import { doc, getDoc, updateDoc, setDoc, collection, serverTimestamp, getDocs, query, where } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
-
-// Google Cloud Storage
-import { Storage } from '@google-cloud/storage';
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -130,8 +127,8 @@ function EditProduct() {
         if (productId !== "new") {
           const productDoc = await getDoc(doc(db, "products", productId));
           if (!productDoc.exists()) {
-            console.log("EditProduct: No product found, redirecting to products.");
-            router.replace("/dashboards/god/products");
+            console.log("EditProduct: No product found, redirecting to products");
+            router.push("/dashboards/god/products");
             return;
           }
           const productData = productDoc.data();
@@ -160,10 +157,10 @@ function EditProduct() {
       }
     };
     checkRoleAndData();
-  }, [productId, router, user]);
+  }, [user, router, productId]);
 
   // Handle file selection
-  const handleFileSelect = (files) => {
+  const handleFileChange = (files) => {
     const selectedFiles = Array.from(files);
     if (selectedFiles.length + imagePreviews.length > 3) {
       setError("You can upload a maximum of 3 images.");
@@ -195,7 +192,7 @@ function EditProduct() {
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
       const validFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
-      handleFileSelect(validFiles);
+      handleFileChange(validFiles);
     }
   };
 
@@ -225,13 +222,13 @@ function EditProduct() {
   };
 
   // Handle image removal
-  const handleImageDelete = (index) => {
+  const handleRemoveImage = (index) => {
     setImages(images.filter((_, i) => i !== index));
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
   };
 
   // Handle toggle isActive
-  const handleToggleActive = async () => {
+  const handleToggleProductActive = async () => {
     if (!productId || productId === "new" || isTogglingActive) return;
 
     setIsTogglingActive(true);
@@ -246,45 +243,12 @@ function EditProduct() {
         updatedAt: serverTimestamp(),
       });
       setForm({ ...form, isActive: newIsActive });
-      setSuccess(`Product ${newIsActive ? "activated" : "deactivated"} successfully`);
+      setSuccess(`Product ${newIsActive ? "activated" : "deactivated"} successfully!`);
     } catch (err) {
-      console.error("EditProduct: Error toggling active status:", err);
+      console.error("EditProduct: Error toggling product active status:", err);
       setError("Failed to toggle product active status: " + err.message);
     } finally {
       setIsTogglingActive(false);
-    }
-  };
-
-  // Cleanup function for failed minting
-  const cleanupFailedMint = async (targetProductId, storeId, txId, imagePaths) => {
-    try {
-      // Delete Firestore product
-      await deleteDoc(doc(db, `products/${targetProductId}`));
-      console.log(`EditProduct: Deleted product ${targetProductId}`);
-
-      // Delete Firestore transaction
-      if (txId) {
-        await deleteDoc(doc(db, `transactions/${txId}`));
-        console.log(`EditProduct: Deleted transaction ${txId}`);
-      }
-
-      // Delete Firebase Storage images
-      for (const path of imagePaths) {
-        const imageRef = ref(storage, path);
-        await deleteObject(imageRef);
-        console.log(`EditProduct: Deleted Firebase Storage image ${path}`);
-      }
-
-      // Delete Google Cloud Storage folder
-      const gcsCredentials = JSON.parse(Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64, 'base64').toString('utf8'));
-      const gcs = new Storage({ credentials: gcsCredentials });
-      const bucket = gcs.bucket('f4cet-nft-assets');
-      const [files] = await bucket.getFiles({ prefix: `nfts/${storeId}/${targetProductId}/` });
-      await Promise.all(files.map(file => file.delete()));
-      console.log(`EditProduct: Deleted Google Cloud Storage folder nfts/${storeId}/${targetProductId}/`);
-    } catch (err) {
-      console.error("EditProduct: Error during cleanup:", err);
-      setError(`Cleanup failed: ${err.message}`);
     }
   };
 
@@ -328,8 +292,6 @@ function EditProduct() {
       return;
     }
 
-    let txId = null;
-    let imagePaths = [];
     try {
       // Fetch store to get sellerId
       const storeDoc = await getDoc(doc(db, "stores", form.storeId));
@@ -353,7 +315,6 @@ function EditProduct() {
             await uploadBytes(imageRef, image);
             const url = await getDownloadURL(imageRef);
             console.log("EditProduct: Image URL:", url);
-            imagePaths.push(imageRef.fullPath);
             return url;
           })
         );
@@ -438,7 +399,6 @@ function EditProduct() {
         });
         if (!mintResponse.ok) {
           const errorData = await mintResponse.json();
-          txId = errorData.txId; // Capture txId if included in error response
           throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
         }
         mintedCnfts = await mintResponse.json();
@@ -476,9 +436,6 @@ function EditProduct() {
       console.error("EditProduct: Error saving product:", err);
       setError("Failed to save product: " + err.message);
       setMintError("Failed to mint cNFTs: " + err.message);
-      if (productId === "new") {
-        await cleanupFailedMint(targetProductId, form.storeId, txId, imagePaths);
-      }
     } finally {
       setIsMinting(false);
     }
@@ -720,7 +677,7 @@ function EditProduct() {
                   {productId !== "new" && (
                     <MDBox mb={3}>
                       <MDButton
-                        onClick={handleToggleActive}
+                        onClick={handleToggleProductActive}
                         color={form.isActive ? "error" : "success"}
                         variant="gradient"
                         disabled={isTogglingActive}
@@ -857,8 +814,8 @@ function EditProduct() {
                                 padding: "8px 12px",
                                 borderRadius: "8px",
                                 transition: "background-color 0.3s ease",
-                                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
-                                backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
+                                "&:hover": { backgroundColor: "rgba(255, 255, 165, 0.1)" },
+                                backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 165, 0.15)" : "transparent",
                               }}
                             >
                               <MDBox display="flex" alignItems="center">
@@ -1020,7 +977,7 @@ function EditProduct() {
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={(e) => handleFileSelect(e.target.files)}
+                      onChange={(e) => handleFileChange(e.target.files)}
                       sx={{ display: "none" }}
                     />
                   </MDBox>
@@ -1045,7 +1002,7 @@ function EditProduct() {
                             }}
                           />
                           <IconButton
-                            onClick={() => handleImageDelete(index)}
+                            onClick={() => handleRemoveImage(index)}
                             sx={{
                               position: "absolute",
                               top: "-10px",
