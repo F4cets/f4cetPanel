@@ -3,7 +3,7 @@
 * F4cetPanel - God Product Edit/Create Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -69,6 +69,10 @@ function EditProduct() {
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isTogglingActive, setIsTogglingActive] = useState(false);
+  // Minting state
+  const [isMinting, setIsMinting] = useState(false);
+  const [mintError, setMintError] = useState(null);
+  const [mintSuccess, setMintSuccess] = useState(null);
 
   // Category options
   const digitalCategories = [
@@ -253,30 +257,38 @@ function EditProduct() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setMintError(null);
+    setMintSuccess(null);
+    setIsMinting(true);
 
     if (!form.name || !form.description || !form.price || form.categories.length === 0 || !form.storeId) {
       setError("Please fill out all required fields, select at least one category, and choose a store.");
+      setIsMinting(false);
       return;
     }
 
     if (inventoryType === "digital") {
-      if (!form.quantity) {
-        setError("Please specify the quantity for digital items.");
+      if (!form.quantity || parseInt(form.quantity) < 1) {
+        setError("Please specify a quantity of at least 1 for digital items.");
+        setIsMinting(false);
         return;
       }
     } else if (inventoryType === "rwi") {
       if (!form.shippingLocation) {
         setError("Please fill out the shipping location for RWI.");
+        setIsMinting(false);
         return;
       }
       if (inventoryVariants.length === 0) {
         setError("Please add at least one size/color/quantity combination for RWI.");
+        setIsMinting(false);
         return;
       }
     }
 
     if (imagePreviews.length === 0 && images.length === 0) {
       setError("Please upload at least one image.");
+      setIsMinting(false);
       return;
     }
 
@@ -284,8 +296,7 @@ function EditProduct() {
       // Fetch store to get sellerId
       const storeDoc = await getDoc(doc(db, "stores", form.storeId));
       if (!storeDoc.exists()) {
-        setError("Selected store does not exist.");
-        return;
+        throw new Error("Selected store does not exist.");
       }
       const storeData = storeDoc.data();
       const sellerId = storeData.sellerId;
@@ -293,7 +304,7 @@ function EditProduct() {
       // Determine productId
       const targetProductId = productId === "new" ? doc(collection(db, "products")).id : productId;
 
-      // Upload new images with fixed naming
+      // Upload new images to Firebase Storage
       let imageUrls = product?.imageUrls || [];
       if (images.length > 0) {
         imageUrls = await Promise.all(
@@ -309,10 +320,10 @@ function EditProduct() {
         );
       }
 
-      // CHANGED: Handle NFT minting for new products
-      let mintedNfts = [];
+      // Handle cNFT minting for new products
+      let mintedCnfts = [];
       if (productId === "new" && imageUrls.length > 0) {
-        // Upload first image to Google Cloud Storage for NFT metadata
+        // Upload first image to Google Cloud Storage for cNFT metadata
         const firstImage = images[0];
         const formData = new FormData();
         formData.append("image", firstImage);
@@ -325,17 +336,17 @@ function EditProduct() {
         });
         if (!uploadResponse.ok) {
           const errorData = await uploadResponse.json();
-          throw new Error(`Failed to upload NFT image: ${errorData.error || uploadResponse.statusText}`);
+          throw new Error(`Failed to upload cNFT image: ${errorData.error || uploadResponse.statusText}`);
         }
         const { imageUrl, fileExt } = await uploadResponse.json();
-        console.log("EditProduct: NFT image uploaded:", imageUrl);
+        console.log("EditProduct: cNFT image uploaded:", imageUrl);
 
-        // Prepare premintnfts parameters
+        // Prepare mintcnfts parameters
         const quantity = inventoryType === "digital"
           ? parseInt(form.quantity)
           : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
-        const premintParams = {
-          walletAddress: sellerId, // Use sellerId as walletAddress
+        const mintParams = {
+          walletAddress: sellerId,
           storeId: form.storeId,
           productId: targetProductId,
           quantity,
@@ -344,21 +355,22 @@ function EditProduct() {
           imageExt,
           type: inventoryType,
           variants: inventoryType === "rwi" ? inventoryVariants : [],
-          feeTxSignature: `fee-${Math.random().toString(36).substring(2, 10)}`, // Placeholder
+          feeTxSignature: `fee-${Math.random().toString(36).substring(2, 10)}`,
+          treeId: "25a893ed-ac27-4fe6-832e-c8abd627fb14",
         };
 
-        // Call premintnfts
-        const premintResponse = await fetch("https://premintnfts-232592911911.us-central1.run.app", {
+        // Call mintcnfts
+        const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(premintParams),
+          body: JSON.stringify(mintParams),
         });
-        if (!premintResponse.ok) {
-          const errorData = await premintResponse.json();
-          throw new Error(`Failed to mint NFTs: ${errorData.error || premintResponse.statusText}`);
+        if (!mintResponse.ok) {
+          const errorData = await mintResponse.json();
+          throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
         }
-        mintedNfts = await premintResponse.json();
-        console.log("EditProduct: Minted NFTs:", mintedNfts);
+        mintedCnfts = await mintResponse.json();
+        console.log("EditProduct: Minted cNFTs:", mintedCnfts);
       }
 
       // Prepare product data
@@ -371,7 +383,7 @@ function EditProduct() {
         imageUrls,
         selectedImage: imageUrls[0] || product?.imageUrls[0] || "",
         storeId: form.storeId,
-        sellerId: storeData.sellerId,
+        sellerId,
         isActive: form.isActive,
         updatedAt: serverTimestamp(),
       };
@@ -386,24 +398,25 @@ function EditProduct() {
       // Save or update product
       if (productId === "new") {
         productData.createdAt = serverTimestamp();
-        // CHANGED: Remove placeholder nftMint, rely on premintnfts
         console.log("EditProduct: Creating new product at products/", targetProductId, ":", productData);
         await setDoc(doc(db, "products", targetProductId), productData);
 
-        // CHANGED: Save minted NFTs to Firestore
-        for (const nft of mintedNfts) {
-          await setDoc(doc(db, `products/${targetProductId}/nfts`, nft.mintAddress), {
-            mintAddress: nft.mintAddress,
-            metadataUri: nft.metadataUri,
+        // Save minted cNFTs to Firestore
+        for (const cnft of mintedCnfts.cnfts || []) {
+          await setDoc(doc(db, `products/${targetProductId}/nfts`, cnft.assetId), {
+            assetId: cnft.assetId,
+            metadataUri: cnft.metadataUri,
+            leafIndex: cnft.leafIndex,
             productId: targetProductId,
             storeId: form.storeId,
             status: "Ordered",
             createdAt: serverTimestamp(),
+            transferred: false,
           });
-          console.log("EditProduct: Saved NFT:", nft.mintAddress);
+          console.log("EditProduct: Saved cNFT:", cnft.assetId);
         }
 
-        setSuccess("Product created and NFTs minted successfully!");
+        setSuccess("Product created and cNFTs minted successfully!");
       } else {
         console.log("EditProduct: Updating product at products/", targetProductId, ":", productData);
         await updateDoc(doc(db, "products", productId), productData);
@@ -419,6 +432,9 @@ function EditProduct() {
     } catch (err) {
       console.error("EditProduct: Error saving product:", err);
       setError("Failed to save product: " + err.message);
+      setMintError("Failed to mint cNFTs: " + err.message);
+    } finally {
+      setIsMinting(false);
     }
   };
 
@@ -521,6 +537,26 @@ function EditProduct() {
                     sx={{ textAlign: { xs: "center", md: "left" } }}
                   >
                     {success}
+                  </MDTypography>
+                )}
+                {mintError && (
+                  <MDTypography
+                    variant="body2"
+                    color="error"
+                    mb={2}
+                    sx={{ textAlign: { xs: "center", md: "left" } }}
+                  >
+                    {mintError}
+                  </MDTypography>
+                )}
+                {mintSuccess && (
+                  <MDTypography
+                    variant="body2"
+                    color="success"
+                    mb={2}
+                    sx={{ textAlign: { xs: "center", md: "left" } }}
+                  >
+                    {mintSuccess}
                   </MDTypography>
                 )}
                 <form onSubmit={handleSubmit}>
@@ -985,9 +1021,10 @@ function EditProduct() {
                       type="submit"
                       color="dark"
                       variant="gradient"
+                      disabled={isMinting}
                       sx={{ width: { xs: "100%", sm: "auto" } }}
                     >
-                      {productId === "new" ? "Create Product" : "Update Product"}
+                      {isMinting ? "Creating..." : (productId === "new" ? "Create Product" : "Update Product")}
                     </MDButton>
                     <MDButton
                       onClick={handleCancel}

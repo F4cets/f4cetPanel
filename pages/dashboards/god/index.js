@@ -6,9 +6,9 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react"; // CHANGED: Added useRef
 import { db } from "/lib/firebase";
-import { getFirestore, doc, collection, getDocs, getDoc, query, where } from "firebase/firestore";
+import { getFirestore, doc, collection, getDocs, getDoc, query, where } from "firebase/firestore"; // CHANGED: Added doc import
 import Link from "next/link";
 import { fetchSolPrice } from "/lib/getSolPrice";
 
@@ -36,40 +36,13 @@ function GodDashboard() {
   const [topItems, setTopItems] = useState({ columns: [], rows: [] });
   const [flaggedStores, setFlaggedStores] = useState({ columns: [], rows: [] });
   const [flaggedItems, setFlaggedItems] = useState({ columns: [], rows: [] });
-  // State for Create Bubblegum Tree button
-  const [isLoading, setIsLoading] = useState(false);
-  const [treeResponse, setTreeResponse] = useState(null);
-  const [error, setError] = useState(null);
-  // Track fetchData execution
+  // CHANGED: Added useRef to track fetchData execution
   const hasFetched = useRef(false);
-
-  // Handle Create Bubblegum Tree
-  const handleCreateTree = async () => {
-    setIsLoading(true);
-    setError(null);
-    setTreeResponse(null);
-    try {
-      const response = await fetch('https://createbubblegumtree-232592911911.us-central1.run.app', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await response.json();
-      if (response.ok) {
-        setTreeResponse(data);
-      } else {
-        throw new Error(data.error || 'Failed to create Bubblegum tree');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Fetch Firestore data
   useEffect(() => {
     const fetchData = async () => {
+      // CHANGED: Skip if already fetched
       if (hasFetched.current) return;
       hasFetched.current = true;
 
@@ -328,37 +301,64 @@ function GodDashboard() {
     fetchData();
   }, []);
 
+  // Placeholder for future admin flag button logic in edit pages
+  /*
+  // In god/products/edit/[productId]/index.js:
+  const handleToggleProductActive = async () => {
+    try {
+      const productRef = doc(db, "products", productId);
+      await updateDoc(productRef, { isActive: !product.isActive });
+      // Update local state or refetch
+    } catch (error) {
+      console.error("Error toggling product active status:", error);
+    }
+  };
+
+  // In god/stores/edit/[storeId]/index.js:
+  const handleToggleStoreActive = async () => {
+    try {
+      const storeRef = doc(db, "stores", storeId);
+      await updateDoc(storeRef, { isActive: !store.isActive });
+      // Update local state or refetch
+    } catch (error) {
+      console.error("Error toggling store active status:", error);
+    }
+  };
+
+  // User flagging abuse prevention:
+  // In user management (e.g., god/users/edit/[userId]/index.js):
+  const handleToggleUserActive = async () => {
+    try {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, { isActive: !user.isActive });
+      // If isActive: false, user cannot access marketplace/affiliate features
+    } catch (error) {
+      console.error("Error toggling user active status:", error);
+    }
+  };
+
+  // In frontend flagging (e.g., buyer/marketplace/details/[orderId]/index.js):
+  const handleFlagIssue = async () => {
+    try {
+      await addDoc(collection(db, "notifications"), {
+        orderId,
+        userId: sellerId,
+        flaggedBy: user.walletId,
+        type: "issue",
+        description: issueDescription,
+        timestamp: new Date().toISOString(),
+        read: false,
+      });
+    } catch (error) {
+      console.error("Error flagging issue:", error);
+    }
+  };
+  */
+
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
-        {/* Create Bubblegum Tree Button */}
-        {/* TODO: Remove this button after tree creation */}
-        <MDBox mb={3} display="flex" justifyContent="center">
-          <MDButton
-            variant="gradient"
-            color="info"
-            onClick={handleCreateTree}
-            disabled={isLoading}
-          >
-            {isLoading ? "Creating Tree..." : "Create Bubblegum Tree"}
-          </MDButton>
-        </MDBox>
-        {/* Success/Error Messages */}
-        {treeResponse && (
-          <MDBox mb={3} p={2} bgColor="success" borderRadius="md">
-            <MDTypography variant="body2" color="white">
-              Bubblegum Tree Created Successfully! Tree ID: {treeResponse.treeId}, Public Key: {treeResponse.publicKey}
-            </MDTypography>
-          </MDBox>
-        )}
-        {error && (
-          <MDBox mb={3} p={2} bgColor="error" borderRadius="md">
-            <MDTypography variant="body2" color="white">
-              Error: {error}
-            </MDTypography>
-          </MDBox>
-        )}
         <MDBox mb={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={3}>
