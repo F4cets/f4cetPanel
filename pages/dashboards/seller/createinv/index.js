@@ -18,7 +18,7 @@ import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } f
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, setDoc, addDoc, collection, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
@@ -52,17 +52,17 @@ function CreateInventory() {
   const router = useRouter();
 
   // Form state
-  const [inventoryType, setInventoryType] = useState("digital"); // Default to digital
+  const [inventoryType, setInventoryType] = useState("digital");
   const [form, setForm] = useState({
     name: "",
     description: "",
     price: "",
-    quantity: "", // Used for digital items
-    shippingLocation: "", // Used for RWI
-    categories: [], // Multi-selection array
+    quantity: "",
+    shippingLocation: "",
+    categories: [],
   });
-  const [inventoryVariants, setInventoryVariants] = useState([]); // RWI: [{ size, color, quantity }]
-  const [variantForm, setVariantForm] = useState({ size: "", color: "", quantity: "" }); // Temporary state for adding variants
+  const [inventoryVariants, setInventoryVariants] = useState([]);
+  const [variantForm, setVariantForm] = useState({ size: "", color: "", quantity: "" });
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [storeId, setStoreId] = useState(null);
@@ -71,55 +71,35 @@ function CreateInventory() {
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false); // For backdrop
-  const [isSubmitting, setIsSubmitting] = useState(false); // Submission lock
+  const [processing, setProcessing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Category options
   const digitalCategories = [
-    "Books, Movies & Music",
-    "Digital Goods",
-    "Digital Services",
-    "Ebooks",
-    "EGames",
-    "NFTs",
-    "Private Access Groups",
-    "Software",
+    "Books, Movies & Music", "Digital Goods", "Digital Services", "Ebooks",
+    "EGames", "NFTs", "Private Access Groups", "Software",
   ];
-
   const rwiCategories = [
-    "Accessories",
-    "Art & Collectibles",
-    "Baby & Toddler",
-    "Beauty",
-    "Books, Movies & Music",
-    "Clothing",
-    "Craft Supplies",
-    "Electronics",
-    "Fitness & Nutrition",
-    "Food & Drinks",
-    "Home & Living",
-    "Jewelry",
-    "Luggage & Bags",
-    "NFTs",
-    "Pet Supplies",
-    "Shoes",
-    "Sporting Goods",
+    "Accessories", "Art & Collectibles", "Baby & Toddler", "Beauty",
+    "Books, Movies & Music", "Clothing", "Craft Supplies", "Electronics",
+    "Fitness & Nutrition", "Food & Drinks", "Home & Living", "Jewelry",
+    "Luggage & Bags", "NFTs", "Pet Supplies", "Shoes", "Sporting Goods",
     "Toys & Games",
   ];
 
-  // Calculate total SOL cost (0.02 SOL per NFT)
+  // Calculate total SOL cost (0.003 SOL per item)
   const calculateTotalSolCost = () => {
-    const feePerItemSOL = 0.02;
+    const feePerItemSOL = 0.003;
     let totalQuantity = 0;
     if (inventoryType === "rwi") {
       totalQuantity = inventoryVariants.reduce((sum, v) => sum + (parseInt(v.quantity) || 0), 0);
     } else {
       totalQuantity = parseInt(form.quantity) || 0;
     }
-    return (totalQuantity * feePerItemSOL).toFixed(2);
+    return (totalQuantity * feePerItemSOL).toFixed(5);
   };
 
-  // Check role, fetch storeId, and escrowPublicKey
+  // Check role, fetch storeId, escrowPublicKey, and shipping address
   useEffect(() => {
     const checkRoleAndStore = async () => {
       try {
@@ -132,7 +112,7 @@ function CreateInventory() {
         console.log("CreateInventory: Fetching user data for wallet:", user.walletId);
         const userDoc = await getDoc(doc(db, "users", user.walletId));
         if (!userDoc.exists()) {
-          console.log("CreateInventory: No user found in Firestore, redirecting to buyer dashboard");
+          console.log("CreateInventory: No user found, redirecting to buyer dashboard");
           router.push("/dashboards/buyer");
           return;
         }
@@ -146,7 +126,7 @@ function CreateInventory() {
           return;
         }
 
-        // Fetch storeId (single store per wallet)
+        // Fetch storeId
         const storeIds = userData.storeIds || [];
         console.log("CreateInventory: Store IDs:", storeIds);
         if (storeIds.length === 0) {
@@ -154,9 +134,9 @@ function CreateInventory() {
           router.push("/dashboards/onboarding");
           return;
         }
-        setStoreId(storeIds[0]); // Use first storeId (single store)
+        setStoreId(storeIds[0]);
 
-        // Fetch escrowPublicKey from plan
+        // Fetch escrowPublicKey
         const plan = userData.plan || {};
         if (!plan.escrowPublicKey) {
           console.log("CreateInventory: No escrow public key found, redirecting to onboarding");
@@ -165,6 +145,15 @@ function CreateInventory() {
         }
         setEscrowPublicKey(plan.escrowPublicKey);
         console.log("CreateInventory: Escrow Public Key:", plan.escrowPublicKey);
+
+        // Fetch shipping address for RWI
+        const storeDoc = await getDoc(doc(db, "stores", storeIds[0]));
+        if (storeDoc.exists()) {
+          const storeData = storeDoc.data();
+          const shippingAddress = storeData.businessInfo?.shippingAddress || "";
+          console.log("CreateInventory: Shipping Address:", shippingAddress);
+          setForm((prev) => ({ ...prev, shippingLocation: shippingAddress }));
+        }
 
         setLoading(false);
       } catch (err) {
@@ -176,9 +165,9 @@ function CreateInventory() {
     checkRoleAndStore();
   }, [user, router]);
 
-  // Handle file selection (click or drop)
+  // Handle file selection
   const handleFileChange = (files) => {
-    const selectedFiles = Array.from(files).filter(file => 
+    const selectedFiles = Array.from(files).filter(file =>
       ['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
     );
     if (selectedFiles.length + images.length > 3) {
@@ -255,11 +244,11 @@ function CreateInventory() {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
-    setProcessing(true); // Show backdrop
+    setProcessing(true);
 
     // Validate common fields
-    if (!form.name || !form.description || !form.price || parseFloat(form.price) < 0 || form.categories.length === 0) {
-      setError("Please fill out all required fields with a non-negative price and select at least one category.");
+    if (!form.name || !form.description || !form.price || parseFloat(form.price) <= 0 || form.categories.length === 0) {
+      setError("Please fill out all required fields with a positive price and select at least one category.");
       setProcessing(false);
       setIsSubmitting(false);
       return;
@@ -314,54 +303,21 @@ function CreateInventory() {
       const productRef = doc(collection(db, "products"));
       const productId = productRef.id;
 
-      // Upload images to Firebase Storage (products bucket)
-      const imageUrls = await Promise.all(
-        images.slice(0, 3).map(async (image, index) => {
-          const fileExt = image.name.split('.').pop().toLowerCase();
-          const imageName = `image${index + 1}.${fileExt}`; // e.g., image1.webp
-          const productImageRef = ref(storage, `products/${productId}/${imageName}`);
-          console.log("CreateInventory: Uploading product image to:", productImageRef.fullPath);
-          await uploadBytes(productImageRef, image);
-          const url = await getDownloadURL(productImageRef);
-          console.log("CreateInventory: Product Image URL:", url);
-          return { url, fileExt };
-        })
-      );
-
-      // Upload first image to Google Cloud Storage via API route
-      const firstImage = images[0];
-      const formData = new FormData();
-      formData.append('image', firstImage);
-      formData.append('storeId', storeId);
-      formData.append('productId', productId);
-
-      console.log("CreateInventory: Uploading NFT image to API route");
-      const uploadResponse = await fetch('/api/upload-nft-image', {
-        method: 'POST',
-        body: formData,
-      });
-      const uploadResult = await uploadResponse.json();
-      if (!uploadResponse.ok) {
-        throw new Error(uploadResult.error || 'Failed to upload NFT image');
-      }
-      const { url: nftImageUrl, fileExt } = uploadResult;
-      console.log("CreateInventory: NFT Image URL:", nftImageUrl);
-
       // Calculate total quantity
-      const totalQuantity = inventoryType === 'rwi' 
-        ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0) 
+      const totalQuantity = inventoryType === "rwi"
+        ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0)
         : parseInt(form.quantity);
 
-      // Fee structure: 0.02 SOL per NFT (50% escrow, 50% F4cets)
-      const feePerItemSOL = 0.02; // Fixed in SOL
-      const f4cetFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
-      const escrowFeeSOL = feePerItemSOL * 0.5; // 0.01 SOL
+      // Fee structure: 0.003 SOL per item
+      const feePerItemSOL = 0.003;
+      const f4cetFeeSOL = 0.00299;
+      const escrowFeeSOL = 0.00001;
       const totalFeeSOL = feePerItemSOL * totalQuantity;
       const totalF4cetFeeSOL = f4cetFeeSOL * totalQuantity;
       const totalEscrowFeeSOL = escrowFeeSOL * totalQuantity;
 
       // Create Solana transaction
-      const connection = new Connection('https://maximum-delicate-butterfly.solana-mainnet.quiknode.pro/0d01db8053770d711e1250f720db6ffe7b81956c/', 'confirmed');
+      const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
       const f4cetsWallet = new PublicKey('2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53');
       const escrowWallet = new PublicKey(escrowPublicKey);
 
@@ -369,12 +325,12 @@ function CreateInventory() {
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: f4cetsWallet,
-          lamports: Math.floor(totalF4cetFeeSOL * LAMPORTS_PER_SOL)
+          lamports: Math.floor(totalF4cetFeeSOL * LAMPORTS_PER_SOL),
         }),
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: escrowWallet,
-          lamports: Math.floor(totalEscrowFeeSOL * LAMPORTS_PER_SOL)
+          lamports: Math.floor(totalEscrowFeeSOL * LAMPORTS_PER_SOL),
         })
       );
 
@@ -384,26 +340,58 @@ function CreateInventory() {
       transaction.feePayer = publicKey;
 
       // Sign and send transaction
+      console.log("CreateInventory: Prompting Solana wallet payment");
       const signedTransaction = await signTransaction(transaction);
       const txSignature = await connection.sendRawTransaction(signedTransaction.serialize());
       await connection.confirmTransaction(txSignature, 'confirmed');
+      console.log("CreateInventory: Payment confirmed, txSignature:", txSignature);
 
-      // Prepare product data for Firestore
+      // Upload first image to Google Cloud Storage for cNFT metadata
+      const firstImage = images[0];
+      const formData = new FormData();
+      formData.append("image", firstImage);
+      formData.append("storeId", storeId);
+      formData.append("productId", productId);
+
+      console.log("CreateInventory: Uploading NFT image to API route");
+      const uploadResponse = await fetch("https://user.f4cets.market/api/upload-nft-image", {
+        method: "POST",
+        body: formData,
+      });
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(`Failed to upload cNFT image: ${errorData.error || uploadResponse.statusText}`);
+      }
+      const { url: imageUrl, fileExt } = await uploadResponse.json();
+      console.log("CreateInventory: cNFT image uploaded:", imageUrl);
+
+      // Upload remaining images to Firebase Storage
+      const imageUrls = await Promise.all(
+        images.slice(0, 3).map(async (image, index) => {
+          const fileExt = image.name.split('.').pop().toLowerCase();
+          const imageRef = ref(storage, `products/${productId}/image${index + 1}.${fileExt}`);
+          console.log("CreateInventory: Uploading image to:", imageRef.fullPath);
+          await uploadBytes(imageRef, image);
+          const url = await getDownloadURL(imageRef);
+          console.log("CreateInventory: Image URL:", url);
+          return url;
+        })
+      );
+
+      // Prepare product data
       const productData = {
         type: inventoryType,
         name: form.name,
         description: form.description,
         price: parseFloat(form.price),
         categories: form.categories,
-        imageUrls: imageUrls.map(img => img.url),
-        selectedImage: nftImageUrl, // Use Google Cloud Storage URL for NFT
-        selectedImageExt: fileExt,
+        imageUrls,
+        selectedImage: imageUrls[0],
         storeId,
         sellerId: user.walletId,
         isActive: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        nftMint: `mint-${Math.random().toString(36).substring(2, 10)}` // Placeholder, updated by premintnfts
       };
 
       if (inventoryType === "digital") {
@@ -414,66 +402,54 @@ function CreateInventory() {
       }
 
       // Save product to Firestore
-      console.log("CreateInventory: Saving product data to products/", productId, ":", productData);
-      await setDoc(productRef, productData);
+      console.log("CreateInventory: Saving product at products/", productId, ":", productData);
+      await setDoc(doc(db, "products", productId), productData);
 
-      // Call premintnfts Cloud Function with retry logic
-      let premintResponse;
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          premintResponse = await fetch('https://premintnfts-232592911911.us-central1.run.app', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              walletAddress: user.walletId,
-              storeId,
-              productId,
-              quantity: totalQuantity,
-              name: form.name,
-              imageUrl: nftImageUrl, // Use Google Cloud Storage URL
-              imageExt: fileExt,
-              type: inventoryType,
-              variants: inventoryType === 'rwi' ? inventoryVariants.map(v => ({
-                size: v.size,
-                color: v.color,
-                quantity: parseInt(v.quantity)
-              })) : undefined,
-              feeTxSignature: txSignature
-            })
-          });
-          break;
-        } catch (err) {
-          retries--;
-          if (retries === 0) throw err;
-          console.log(`CreateInventory: Retry ${4 - retries} for premintnfts call`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      // Call mintcnfts
+      const mintParams = {
+        walletAddress: user.walletId,
+        storeId,
+        productId,
+        quantity: totalQuantity,
+        name: form.name,
+        imageUrl,
+        imageExt: fileExt,
+        type: inventoryType,
+        variants: inventoryType === "rwi" ? inventoryVariants : [],
+        feeTxSignature: txSignature,
+        treeId: "25a893ed-ac27-4fe6-832e-c8abd627fb14",
+      };
+
+      console.log("CreateInventory: Calling mintcnfts with params:", mintParams);
+      const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mintParams),
+      });
+      if (!mintResponse.ok) {
+        const errorData = await mintResponse.json();
+        throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
       }
+      const mintedCnfts = await mintResponse.json();
+      console.log("CreateInventory: Minted cNFTs:", mintedCnfts);
 
-      const premintResult = await premintResponse.json();
-      if (!premintResponse.ok) {
-        throw new Error(premintResult.error || 'Failed to pre-mint NFTs');
-      }
-
-      setSuccess("Inventory created and NFTs pre-minted successfully!");
+      setSuccess(`Inventory created and ${mintedCnfts.cnfts?.length || 0} cNFTs minted successfully!`);
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [] });
       setImages([]);
       setImagePreviews([]);
       setInventoryVariants([]);
       setVariantForm({ size: "", color: "", quantity: "" });
-      setProcessing(false);
-      setIsSubmitting(false);
-      router.push(`/dashboards/seller/inventory/details/${productId}`);
+      setTimeout(() => router.push(`/dashboards/seller/inventory/details/${productId}`), 2000);
     } catch (err) {
       console.error("CreateInventory: Error creating inventory:", err);
       setError("Failed to create inventory: " + err.message);
+    } finally {
       setProcessing(false);
       setIsSubmitting(false);
     }
   };
 
-  // Handle cancel (navigate back to seller dashboard)
+  // Handle cancel
   const handleCancel = () => {
     router.push("/dashboards/seller");
   };
@@ -492,7 +468,7 @@ function CreateInventory() {
                 overflow: "hidden",
               }}>
                 <MDBox p={{ xs: 2, md: 3 }}>
-                  <MDTypography variant="h5" mb={{ xs: 2, md: 3 }} sx={{ fontWeight: 600, textAlign: { xs: "center", md: "left" } }}>
+                  <MDTypography variant="h5" sx={{ color: "#fff", textAlign: { xs: "center", md: "left" } }}>
                     Loading...
                   </MDTypography>
                 </MDBox>
@@ -519,7 +495,7 @@ function CreateInventory() {
                 overflow: "hidden",
               }}>
                 <MDBox p={{ xs: 2, md: 3 }}>
-                  <MDTypography variant="h5" mb={{ xs: 2, md: 3 }} sx={{ fontWeight: 600, textAlign: { xs: "center", md: "left" } }}>
+                  <MDTypography variant="h5" sx={{ color: "#fff", textAlign: { xs: "center", md: "left" } }}>
                     Error
                   </MDTypography>
                   <MDTypography variant="body2" color="error" sx={{ textAlign: { xs: "center", md: "left" } }}>
@@ -550,12 +526,7 @@ function CreateInventory() {
               <MDBox p={{ xs: 2, md: 3 }}>
                 <MDTypography
                   variant="h5"
-                  mb={{ xs: 2, md: 3 }}
-                  sx={{
-                    fontWeight: 600,
-                    color: "#344767",
-                    textAlign: { xs: "center", md: "left" },
-                  }}
+                  sx={{ color: "#212121", mb: { xs: 2, md: 3 }, textAlign: { xs: "center", md: "left" } }}
                 >
                   Create New Inventory
                 </MDTypography>
@@ -564,7 +535,7 @@ function CreateInventory() {
                     variant="body2"
                     color="error"
                     mb={2}
-                    sx={{ color: "#d32f2f", textAlign: { xs: "center", md: "left" } }}
+                    sx={{ textAlign: { xs: "center", md: "left" } }}
                   >
                     {error}
                   </MDTypography>
@@ -574,7 +545,7 @@ function CreateInventory() {
                     variant="body2"
                     color="success"
                     mb={2}
-                    sx={{ color: "#2e7d32", textAlign: { xs: "center", md: "left" } }}
+                    sx={{ textAlign: { xs: "center", md: "left" } }}
                   >
                     {success}
                   </MDTypography>
@@ -589,7 +560,7 @@ function CreateInventory() {
                         "& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track": { backgroundColor: "#3f51b5" },
                       }}
                     />
-                    <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500, textAlign: { xs: "center", md: "left" } }}>
+                    <MDTypography variant="body2" sx={{ color: "#212121", textAlign: { xs: "center", md: "left" } }}>
                       {inventoryType === "digital" ? "Digital" : "Real World Item (RWI)"}
                     </MDTypography>
                   </MDBox>
@@ -601,9 +572,14 @@ function CreateInventory() {
                       fullWidth
                       required
                       sx={{
-                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                        "& .MuiInputLabel-root": { color: "#344767 !important" },
-                        "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiOutlinedInput-root": {
+                          "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                          "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                          "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                        },
                       }}
                     />
                   </MDBox>
@@ -617,9 +593,14 @@ function CreateInventory() {
                       rows={4}
                       required
                       sx={{
-                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                        "& .MuiInputLabel-root": { color: "#344767 !important" },
-                        "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiOutlinedInput-root": {
+                          "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                          "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                          "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                        },
                       }}
                     />
                   </MDBox>
@@ -628,21 +609,18 @@ function CreateInventory() {
                       label="Price (USDC)"
                       type="number"
                       value={form.price}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === "" || parseFloat(value) >= 0) {
-                          setForm({ ...form, price: value });
-                        } else {
-                          setForm({ ...form, price: "0" });
-                        }
-                      }}
+                      onChange={(e) => setForm({ ...form, price: e.target.value })}
                       fullWidth
                       required
-                      min="0"
                       sx={{
-                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                        "& .MuiInputLabel-root": { color: "#344767 !important" },
-                        "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                        "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                        "& .MuiOutlinedInput-root": {
+                          "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                          "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                          "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                        },
                       }}
                     />
                   </MDBox>
@@ -653,26 +631,23 @@ function CreateInventory() {
                           label="Quantity"
                           type="number"
                           value={form.quantity}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === "" || parseInt(value) >= 1) {
-                              setForm({ ...form, quantity: value });
-                            } else {
-                              setForm({ ...form, quantity: "1" });
-                            }
-                          }}
+                          onChange={(e) => setForm({ ...form, quantity: e.target.value })}
                           fullWidth
                           required
-                          min="1"
                           sx={{
-                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                            "& .MuiInputLabel-root": { color: "#344767 !important" },
-                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                              "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                              "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                            },
                           }}
                         />
                       </MDBox>
                       <MDBox mb={3}>
-                        <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500, mb: 1, textAlign: { xs: "center", md: "left" } }}>
+                        <MDTypography variant="body2" sx={{ color: "#212121", mb: 1, textAlign: { xs: "center", md: "left" } }}>
                           Categories
                         </MDTypography>
                         <MDBox sx={{
@@ -743,14 +718,19 @@ function CreateInventory() {
                           fullWidth
                           required
                           sx={{
-                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                            "& .MuiInputLabel-root": { color: "#344767 !important" },
-                            "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                            "& .MuiOutlinedInput-root": {
+                              "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                              "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                              "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                            },
                           }}
                         />
                       </MDBox>
                       <MDBox mb={3}>
-                        <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500, mb: 1, textAlign: { xs: "center", md: "left" } }}>
+                        <MDTypography variant="body2" sx={{ color: "#212121", mb: 1, textAlign: { xs: "center", md: "left" } }}>
                           Categories
                         </MDTypography>
                         <MDBox sx={{
@@ -771,8 +751,8 @@ function CreateInventory() {
                                 padding: "8px 12px",
                                 borderRadius: "8px",
                                 transition: "background-color 0.3s ease",
-                                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.1)" },
-                                backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 255, 0.15)" : "transparent",
+                                "&:hover": { backgroundColor: "rgba(255, 255, 165, 0.1)" },
+                                backgroundColor: form.categories.includes(category) ? "rgba(255, 255, 165, 0.15)" : "transparent",
                               }}
                             >
                               <MDBox display="flex" alignItems="center">
@@ -810,7 +790,7 @@ function CreateInventory() {
                         </MDBox>
                       </MDBox>
                       <MDBox mb={3}>
-                        <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500, mb: 1, textAlign: { xs: "center", md: "left" } }}>
+                        <MDTypography variant="body2" sx={{ color: "#212121", mb: 1, textAlign: { xs: "center", md: "left" } }}>
                           Inventory Variants (Size, Color, Quantity)
                         </MDTypography>
                         {inventoryVariants.length > 0 && (
@@ -824,7 +804,7 @@ function CreateInventory() {
                                 mb={1}
                                 sx={{ backgroundColor: "rgba(255, 255, 255, 0.5)", padding: "8px", borderRadius: "8px" }}
                               >
-                                <MDTypography variant="body2" sx={{ color: "#344767", flex: 1 }}>
+                                <MDTypography variant="body2" sx={{ color: "#fff", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
                                 </MDTypography>
                                 <IconButton onClick={() => handleRemoveVariant(index)} sx={{ color: "#d32f2f" }}>
@@ -842,9 +822,14 @@ function CreateInventory() {
                               onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })}
                               fullWidth
                               sx={{
-                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                                "& .MuiInputLabel-root": { color: "#344767 !important" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiOutlinedInput-root": {
+                                  "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                                  "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                                  "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                                },
                               }}
                             />
                           </Grid>
@@ -855,9 +840,14 @@ function CreateInventory() {
                               onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })}
                               fullWidth
                               sx={{
-                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                                "& .MuiInputLabel-root": { color: "#344767 !important" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiOutlinedInput-root": {
+                                  "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                                  "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                                  "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                                },
                               }}
                             />
                           </Grid>
@@ -877,9 +867,14 @@ function CreateInventory() {
                               fullWidth
                               min="1"
                               sx={{
-                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#344767" },
-                                "& .MuiInputLabel-root": { color: "#344767 !important" },
-                                "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
+                                "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiInputLabel-root.Mui-focused": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
+                                "& .MuiOutlinedInput-root": {
+                                  "& fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#bdbdbd' },
+                                  "&:hover fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#e0e0e0' : '#3f51b5' },
+                                  "&.Mui-focused fieldset": { borderColor: theme => theme.palette.mode === 'dark' ? '#fff' : '#3f51b5' },
+                                },
                               }}
                             />
                           </Grid>
@@ -890,9 +885,6 @@ function CreateInventory() {
                               variant="gradient"
                               sx={{
                                 padding: { xs: "8px", md: "10px" },
-                                borderRadius: "8px",
-                                transition: "all 0.3s ease",
-                                "&:hover": { transform: "translateY(-2px)", boxShadow: "0 4px 12px rgba(63, 81, 181, 0.3)" },
                                 width: "100%",
                               }}
                             >
@@ -911,7 +903,6 @@ function CreateInventory() {
                       padding: { xs: "16px", md: "20px" },
                       textAlign: "center",
                       backgroundColor: dragActive ? "rgba(63, 81, 181, 0.1)" : "rgba(0, 0, 0, 0.02)",
-                      transition: "all 0.3s ease",
                       cursor: "pointer",
                     }}
                     onDragEnter={handleDragEnter}
@@ -920,11 +911,11 @@ function CreateInventory() {
                     onDrop={handleDrop}
                     onClick={() => document.getElementById("imageInput").click()}
                   >
-                    <MDTypography variant="body2" sx={{ color: dragActive ? "#3f51b5" : "#344767", mb: 1 }}>
+                    <MDTypography variant="body2" sx={{ color: "#212121", mb: 1 }}>
                       Drag & Drop or Click to Upload Images (Max 3)
                     </MDTypography>
-                    <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                      (Supports PNG, JPG, WEBP, up to 5MB each)
+                    <MDTypography variant="caption" sx={{ color: "#212121", display: "block", mb: 1 }}>
+                      (Supports PNG, JPG, up to 5MB each)
                     </MDTypography>
                     <MDInput
                       id="imageInput"
@@ -973,7 +964,7 @@ function CreateInventory() {
                     </MDBox>
                   )}
                   <MDBox mb={3} display="flex" justifyContent="center">
-                    <MDTypography variant="body2" sx={{ color: "#344767", fontWeight: 500 }}>
+                    <MDTypography variant="body2" sx={{ color: "#212121" }}>
                       Total Minting Cost: {calculateTotalSolCost()} SOL
                     </MDTypography>
                   </MDBox>
@@ -983,27 +974,16 @@ function CreateInventory() {
                       type="submit"
                       color="dark"
                       variant="gradient"
-                      disabled={processing || isSubmitting}
-                      sx={{
-                        padding: { xs: "8px 24px", md: "10px 32px" },
-                        borderRadius: "8px",
-                        transition: "all 0.3s ease",
-                        "&:hover": { transform: "translateY(-2px)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)" },
-                      }}
+                      disabled={isSubmitting}
+                      sx={{ width: { xs: "100%", sm: "auto" } }}
                     >
-                      {processing ? "Processing..." : "Create Inventory"}
+                      {isSubmitting ? "Creating..." : "Create Inventory"}
                     </MDButton>
                     <MDButton
                       onClick={handleCancel}
                       color="dark"
                       variant="outlined"
-                      disabled={processing || isSubmitting}
-                      sx={{
-                        padding: { xs: "8px 24px", md: "10px 32px" },
-                        borderRadius: "8px",
-                        transition: "all 0.3s ease",
-                        "&:hover": { transform: "translateY(-2px)", boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)" },
-                      }}
+                      sx={{ width: { xs: "100%", sm: "auto" } }}
                     >
                       Cancel
                     </MDButton>
@@ -1015,13 +995,10 @@ function CreateInventory() {
         </Grid>
       </MDBox>
       <Backdrop
-        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1, flexDirection: 'column' }}
+        sx={{ color: '#fff', zIndex: (theme) => theme.zIndex.drawer + 1 }}
         open={processing}
       >
-        <CircularProgress color="inherit" size={60} />
-        <Typography variant="h6" sx={{ mt: 2 }}>
-          Minting Your Dynamic Core NFTs, please wait...
-        </Typography>
+        <CircularProgress color="inherit" />
       </Backdrop>
       <Footer />
     </DashboardLayout>
