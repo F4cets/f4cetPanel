@@ -3,7 +3,7 @@
 * F4cetPanel - Seller Sales Details Page
 =========================================================
 
-* Copyright 2023 F4cets Team
+* Copyright 2025 F4cets Team
 */
 
 // React imports
@@ -41,19 +41,19 @@ function SalesDetails() {
   const { salesId } = router.query;
   const [saleDetails, setSaleDetails] = useState(null);
   const [trackingNumber, setTrackingNumber] = useState("");
-  const [messageInput, setMessageInput] = useState(""); // Renamed newMessage to messageInput for clarity
+  const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [isSending, setIsSending] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isShipping, setIsShipping] = useState(false);
+  const [isNoTracking, setIsNoTracking] = useState(false);
   const [isConfirmingDelivery, setIsConfirmingDelivery] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [hasFlaggedIssue, setHasFlaggedIssue] = useState(false);
   const [timeUntilRelease, setTimeUntilRelease] = useState(null);
 
-  // Fetch sale details, messages, and notifications from Firestore
+  // Fetch sale details, messages, and notifications
   useEffect(() => {
     if (!user || !user.walletId || !salesId) return;
 
@@ -64,8 +64,9 @@ function SalesDetails() {
           if (saleSnapshot.exists() && saleSnapshot.data().sellerId === user.walletId) {
             const saleData = saleSnapshot.data();
 
-            // Fetch product names
+            // Fetch product names and NFTs
             let productNames = [];
+            let nfts = [];
             if (Array.isArray(saleData.productIds)) {
               for (const productId of saleData.productIds) {
                 const productDocRef = doc(db, "products", productId);
@@ -73,22 +74,36 @@ function SalesDetails() {
                 if (productDoc.exists()) {
                   const productData = productDoc.data();
                   productNames.push(productData.name || productId);
+
+                  // Fetch NFTs
+                  const nftsQuery = query(
+                    collection(db, `products/${productId}/nfts`),
+                    where("status", "==", "Ordered"),
+                    where("transferred", "==", false)
+                  );
+                  const nftsSnapshot = await getDocs(nftsQuery);
+                  nftsSnapshot.forEach(nftDoc => {
+                    nfts.push({
+                      productId,
+                      assetId: nftDoc.data().assetId,
+                      metadataUri: nftDoc.data().metadataUri,
+                    });
+                  });
                 } else {
                   productNames.push(productId);
                 }
               }
             }
 
-            // Fetch buyer name (if available)
+            // Fetch buyer name
             let buyerName = saleData.buyerId;
             const buyerDocRef = doc(db, "users", saleData.buyerId);
             const buyerDoc = await getDoc(buyerDocRef);
             if (buyerDoc.exists()) {
-              const buyerData = buyerDoc.data();
-              buyerName = buyerData.name || buyerName;
+              buyerName = buyerDoc.data().name || buyerName;
             }
 
-            // Build timeline dynamically
+            // Build timeline
             const timeline = [];
             if (saleData.createdAt) {
               const createdDate = saleData.createdAt.toDate ? saleData.createdAt.toDate() : new Date(saleData.createdAt);
@@ -115,16 +130,15 @@ function SalesDetails() {
               });
             }
             if (saleData.buyerConfirmed) {
-              // CHANGED: Safely handle updatedAt as Timestamp or string
               const confirmedDate = saleData.updatedAt
                 ? (typeof saleData.updatedAt.toDate === 'function'
                   ? saleData.updatedAt.toDate()
                   : new Date(saleData.updatedAt))
                 : new Date();
               timeline.push({
-                title: "Receipt Confirmed",
+                title: "Funds Released",
                 date: `${confirmedDate.toISOString().split('T')[0]} ${confirmedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-                description: "Buyer confirmed receipt of the item.",
+                description: "Funds released from escrow.",
               });
             }
 
@@ -140,12 +154,16 @@ function SalesDetails() {
               currency: saleData.currency || "USDC",
               status: saleData.shippingStatus || "Pending",
               date: createdDateForDisplay.toISOString().split('T')[0],
+              storeId: saleData.storeId || "",
+              productIds: saleData.productIds || [],
               shippingAddress: saleData.shippingAddress || "N/A",
               trackingNumber: saleData.trackingNumber || "Not Available",
               buyerConfirmed: saleData.buyerConfirmed || false,
               sellerRating: saleData.sellerRating || null,
               deliveryConfirmedAt: saleData.deliveryConfirmedAt || null,
-              timeline: timeline.length > 0 ? timeline : [],
+              shippingConfirmedAt: saleData.shippingConfirmedAt || null,
+              timeline,
+              nfts,
             };
             setSaleDetails(data);
             setTrackingNumber(data.trackingNumber || "");
@@ -235,14 +253,8 @@ function SalesDetails() {
     const unsubscribeNotifications = fetchNotifications();
 
     return () => {
-      if (unsubscribeMessages) {
-        console.log("SalesDetails: Cleaning up messages listener for sale:", salesId);
-        unsubscribeMessages();
-      }
-      if (unsubscribeNotifications) {
-        console.log("SalesDetails: Cleaning up notifications listener for sale:", salesId);
-        unsubscribeNotifications();
-      }
+      if (unsubscribeMessages) unsubscribeMessages();
+      if (unsubscribeNotifications) unsubscribeNotifications();
     };
   }, [user, salesId]);
 
@@ -255,12 +267,12 @@ function SalesDetails() {
 
     const calculateTimeUntilRelease = () => {
       const deliveryDate = new Date(saleDetails.deliveryConfirmedAt);
-      const releaseDate = new Date(deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from delivery
+      const releaseDate = new Date(deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       const now = new Date();
       const timeDiff = releaseDate - now;
 
       if (timeDiff <= 0) {
-        setTimeUntilRelease(null);
+        setTimeUntilRelease({ expired: true });
         return;
       }
 
@@ -269,7 +281,7 @@ function SalesDetails() {
       const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
 
-      setTimeUntilRelease({ days, hours, minutes, seconds });
+      setTimeUntilRelease({ days, hours, minutes, seconds, expired: false });
     };
 
     calculateTimeUntilRelease();
@@ -278,7 +290,7 @@ function SalesDetails() {
     return () => clearInterval(timer);
   }, [saleDetails, hasFlaggedIssue]);
 
-  // Redirect to home if no user, no walletId, or unauthorized role
+  // Redirect if unauthorized
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
       console.log("SalesDetails: Unauthorized access, redirecting to home");
@@ -315,7 +327,7 @@ function SalesDetails() {
 
   // Handle updating tracking number
   const handleSaveTracking = async () => {
-    if (!saleDetails || isSaving || trackingNumber === saleDetails.trackingNumber) return;
+    if (!saleDetails || isSaving || saleDetails.buyerConfirmed) return;
 
     setIsSaving(true);
     setError(null);
@@ -323,24 +335,69 @@ function SalesDetails() {
 
     try {
       const saleDocRef = doc(db, "transactions", salesId);
+      const newTrackingNumber = trackingNumber.trim() || null;
+      const isUpdate = saleDetails.shippingConfirmedAt && saleDetails.trackingNumber !== newTrackingNumber;
+
       const updatedData = {
-        trackingNumber,
+        trackingNumber: newTrackingNumber,
         updatedAt: new Date().toISOString(),
-        timeline: [
+      };
+
+      if (!saleDetails.shippingConfirmedAt) {
+        updatedData.shippingStatus = "Shipped";
+        updatedData.shippingConfirmedAt = new Date().toISOString();
+        updatedData.timeline = [
           ...(saleDetails.timeline || []),
           {
-            title: trackingNumber ? "Tracking Number Updated" : "Tracking Number Removed",
+            title: "Order Shipped",
             date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            description: trackingNumber ? `Tracking number set to ${trackingNumber}.` : "Tracking number cleared.",
+            description: `Order shipped with tracking number ${newTrackingNumber || 'Not Available'}.`,
           },
-        ],
-      };
+        ];
+      } else if (isUpdate) {
+        updatedData.timeline = [
+          ...(saleDetails.timeline || []),
+          {
+            title: "Tracking Number Updated",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: `Tracking number updated to ${newTrackingNumber || 'Not Available'}.`,
+          },
+        ];
+      } else {
+        setSuccess("No changes to tracking number.");
+        setIsSaving(false);
+        return;
+      }
+
       await updateDoc(saleDocRef, updatedData);
+
+      if (!saleDetails.shippingConfirmedAt) {
+        const nft = saleDetails.nfts[0];
+        if (nft) {
+          const metadataId = nft.metadataUri.split('/').pop().replace('.json', '');
+          const response = await fetch("/api/update-nft-metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              storeId: saleDetails.storeId,
+              productId: nft.productId,
+              metadataId,
+              status: "Shipped",
+            }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to update NFT metadata: ${errorData.error}`);
+          }
+          console.log(`SalesDetails: Updated NFT ${nft.assetId} metadata to status: Shipped`);
+        }
+      }
+
       setSaleDetails({
         ...saleDetails,
         ...updatedData,
       });
-      setSuccess("Tracking number updated successfully!");
+      setSuccess(isUpdate ? "Tracking number updated successfully!" : "Tracking number saved and order marked as shipped successfully!");
     } catch (err) {
       console.error("SalesDetails: Error updating tracking number:", err);
       setError("Failed to save tracking number: " + err.message);
@@ -349,40 +406,84 @@ function SalesDetails() {
     }
   };
 
-  // Handle marking as shipped
-  const handleMarkAsShipped = async () => {
-    if (!saleDetails || isShipping || saleDetails.status !== "Pending") return;
+  // Handle marking as shipped without tracking
+  const handleMarkNoTracking = async () => {
+    if (!saleDetails || isNoTracking || saleDetails.buyerConfirmed) return;
 
-    setIsShipping(true);
+    setIsNoTracking(true);
     setError(null);
     setSuccess(null);
 
     try {
       const saleDocRef = doc(db, "transactions", salesId);
+      const isUpdate = saleDetails.shippingConfirmedAt && saleDetails.trackingNumber;
+
       const updatedData = {
-        shippingStatus: "Shipped",
-        shippingConfirmedAt: new Date().toISOString(),
+        trackingNumber: null,
         updatedAt: new Date().toISOString(),
-        timeline: [
+      };
+
+      if (!saleDetails.shippingConfirmedAt) {
+        updatedData.shippingStatus = "Shipped";
+        updatedData.shippingConfirmedAt = new Date().toISOString();
+        updatedData.timeline = [
           ...(saleDetails.timeline || []),
           {
             title: "Order Shipped",
             date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            description: `Order shipped with tracking number ${trackingNumber || 'Not Available'}.`,
+            description: "Order shipped without tracking number.",
           },
-        ],
-      };
+        ];
+      } else if (isUpdate) {
+        updatedData.timeline = [
+          ...(saleDetails.timeline || []),
+          {
+            title: "Tracking Number Removed",
+            date: new Date().toISOString().split("T")[0] + " " + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: "Order now shipped without tracking number.",
+          },
+        ];
+      } else {
+        setSuccess("No changes to tracking number.");
+        setIsNoTracking(false);
+        return;
+      }
+
       await updateDoc(saleDocRef, updatedData);
+
+      if (!saleDetails.shippingConfirmedAt) {
+        const nft = saleDetails.nfts[0];
+        if (nft) {
+          const metadataId = nft.metadataUri.split('/').pop().replace('.json', '');
+          const response = await fetch("/api/update-nft-metadata", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              storeId: saleDetails.storeId,
+              productId: nft.productId,
+              metadataId,
+              status: "Shipped",
+            }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Failed to update NFT metadata: ${errorData.error}`);
+          }
+          console.log(`SalesDetails: Updated NFT ${nft.assetId} metadata to status: Shipped`);
+        }
+      }
+
       setSaleDetails({
         ...saleDetails,
         ...updatedData,
       });
-      setSuccess("Order marked as shipped successfully!");
+      setTrackingNumber("");
+      setSuccess(isUpdate ? "Tracking number removed successfully!" : "Order marked as shipped without tracking successfully!");
     } catch (err) {
-      console.error("SalesDetails: Error marking as shipped:", err);
+      console.error("SalesDetails: Error marking as shipped without tracking:", err);
       setError("Failed to mark order as shipped: " + err.message);
     } finally {
-      setIsShipping(false);
+      setIsNoTracking(false);
     }
   };
 
@@ -410,6 +511,27 @@ function SalesDetails() {
         ],
       };
       await updateDoc(saleDocRef, updatedData);
+
+      const nft = saleDetails.nfts[0];
+      if (nft) {
+        const metadataId = nft.metadataUri.split('/').pop().replace('.json', '');
+        const response = await fetch("/api/update-nft-metadata", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            storeId: saleDetails.storeId,
+            productId: nft.productId,
+            metadataId,
+            status: "Delivered",
+          }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Failed to update NFT metadata: ${errorData.error}`);
+        }
+        console.log(`SalesDetails: Updated NFT ${nft.assetId} metadata to status: Delivered`);
+      }
+
       setSaleDetails({
         ...saleDetails,
         ...updatedData,
@@ -423,12 +545,10 @@ function SalesDetails() {
     }
   };
 
-  // Ensure user is loaded and authorized before rendering
   if (!user || !user.walletId || user.role !== "seller") {
-    return null; // Or a loading spinner
+    return null;
   }
 
-  // Handle invalid or missing salesId
   if (!salesId) {
     return (
       <DashboardLayout>
@@ -443,7 +563,6 @@ function SalesDetails() {
     );
   }
 
-  // Handle no saleDetails (e.g., still loading or error)
   if (!saleDetails) {
     return (
       <DashboardLayout>
@@ -514,19 +633,31 @@ function SalesDetails() {
                         onChange={(e) => setTrackingNumber(e.target.value)}
                         placeholder="Enter tracking number"
                         fullWidth
+                        disabled={saleDetails.buyerConfirmed}
                         sx={{
-                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
+                          "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#212121" },
                         }}
                       />
-                      <MDButton
-                        onClick={handleSaveTracking}
-                        color="dark"
-                        variant="gradient"
-                        disabled={isSaving || trackingNumber === saleDetails.trackingNumber}
-                        sx={{ mt: 1, width: { xs: "100%", sm: "auto" } }}
-                      >
-                        {isSaving ? "Saving..." : "Save Tracking"}
-                      </MDButton>
+                      <MDBox display="flex" gap={1} mt={1}>
+                        <MDButton
+                          onClick={handleSaveTracking}
+                          color="dark"
+                          variant="gradient"
+                          disabled={isSaving || isNoTracking || !trackingNumber.trim() || saleDetails.buyerConfirmed}
+                          sx={{ width: { xs: "100%", sm: "auto" } }}
+                        >
+                          {isSaving ? "Saving..." : "Save Tracking"}
+                        </MDButton>
+                        <MDButton
+                          onClick={handleMarkNoTracking}
+                          color="info"
+                          variant="gradient"
+                          disabled={isNoTracking || isSaving || saleDetails.buyerConfirmed}
+                          sx={{ width: { xs: "100%", sm: "auto" } }}
+                        >
+                          {isNoTracking ? "Marking..." : "No Tracking"}
+                        </MDButton>
+                      </MDBox>
                     </MDBox>
                     <MDBox mb={2}>
                       <MDTypography variant="h6" color="dark">
@@ -584,24 +715,6 @@ function SalesDetails() {
                       <MDTypography variant="h6" color="dark" mb={2}>
                         Seller Actions
                       </MDTypography>
-                      {/* Mark as Shipped (RWI Only) */}
-                      {saleDetails.type === "rwi" && saleDetails.status === "Pending" && (
-                        <MDBox mb={2}>
-                          <MDTypography variant="body1" color="dark" mb={1}>
-                            Mark as Shipped
-                          </MDTypography>
-                          <MDButton
-                            onClick={handleMarkAsShipped}
-                            color="success"
-                            variant="gradient"
-                            disabled={isShipping}
-                            sx={{ width: { xs: "100%", sm: "auto" } }}
-                          >
-                            {isShipping ? "Marking..." : "Mark as Shipped"}
-                          </MDButton>
-                        </MDBox>
-                      )}
-                      {/* Confirm Delivery (RWI Only) */}
                       {saleDetails.type === "rwi" && saleDetails.status === "Shipped" && !saleDetails.deliveryConfirmedAt && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
@@ -618,22 +731,22 @@ function SalesDetails() {
                           </MDButton>
                         </MDBox>
                       )}
-                      {/* Escrow Release Timer */}
                       {saleDetails.deliveryConfirmedAt && !saleDetails.buyerConfirmed && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
-                            Escrow Release Timer
+                            Escrow Auto-Release Timer
                           </MDTypography>
                           <MDTypography variant="body2" color={hasFlaggedIssue ? "error" : "info"}>
                             {hasFlaggedIssue
                               ? "Timer paused due to active flagged issue."
                               : timeUntilRelease
-                              ? `Funds release in: ${timeUntilRelease.days}d ${timeUntilRelease.hours}h ${timeUntilRelease.minutes}m ${timeUntilRelease.seconds}s`
+                              ? timeUntilRelease.expired
+                                ? "Funds will be auto-released soon."
+                                : `Funds auto-release in: ${timeUntilRelease.days}d ${timeUntilRelease.hours}h ${timeUntilRelease.minutes}m ${timeUntilRelease.seconds}s`
                               : "Funds release pending."}
                           </MDTypography>
                         </MDBox>
                       )}
-                      {/* Buyer Confirmation (RWI Only) */}
                       {saleDetails.type === "rwi" && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
@@ -642,11 +755,10 @@ function SalesDetails() {
                           <MDTypography variant="body2" color={saleDetails.buyerConfirmed ? "success" : "warning"}>
                             {saleDetails.buyerConfirmed
                               ? "Confirmed: Funds released from escrow."
-                              : "Pending: Awaiting buyer confirmation of receipt."}
+                              : "Pending: Awaiting buyer confirmation or auto-release after 7 days."}
                           </MDTypography>
                         </MDBox>
                       )}
-                      {/* Buyer Rating */}
                       <MDBox mb={2}>
                         <MDTypography variant="body1" color="dark" mb={1}>
                           Buyer Rating
@@ -656,12 +768,11 @@ function SalesDetails() {
                           readOnly
                           sx={{
                             fontSize: "2rem",
-                            "& .MuiRating-iconEmpty": { color: "#FFFFFF" },
+                            "& .MuiRating-iconEmpty": { color: "#bdbdbd" },
                             "& .MuiRating-iconFilled": { color: "#FFD700" },
                           }}
                         />
                       </MDBox>
-                      {/* Messaging */}
                       <MDBox mb={2}>
                         <MDTypography variant="body1" color="dark" mb={1}>
                           Message Buyer
@@ -675,7 +786,7 @@ function SalesDetails() {
                           rows={3}
                           disabled={isSending}
                           sx={{
-                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#FFFFFF" },
+                            "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: "#212121" },
                           }}
                         />
                         <MDButton
@@ -706,7 +817,6 @@ function SalesDetails() {
                           )}
                         </MDBox>
                       </MDBox>
-                      {/* Flagged Issues */}
                       <MDBox mb={2}>
                         <MDTypography variant="body1" color="dark" mb={1}>
                           Flagged Issues

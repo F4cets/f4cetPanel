@@ -7,7 +7,7 @@
 */
 
 // React imports
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 
@@ -38,14 +38,15 @@ function SellerEscrow() {
   const router = useRouter();
   const [pendingEscrowPayments, setPendingEscrowPayments] = useState([]);
   const [escrowNFTInventory, setEscrowNFTInventory] = useState([]);
-  const [digitalGoodsInEscrow, setDigitalGoodsInEscrow] = useState(0);
-  const [rwiGoodsInEscrow, setRwiGoodsInEscrow] = useState(0);
+  const [digitalProductsInEscrow, setDigitalProductsInEscrow] = useState(0);
+  const [rwiProductsInEscrow, setRwiProductsInEscrow] = useState(0);
   const [totalPendingItems, setTotalPendingItems] = useState(0);
   const [totalPendingAmount, setTotalPendingAmount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Redirect to home if no user, no walletId, or unauthorized role
+  // Redirect to home if no user or unauthorized role
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
       console.log("SellerEscrow: Unauthorized access, redirecting to home");
@@ -92,7 +93,7 @@ function SellerEscrow() {
           const notificationsSnapshot = await getDocs(notificationsQuery);
           const isFlagged = !notificationsSnapshot.empty;
 
-          // Calculate net amount (minus 4% F4cet fee)
+          // Calculate net amount (minus 4% F4cets fee)
           const fee = txData.amount * 0.04;
           const netAmount = txData.amount - fee;
 
@@ -119,61 +120,60 @@ function SellerEscrow() {
           });
         }
 
-        // Fetch all products for NFT inventory (pre-minted NFTs)
+        // Fetch NFTs from products/{productId}/nfts subcollection
         const productsQuery = query(
           collection(db, "products"),
           where("sellerId", "==", user.walletId)
         );
         const productsSnapshot = await getDocs(productsQuery);
-        const products = [];
+        const nfts = [];
 
         for (const productDoc of productsSnapshot.docs) {
           const productData = productDoc.data();
+          const productId = productDoc.id;
+          const productType = productData.type;
+          const productName = productData.name || "Unknown Product";
           const createdDate = productData.createdAt?.toDate ? productData.createdAt.toDate() : new Date(productData.createdAt);
 
-          // Determine quantity based on product type
-          let quantity = 0;
-          if (productData.type === "digital") {
-            quantity = productData.quantity || 0;
-          } else if (productData.type === "rwi" && Array.isArray(productData.variants) && productData.variants.length > 0) {
-            quantity = productData.variants.reduce((sum, variant) => {
-              const variantQty = parseInt(variant.quantity, 10);
-              return sum + (isNaN(variantQty) ? 0 : variantQty);
-            }, 0);
-          }
+          // Query NFTs subcollection
+          const nftsQuery = query(
+            collection(db, `products/${productId}/nfts`),
+            where("status", "==", "Ordered"),
+            where("transferred", "==", false)
+          );
+          const nftsSnapshot = await getDocs(nftsQuery);
 
-          console.log(`Product ${productDoc.id}: type=${productData.type}, quantity=${quantity}, nftMint=${productData.nftMint}`);
-
-          if (quantity > 0 && productData.nftMint) {
-            products.push({
-              id: productData.nftMint,
+          for (const nftDoc of nftsSnapshot.docs) {
+            const nftData = nftDoc.data();
+            nfts.push({
+              id: nftData.assetId,
               date: createdDate.toISOString().split("T")[0],
-              product: productData.name || "Unknown Product",
-              invId: productDoc.id,
-              quantity,
-              status: productData.isActive ? "Active" : "Removed",
-              type: productData.type, // CHANGED: Added type for metric calculation
+              product: productName,
+              invId: productId,
+              quantity: 1,
+              status: productData.isActive ? "Active" : "Inactive",
+              type: productType,
             });
           }
         }
 
         // Calculate metrics
-        // CHANGED: Count quantities from escrowNFTInventory instead of transactions
-        const digitalCount = products
+        const digitalCount = nfts
           .filter(item => item.type === "digital")
           .reduce((sum, item) => sum + item.quantity, 0);
-        const rwiCount = products
+        const rwiCount = nfts
           .filter(item => item.type === "rwi")
           .reduce((sum, item) => sum + item.quantity, 0);
         const totalItems = transactions.length;
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
 
-        console.log("Escrow NFT Inventory:", products);
+        console.log("SellerEscrow: Escrow NFT Inventory:", nfts);
+        console.log("SellerEscrow: Digital Count:", digitalCount, "RWI Count:", rwiCount);
 
         setPendingEscrowPayments(transactions);
-        setEscrowNFTInventory(products);
-        setDigitalGoodsInEscrow(digitalCount);
-        setRwiGoodsInEscrow(rwiCount);
+        setEscrowNFTInventory(nfts);
+        setDigitalProductsInEscrow(digitalCount);
+        setRwiProductsInEscrow(rwiCount);
         setTotalPendingItems(totalItems);
         setTotalPendingAmount(totalAmount);
         setLoading(false);
@@ -187,9 +187,53 @@ function SellerEscrow() {
     fetchEscrowData();
   }, [user, router]);
 
+  // Memoize table data to prevent re-renders
+  const escrowNFTTableData = useMemo(() => ({
+    columns: [
+      { Header: "NFT ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Inventory ID", accessor: "invId", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Quantity", accessor: "quantity", width: "15%", sx: { paddingRight: "20px" } },
+      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
+    ],
+    rows: escrowNFTInventory.map(item => ({
+      ...item,
+      invId: (
+        <Link href={`/dashboards/seller/inventory/details/${item.invId}`}>
+          <MDTypography variant="button" color="info" fontWeight="medium">
+            {item.invId}
+          </MDTypography>
+        </Link>
+      ),
+      status: (
+        <MDBox display="flex" alignItems="center">
+          <Icon
+            fontSize="small"
+            sx={{
+              color: item.status === "Active" ? "success.main" : "warning.main",
+              mr: 1,
+            }}
+          >
+            {item.status === "Active" ? "check_circle" : "warning"}
+          </Icon>
+          <MDTypography variant="button" color="text">
+            {item.status}
+          </MDTypography>
+        </MDBox>
+      ),
+    })),
+  }), [escrowNFTInventory]);
+
+  // Handle page change
+  const handlePageChange = (page) => {
+    console.log("SellerEscrow: Navigating to page:", page);
+    setCurrentPage(page);
+  };
+
   // Ensure user is loaded and authorized before rendering
   if (!user || !user.walletId || user.role !== "seller") {
-    return null; // Or a loading spinner
+    return null;
   }
 
   const walletId = user.walletId;
@@ -228,44 +272,6 @@ function SellerEscrow() {
             }}
           >
             {item.status === "Pending" ? "hourglass_empty" : "check_circle"}
-          </Icon>
-          <MDTypography variant="button" color="text">
-            {item.status}
-          </MDTypography>
-        </MDBox>
-      ),
-    })),
-  };
-
-  // Escrow NFT Inventory Table
-  const escrowNFTTableData = {
-    columns: [
-      { Header: "NFT ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Inventory ID", accessor: "invId", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Quantity", accessor: "quantity", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
-    ],
-    rows: escrowNFTInventory.map(item => ({
-      ...item,
-      invId: (
-        <Link href={`/dashboards/seller/inventory/details/${item.invId}`}>
-          <MDTypography variant="button" color="info" fontWeight="medium">
-            {item.invId}
-          </MDTypography>
-        </Link>
-      ),
-      status: (
-        <MDBox display="flex" alignItems="center">
-          <Icon
-            fontSize="small"
-            sx={{
-              color: item.status === "Active" ? "success.main" : "warning.main",
-              mr: 1,
-            }}
-          >
-            {item.status === "Active" ? "check_circle" : "removed"}
           </Icon>
           <MDTypography variant="button" color="text">
             {item.status}
@@ -324,10 +330,10 @@ function SellerEscrow() {
                     </MDBox>
                     <MDBox>
                       <MDTypography variant="h6" color="dark">
-                        Digital Goods
+                        Digital Products
                       </MDTypography>
                       <MDTypography variant="h4" color="info">
-                        {digitalGoodsInEscrow}
+                        {digitalProductsInEscrow}
                       </MDTypography>
                       <MDTypography variant="caption" color="text">
                         In Escrow
@@ -354,10 +360,10 @@ function SellerEscrow() {
                     </MDBox>
                     <MDBox>
                       <MDTypography variant="h6" color="dark">
-                        RWI Goods
+                        RWI Products
                       </MDTypography>
                       <MDTypography variant="h4" color="info">
-                        {rwiGoodsInEscrow}
+                        {rwiProductsInEscrow}
                       </MDTypography>
                       <MDTypography variant="caption" color="text">
                         In Escrow
@@ -482,11 +488,16 @@ function SellerEscrow() {
                     ) : (
                       <DataTable
                         table={escrowNFTTableData}
-                        entriesPerPage={false}
+                        entriesPerPage={{
+                          defaultValue: 5,
+                          entries: [5, 10, 15],
+                        }}
                         canSearch={false}
+                        pagination={{ variant: "gradient", color: "info" }}
+                        onPageChange={handlePageChange}
+                        currentPage={currentPage}
                         sx={{
                           "& th": { paddingRight: "20px !important", paddingLeft: "20px !important" },
-                          "& .MuiTablePagination-root": { display: "none !important" },
                         }}
                       />
                     )}
