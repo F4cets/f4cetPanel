@@ -403,29 +403,16 @@ function EditProduct() {
         }
         mintedCnfts = await mintResponse.json();
         console.log("EditProduct: Minted cNFTs:", mintedCnfts);
-
-        // Save minted cNFTs to Firestore
-        for (const cnft of mintedCnfts.cnfts || []) {
-          await setDoc(doc(db, `products/${targetProductId}/nfts`, cnft.assetId), {
-            assetId: cnft.assetId,
-            metadataUri: cnft.metadataUri,
-            leafIndex: cnft.leafIndex,
-            productId: targetProductId,
-            storeId: form.storeId,
-            status: "Ordered",
-            createdAt: serverTimestamp(),
-            transferred: false,
-          });
-          console.log("EditProduct: Saved cNFT:", cnft.assetId);
-        }
       }
 
+      // Set success message
       if (productId === "new") {
         setSuccess(`Product created${mintedCnfts.cnfts?.length ? ` and ${mintedCnfts.cnfts.length} cNFTs minted` : ""} successfully!`);
       } else {
         setSuccess("Product updated successfully!");
       }
 
+      // Reset form and redirect
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [], isActive: true, storeId: "" });
       setImages([]);
       setImagePreviews([]);
