@@ -275,6 +275,15 @@ function CreateInventory() {
         setIsSubmitting(false);
         return;
       }
+      // Validate variant fields
+      for (const variant of inventoryVariants) {
+        if (!variant.size || !variant.color || !variant.quantity || parseInt(variant.quantity) < 1) {
+          setError("All RWI variants must have size, color, and a quantity of at least 1.");
+          setProcessing(false);
+          setIsSubmitting(false);
+          return;
+        }
+      }
     }
 
     if (images.length === 0) {
@@ -420,7 +429,7 @@ function CreateInventory() {
         treeId: "25a893ed-ac27-4fe6-832e-c8abd627fb14",
       };
 
-      console.log("CreateInventory: Calling mintcnfts with params:", mintParams);
+      console.log("CreateInventory: Calling mintcnfts with params:", JSON.stringify(mintParams, null, 2));
       const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -431,7 +440,7 @@ function CreateInventory() {
         throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
       }
       const mintedCnfts = await mintResponse.json();
-      console.log("CreateInventory: Minted cNFTs:", mintedCnfts);
+      console.log("CreateInventory: Minted cNFTs response:", JSON.stringify(mintedCnfts, null, 2));
 
       setSuccess(`Inventory created and ${mintedCnfts.cnfts?.length || 0} cNFTs minted successfully!`);
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [] });
