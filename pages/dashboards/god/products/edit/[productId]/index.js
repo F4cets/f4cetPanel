@@ -284,6 +284,14 @@ function EditProduct() {
         setIsMinting(false);
         return;
       }
+      // Validate variant fields
+      for (const variant of inventoryVariants) {
+        if (!variant.size || !variant.color || !variant.quantity || parseInt(variant.quantity) < 1) {
+          setError("All RWI variants must have size, color, and a quantity of at least 1.");
+          setIsMinting(false);
+          return;
+        }
+      }
     }
 
     if (imagePreviews.length === 0 && images.length === 0) {
@@ -392,6 +400,7 @@ function EditProduct() {
         };
 
         // Call mintcnfts
+        console.log("EditProduct: Calling mintcnfts with params:", JSON.stringify(mintParams, null, 2));
         const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -402,7 +411,7 @@ function EditProduct() {
           throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
         }
         mintedCnfts = await mintResponse.json();
-        console.log("EditProduct: Minted cNFTs:", mintedCnfts);
+        console.log("EditProduct: Minted cNFTs response:", JSON.stringify(mintedCnfts, null, 2));
       }
 
       // Set success message
