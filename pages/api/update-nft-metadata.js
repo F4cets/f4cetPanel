@@ -20,8 +20,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Initialize Google Cloud Storage
-    const storage = new Storage();
+    // Decode base64-encoded Google Cloud credentials
+    const credentialsBase64 = process.env.GOOGLE_APPLICATION_CREDENTIALS_BASE64;
+    if (!credentialsBase64) {
+      throw new Error("GOOGLE_APPLICATION_CREDENTIALS_BASE64 environment variable is not set");
+    }
+
+    // Decode the base64 string to JSON
+    const credentialsJson = Buffer.from(credentialsBase64, "base64").toString("utf-8");
+    const credentials = JSON.parse(credentialsJson);
+
+    // Initialize Google Cloud Storage with credentials
+    const storage = new Storage({
+      credentials,
+    });
+
     const bucket = storage.bucket("f4cet-nft-assets");
     const filePath = `nfts/${storeId}/${productId}/${metadataId}.json`;
     const file = bucket.file(filePath);
