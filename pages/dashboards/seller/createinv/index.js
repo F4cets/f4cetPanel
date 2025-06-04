@@ -86,9 +86,9 @@ function CreateInventory() {
     "Toys & Games",
   ];
 
-  // Calculate total SOL cost (0.0025 SOL per item) - Updated fee
+  // Calculate total SOL cost (0.0025 SOL per item)
   const calculateTotalSolCost = () => {
-    const feePerItemSOL = 0.0025; // Changed from 0.003 to 0.0025
+    const feePerItemSOL = 0.0025;
     let totalQuantity = 0;
     if (inventoryType === "rwi") {
       totalQuantity = inventoryVariants.reduce((sum, v) => sum + (parseInt(v.quantity) || 0), 0);
@@ -98,7 +98,7 @@ function CreateInventory() {
     return (totalQuantity * feePerItemSOL).toFixed(5);
   };
 
-  // Check role, fetch storeId, and shipping address - Removed escrowPublicKey fetch
+  // Check role, fetch storeId, and shipping address
   useEffect(() => {
     const checkRoleAndStore = async () => {
       try {
@@ -223,7 +223,7 @@ function CreateInventory() {
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
   };
 
-  // Handle form submission - Removed mintcnfts and Google Cloud Storage logic
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) {
@@ -298,10 +298,14 @@ function CreateInventory() {
       const totalQuantity = inventoryType === "rwi"
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0)
         : parseInt(form.quantity);
+      console.log("CreateInventory: Total Quantity:", totalQuantity); // Added logging
 
-      // Fee structure: 0.0025 SOL per item, 100% to F4cets - Updated fees
+      // Fee structure: 0.0025 SOL per item
       const feePerItemSOL = 0.0025;
       const totalFeeSOL = feePerItemSOL * totalQuantity;
+      console.log("CreateInventory: Total Fee (SOL):", totalFeeSOL); // Added logging
+      const lamports = Math.floor(totalFeeSOL * LAMPORTS_PER_SOL);
+      console.log("CreateInventory: Total Fee (Lamports):", lamports); // Added logging
 
       // Create Solana transaction
       const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
@@ -311,7 +315,7 @@ function CreateInventory() {
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: f4cetsWallet,
-          lamports: Math.floor(totalFeeSOL * LAMPORTS_PER_SOL),
+          lamports,
         })
       );
 
@@ -319,6 +323,14 @@ function CreateInventory() {
       const { blockhash } = await connection.getLatestBlockhash();
       transaction.recentBlockhash = blockhash;
       transaction.feePayer = publicKey;
+
+      // Log transaction details before signing
+      console.log("CreateInventory: Transaction Details:", {
+        from: publicKey.toString(),
+        to: f4cetsWallet.toString(),
+        lamports,
+        sol: lamports / LAMPORTS_PER_SOL,
+      });
 
       // Sign and send transaction
       console.log("CreateInventory: Prompting Solana wallet payment");
@@ -753,7 +765,7 @@ function CreateInventory() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "#4d455d", padding: "8px", borderRadius: "8px" }}
+                                sx={{ backgroundColor: "#4D455D", padding: "8px", borderRadius: "8px" }} // Changed background color
                               >
                                 <MDTypography variant="body2" sx={{ color: "#fff", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
@@ -916,7 +928,7 @@ function CreateInventory() {
                   )}
                   <MDBox mb={3} display="flex" justifyContent="center">
                     <MDTypography variant="body2" sx={{ color: "#212121" }}>
-                      Total Listing Cost: {calculateTotalSolCost()} SOL {/* Changed from Minting to Listing */}
+                      Total Listing Cost: {calculateTotalSolCost()} SOL
                     </MDTypography>
                   </MDBox>
                   <Divider sx={{ mb: 3, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
