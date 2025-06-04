@@ -6,16 +6,18 @@
 * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
 */
 
-import { useState, useEffect, useRef } from "react"; // CHANGED: Added useRef
+import { useState, useEffect, useRef } from "react";
 import { db } from "/lib/firebase";
-import { getFirestore, doc, collection, getDocs, getDoc, query, where } from "firebase/firestore"; // CHANGED: Added doc import
+import { getFirestore, doc, collection, getDocs, getDoc, query, where } from "firebase/firestore";
 import Link from "next/link";
 import { fetchSolPrice } from "/lib/getSolPrice";
+import axios from "axios"; // ADDED: For HTTP requests
 
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
+import CircularProgress from "@mui/material/CircularProgress"; // ADDED: For loading state
 
 // NextJS Material Dashboard 2 PRO components
 import MDBox from "/components/MDBox";
@@ -36,13 +38,15 @@ function GodDashboard() {
   const [topItems, setTopItems] = useState({ columns: [], rows: [] });
   const [flaggedStores, setFlaggedStores] = useState({ columns: [], rows: [] });
   const [flaggedItems, setFlaggedItems] = useState({ columns: [], rows: [] });
-  // CHANGED: Added useRef to track fetchData execution
+  // ADDED: State for createbubblegumtree
+  const [treeResponse, setTreeResponse] = useState(null);
+  const [treeError, setTreeError] = useState(null);
+  const [isCreatingTree, setIsCreatingTree] = useState(false);
   const hasFetched = useRef(false);
 
   // Fetch Firestore data
   useEffect(() => {
     const fetchData = async () => {
-      // CHANGED: Skip if already fetched
       if (hasFetched.current) return;
       hasFetched.current = true;
 
@@ -301,64 +305,79 @@ function GodDashboard() {
     fetchData();
   }, []);
 
-  // Placeholder for future admin flag button logic in edit pages
-  /*
-  // In god/products/edit/[productId]/index.js:
-  const handleToggleProductActive = async () => {
+  // ADDED: Function to trigger createbubblegumtree
+  const handleCreateBubblegumTree = async () => {
+    setIsCreatingTree(true);
+    setTreeResponse(null);
+    setTreeError(null);
     try {
-      const productRef = doc(db, "products", productId);
-      await updateDoc(productRef, { isActive: !product.isActive });
-      // Update local state or refetch
+      const response = await axios.post(
+        "https://createbubblegumtree-232592911911.us-central1.run.app",
+        {},
+        { headers: { "Content-Type": "application/json" } }
+      );
+      setTreeResponse(response.data);
+      console.log("Created Bubblegum V2 Tree:", response.data);
     } catch (error) {
-      console.error("Error toggling product active status:", error);
+      const errorMessage = error.response?.data?.error || error.message;
+      setTreeError(errorMessage);
+      console.error("Error creating Bubblegum V2 Tree:", errorMessage);
+    } finally {
+      setIsCreatingTree(false);
     }
   };
-
-  // In god/stores/edit/[storeId]/index.js:
-  const handleToggleStoreActive = async () => {
-    try {
-      const storeRef = doc(db, "stores", storeId);
-      await updateDoc(storeRef, { isActive: !store.isActive });
-      // Update local state or refetch
-    } catch (error) {
-      console.error("Error toggling store active status:", error);
-    }
-  };
-
-  // User flagging abuse prevention:
-  // In user management (e.g., god/users/edit/[userId]/index.js):
-  const handleToggleUserActive = async () => {
-    try {
-      const userRef = doc(db, "users", userId);
-      await updateDoc(userRef, { isActive: !user.isActive });
-      // If isActive: false, user cannot access marketplace/affiliate features
-    } catch (error) {
-      console.error("Error toggling user active status:", error);
-    }
-  };
-
-  // In frontend flagging (e.g., buyer/marketplace/details/[orderId]/index.js):
-  const handleFlagIssue = async () => {
-    try {
-      await addDoc(collection(db, "notifications"), {
-        orderId,
-        userId: sellerId,
-        flaggedBy: user.walletId,
-        type: "issue",
-        description: issueDescription,
-        timestamp: new Date().toISOString(),
-        read: false,
-      });
-    } catch (error) {
-      console.error("Error flagging issue:", error);
-    }
-  };
-  */
 
   return (
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox py={3}>
+        {/* ADDED: Button and Response Display */}
+        <MDBox mb={3}>
+          <MDButton
+            variant="gradient"
+            color="info"
+            onClick={handleCreateBubblegumTree}
+            disabled={isCreatingTree}
+          >
+            {isCreatingTree ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : (
+              <>
+                <Icon sx={{ mr: 1 }}>add</Icon>
+                Create Bubblegum V2 Tree
+              </>
+            )}
+          </MDButton>
+          {treeResponse && (
+            <MDBox mt={2} p={2} bgColor="success" borderRadius="lg">
+              <MDTypography variant="h6" color="white">
+                Bubblegum V2 Tree Created Successfully
+              </MDTypography>
+              <MDTypography variant="body2" color="white">
+                Tree ID: {treeResponse.treeId}
+              </MDTypography>
+              <MDTypography variant="body2" color="white">
+                Public Key: {treeResponse.publicKey}
+              </MDTypography>
+              <MDTypography variant="body2" color="white">
+                Schema Version: {treeResponse.schemaVersion}
+              </MDTypography>
+              <MDTypography variant="body2" color="white">
+                Creation Signature: {treeResponse.creationSignature}
+              </MDTypography>
+            </MDBox>
+          )}
+          {treeError && (
+            <MDBox mt={2} p={2} bgColor="error" borderRadius="lg">
+              <MDTypography variant="h6" color="white">
+                Error Creating Bubblegum V2 Tree
+              </MDTypography>
+              <MDTypography variant="body2" color="white">
+                {treeError}
+              </MDTypography>
+            </MDBox>
+          )}
+        </MDBox>
         <MDBox mb={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={3}>
