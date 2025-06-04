@@ -66,7 +66,6 @@ function CreateInventory() {
   const [images, setImages] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
   const [storeId, setStoreId] = useState(null);
-  const [escrowPublicKey, setEscrowPublicKey] = useState(null);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -87,9 +86,9 @@ function CreateInventory() {
     "Toys & Games",
   ];
 
-  // Calculate total SOL cost (0.003 SOL per item)
+  // Calculate total SOL cost (0.0025 SOL per item) - Updated fee
   const calculateTotalSolCost = () => {
-    const feePerItemSOL = 0.003;
+    const feePerItemSOL = 0.0025; // Changed from 0.003 to 0.0025
     let totalQuantity = 0;
     if (inventoryType === "rwi") {
       totalQuantity = inventoryVariants.reduce((sum, v) => sum + (parseInt(v.quantity) || 0), 0);
@@ -99,7 +98,7 @@ function CreateInventory() {
     return (totalQuantity * feePerItemSOL).toFixed(5);
   };
 
-  // Check role, fetch storeId, escrowPublicKey, and shipping address
+  // Check role, fetch storeId, and shipping address - Removed escrowPublicKey fetch
   useEffect(() => {
     const checkRoleAndStore = async () => {
       try {
@@ -136,16 +135,6 @@ function CreateInventory() {
         }
         setStoreId(storeIds[0]);
 
-        // Fetch escrowPublicKey
-        const plan = userData.plan || {};
-        if (!plan.escrowPublicKey) {
-          console.log("CreateInventory: No escrow public key found, redirecting to onboarding");
-          router.push("/dashboards/onboarding");
-          return;
-        }
-        setEscrowPublicKey(plan.escrowPublicKey);
-        console.log("CreateInventory: Escrow Public Key:", plan.escrowPublicKey);
-
         // Fetch shipping address for RWI
         const storeDoc = await getDoc(doc(db, "stores", storeIds[0]));
         if (storeDoc.exists()) {
@@ -157,7 +146,7 @@ function CreateInventory() {
 
         setLoading(false);
       } catch (err) {
-        console.error("CreateInventory: Error fetching role/store/escrow:", err.message);
+        console.error("CreateInventory: Error fetching role/store:", err.message);
         setError(err.message);
         setLoading(false);
       }
@@ -234,7 +223,7 @@ function CreateInventory() {
     setImagePreviews(imagePreviews.filter((_, i) => i !== index));
   };
 
-  // Handle form submission
+  // Handle form submission - Removed mintcnfts and Google Cloud Storage logic
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) {
@@ -300,13 +289,6 @@ function CreateInventory() {
       return;
     }
 
-    if (!escrowPublicKey) {
-      setError("Escrow public key not found. Please complete seller onboarding.");
-      setProcessing(false);
-      setIsSubmitting(false);
-      return;
-    }
-
     try {
       // Generate productId
       const productRef = doc(collection(db, "products"));
@@ -317,29 +299,19 @@ function CreateInventory() {
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0)
         : parseInt(form.quantity);
 
-      // Fee structure: 0.003 SOL per item
-      const feePerItemSOL = 0.003;
-      const f4cetFeeSOL = 0.00299;
-      const escrowFeeSOL = 0.00001;
+      // Fee structure: 0.0025 SOL per item, 100% to F4cets - Updated fees
+      const feePerItemSOL = 0.0025;
       const totalFeeSOL = feePerItemSOL * totalQuantity;
-      const totalF4cetFeeSOL = f4cetFeeSOL * totalQuantity;
-      const totalEscrowFeeSOL = escrowFeeSOL * totalQuantity;
 
       // Create Solana transaction
       const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
       const f4cetsWallet = new PublicKey('2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53');
-      const escrowWallet = new PublicKey(escrowPublicKey);
 
       const transaction = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey: publicKey,
           toPubkey: f4cetsWallet,
-          lamports: Math.floor(totalF4cetFeeSOL * LAMPORTS_PER_SOL),
-        }),
-        SystemProgram.transfer({
-          fromPubkey: publicKey,
-          toPubkey: escrowWallet,
-          lamports: Math.floor(totalEscrowFeeSOL * LAMPORTS_PER_SOL),
+          lamports: Math.floor(totalFeeSOL * LAMPORTS_PER_SOL),
         })
       );
 
@@ -355,26 +327,7 @@ function CreateInventory() {
       await connection.confirmTransaction(txSignature, 'confirmed');
       console.log("CreateInventory: Payment confirmed, txSignature:", txSignature);
 
-      // Upload first image to Google Cloud Storage for cNFT metadata
-      const firstImage = images[0];
-      const formData = new FormData();
-      formData.append("image", firstImage);
-      formData.append("storeId", storeId);
-      formData.append("productId", productId);
-
-      console.log("CreateInventory: Uploading NFT image to API route");
-      const uploadResponse = await fetch("https://user.f4cets.market/api/upload-nft-image", {
-        method: "POST",
-        body: formData,
-      });
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(`Failed to upload cNFT image: ${errorData.error || uploadResponse.statusText}`);
-      }
-      const { url: imageUrl, fileExt } = await uploadResponse.json();
-      console.log("CreateInventory: cNFT image uploaded:", imageUrl);
-
-      // Upload remaining images to Firebase Storage
+      // Upload images to Firebase Storage
       const imageUrls = await Promise.all(
         images.slice(0, 3).map(async (image, index) => {
           const fileExt = image.name.split('.').pop().toLowerCase();
@@ -414,35 +367,7 @@ function CreateInventory() {
       console.log("CreateInventory: Saving product at products/", productId, ":", productData);
       await setDoc(doc(db, "products", productId), productData);
 
-      // Call mintcnfts
-      const mintParams = {
-        walletAddress: user.walletId,
-        storeId,
-        productId,
-        quantity: totalQuantity,
-        name: form.name,
-        imageUrl,
-        imageExt: fileExt,
-        type: inventoryType,
-        variants: inventoryType === "rwi" ? inventoryVariants : [],
-        feeTxSignature: txSignature,
-        treeId: "25a893ed-ac27-4fe6-832e-c8abd627fb14",
-      };
-
-      console.log("CreateInventory: Calling mintcnfts with params:", JSON.stringify(mintParams, null, 2));
-      const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mintParams),
-      });
-      if (!mintResponse.ok) {
-        const errorData = await mintResponse.json();
-        throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
-      }
-      const mintedCnfts = await mintResponse.json();
-      console.log("CreateInventory: Minted cNFTs response:", JSON.stringify(mintedCnfts, null, 2));
-
-      setSuccess(`Inventory created and ${mintedCnfts.cnfts?.length || 0} cNFTs minted successfully!`);
+      setSuccess("Inventory created successfully!");
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [] });
       setImages([]);
       setImagePreviews([]);
@@ -974,7 +899,7 @@ function CreateInventory() {
                   )}
                   <MDBox mb={3} display="flex" justifyContent="center">
                     <MDTypography variant="body2" sx={{ color: "#212121" }}>
-                      Total Minting Cost: {calculateTotalSolCost()} SOL
+                      Total Listing Cost: {calculateTotalSolCost()} SOL {/* Changed from Minting to Listing */}
                     </MDTypography>
                   </MDBox>
                   <Divider sx={{ mb: 3, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
