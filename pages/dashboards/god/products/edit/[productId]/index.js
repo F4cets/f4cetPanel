@@ -396,7 +396,7 @@ function EditProduct() {
           type: inventoryType,
           variants: inventoryType === "rwi" ? inventoryVariants : [],
           feeTxSignature: `fee-${Math.random().toString(36).substring(2, 10)}`,
-          treeId: "25a893ed-ac27-4fe6-832e-c8abd627fb14",
+          treeId: "BKx6rwg4MFgRcHxNSpHg",
         };
 
         // Call mintcnfts
