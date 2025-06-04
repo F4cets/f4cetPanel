@@ -543,9 +543,18 @@ function CreateInventory() {
                       label="Price (USDC)"
                       type="number"
                       value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "" || parseFloat(value) >= 0.01) {
+                          setForm({ ...form, price: value });
+                        } else {
+                          setForm({ ...form, price: "0.01" });
+                        }
+                      }}
                       fullWidth
                       required
+                      min="0.01"
+                      step="0.01"
                       sx={{
                         "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
                         "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
@@ -565,9 +574,17 @@ function CreateInventory() {
                           label="Quantity"
                           type="number"
                           value={form.quantity}
-                          onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "" || parseInt(value) >= 1) {
+                              setForm({ ...form, quantity: value });
+                            } else {
+                              setForm({ ...form, quantity: "1" });
+                            }
+                          }}
                           fullWidth
                           required
+                          min="1"
                           sx={{
                             "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
                             "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
