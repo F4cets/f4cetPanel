@@ -753,7 +753,7 @@ function CreateInventory() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "rgba(255, 255, 255, 0.5)", padding: "8px", borderRadius: "8px" }}
+                                sx={{ backgroundColor: "#4d455d", padding: "8px", borderRadius: "8px" }}
                               >
                                 <MDTypography variant="body2" sx={{ color: "#fff", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
