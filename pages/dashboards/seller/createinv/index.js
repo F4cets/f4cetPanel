@@ -18,9 +18,12 @@ import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } f
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, setDoc, collection, getDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, collection, getDoc } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
+
+// UUID for transaction ID
+import { v4 as uuidv4 } from 'uuid';
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -298,14 +301,14 @@ function CreateInventory() {
       const totalQuantity = inventoryType === "rwi"
         ? inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0)
         : parseInt(form.quantity);
-      console.log("CreateInventory: Total Quantity:", totalQuantity); // Added logging
+      console.log("CreateInventory: Total Quantity:", totalQuantity);
 
       // Fee structure: 0.0025 SOL per item
       const feePerItemSOL = 0.0025;
       const totalFeeSOL = feePerItemSOL * totalQuantity;
-      console.log("CreateInventory: Total Fee (SOL):", totalFeeSOL); // Added logging
+      console.log("CreateInventory: Total Fee (SOL):", totalFeeSOL);
       const lamports = Math.floor(totalFeeSOL * LAMPORTS_PER_SOL);
-      console.log("CreateInventory: Total Fee (Lamports):", lamports); // Added logging
+      console.log("CreateInventory: Total Fee (Lamports):", lamports);
 
       // Create Solana transaction
       const connection = new Connection(process.env.NEXT_PUBLIC_QUICKNODE_RPC, 'confirmed');
@@ -338,6 +341,24 @@ function CreateInventory() {
       const txSignature = await connection.sendRawTransaction(signedTransaction.serialize());
       await connection.confirmTransaction(txSignature, 'confirmed');
       console.log("CreateInventory: Payment confirmed, txSignature:", txSignature);
+
+      // Create Firestore transaction record - Added
+      const txId = uuidv4();
+      const feeTransaction = {
+        amount: totalFeeSOL,
+        buyerId: user.walletId,
+        createdAt: new Date().toISOString(),
+        currency: "SOL",
+        f4cetFee: totalFeeSOL,
+        f4cetWallet: '2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53',
+        feeTxSignature: txSignature,
+        status: "completed",
+        storeId,
+        type: "inventory_fee",
+        updatedAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, `transactions/${txId}`), feeTransaction);
+      console.log(`CreateInventory: Recorded transaction ${txId}: ${totalFeeSOL} SOL to F4cets`);
 
       // Upload images to Firebase Storage
       const imageUrls = await Promise.all(
@@ -765,7 +786,7 @@ function CreateInventory() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "#4D455D", padding: "8px", borderRadius: "8px" }} // Changed background color
+                                sx={{ backgroundColor: "#4D455D", padding: "8px", borderRadius: "8px" }} // Updated to #4D455D
                               >
                                 <MDTypography variant="body2" sx={{ color: "#fff", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}

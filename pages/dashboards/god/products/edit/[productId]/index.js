@@ -14,9 +14,12 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, setDoc, collection, serverTimestamp, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, collection, getDocs, query, where } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
+
+// UUID for transaction ID
+import { v4 as uuidv4 } from 'uuid';
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -69,10 +72,7 @@ function EditProduct() {
   const [dragActive, setDragActive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isTogglingActive, setIsTogglingActive] = useState(false);
-  // Minting state
-  const [isMinting, setIsMinting] = useState(false);
-  const [mintError, setMintError] = useState(null);
-  const [mintSuccess, setMintSuccess] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Added to replace isMinting
 
   // Category options
   const digitalCategories = [
@@ -208,8 +208,8 @@ function EditProduct() {
 
   // Handle variant addition
   const handleAddVariant = () => {
-    if (!variantForm.size || !variantForm.color || !variantForm.quantity) {
-      setError("Please fill out all variant fields.");
+    if (!variantForm.size || !variantForm.color || !variantForm.quantity || parseInt(variantForm.quantity) < 1) {
+      setError("Please fill out all variant fields with a quantity of at least 1.");
       return;
     }
     setInventoryVariants([...inventoryVariants, { ...variantForm }]);
@@ -252,43 +252,40 @@ function EditProduct() {
     }
   };
 
-  // Handle form submission
+  // Handle form submission - Removed minting, added transaction record
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
-    setMintError(null);
-    setMintSuccess(null);
-    setIsMinting(true);
+    setIsSubmitting(true);
 
-    if (!form.name || !form.description || !form.price || form.categories.length === 0 || !form.storeId) {
+    if (!form.name || !form.description || !form.price || parseFloat(form.price) <= 0 || form.categories.length === 0 || !form.storeId) {
       setError("Please fill out all required fields, select at least one category, and choose a store.");
-      setIsMinting(false);
+      setIsSubmitting(false);
       return;
     }
 
     if (inventoryType === "digital") {
       if (!form.quantity || parseInt(form.quantity) < 1) {
         setError("Please specify a quantity of at least 1 for digital items.");
-        setIsMinting(false);
+        setIsSubmitting(false);
         return;
       }
     } else if (inventoryType === "rwi") {
       if (!form.shippingLocation) {
         setError("Please fill out the shipping location for RWI.");
-        setIsMinting(false);
+        setIsSubmitting(false);
         return;
       }
       if (inventoryVariants.length === 0) {
         setError("Please add at least one size/color/quantity combination for RWI.");
-        setIsMinting(false);
+        setIsSubmitting(false);
         return;
       }
-      // Validate variant fields
       for (const variant of inventoryVariants) {
         if (!variant.size || !variant.color || !variant.quantity || parseInt(variant.quantity) < 1) {
           setError("All RWI variants must have size, color, and a quantity of at least 1.");
-          setIsMinting(false);
+          setIsSubmitting(false);
           return;
         }
       }
@@ -296,7 +293,7 @@ function EditProduct() {
 
     if (imagePreviews.length === 0 && images.length === 0) {
       setError("Please upload at least one image.");
-      setIsMinting(false);
+      setIsSubmitting(false);
       return;
     }
 
@@ -360,66 +357,27 @@ function EditProduct() {
         await updateDoc(doc(db, "products", targetProductId), productData);
       }
 
-      // Handle cNFT minting for new products
-      let mintedCnfts = [];
-      if (productId === "new" && imageUrls.length > 0) {
-        // Upload first image to Google Cloud Storage for cNFT metadata
-        const firstImage = images[0];
-        const formData = new FormData();
-        formData.append("image", firstImage);
-        formData.append("storeId", form.storeId);
-        formData.append("productId", targetProductId);
-
-        const uploadResponse = await fetch("https://user.f4cets.market/api/upload-nft-image", {
-          method: "POST",
-          body: formData,
-        });
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json();
-          throw new Error(`Failed to upload cNFT image: ${errorData.error || uploadResponse.statusText}`);
-        }
-        const { url: imageUrl, fileExt } = await uploadResponse.json();
-        console.log("EditProduct: cNFT image uploaded:", imageUrl);
-
-        // Prepare mintcnfts parameters
-        const quantity = inventoryType === "digital"
-          ? parseInt(form.quantity)
-          : inventoryVariants.reduce((sum, v) => sum + parseInt(v.quantity), 0);
-        const mintParams = {
-          walletAddress: sellerId,
-          storeId: form.storeId,
-          productId: targetProductId,
-          quantity,
-          name: form.name,
-          imageUrl,
-          imageExt: fileExt,
-          type: inventoryType,
-          variants: inventoryType === "rwi" ? inventoryVariants : [],
-          feeTxSignature: `fee-${Math.random().toString(36).substring(2, 10)}`,
-          treeId: "BKx6rwg4MFgRcHxNSpHg",
-        };
-
-        // Call mintcnfts
-        console.log("EditProduct: Calling mintcnfts with params:", JSON.stringify(mintParams, null, 2));
-        const mintResponse = await fetch("https://mintcnfts-232592911911.us-central1.run.app", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(mintParams),
-        });
-        if (!mintResponse.ok) {
-          const errorData = await mintResponse.json();
-          throw new Error(`Failed to mint cNFTs: ${errorData.error || mintResponse.statusText}`);
-        }
-        mintedCnfts = await mintResponse.json();
-        console.log("EditProduct: Minted cNFTs response:", JSON.stringify(mintedCnfts, null, 2));
-      }
+      // Create Firestore transaction record
+      const txId = uuidv4();
+      const feeTransaction = {
+        amount: 0,
+        buyerId: user.walletId,
+        createdAt: new Date().toISOString(),
+        currency: "SOL",
+        f4cetFee: 0,
+        f4cetWallet: '2Wij9XGAEpXeTfDN4KB1ryrizicVkUHE1K5dFqMucy53',
+        feeTxSignature: "N/A",
+        status: "completed",
+        storeId: form.storeId,
+        type: "god_product",
+        updatedAt: new Date().toISOString(),
+        godCreated: true,
+      };
+      await setDoc(doc(db, `transactions/${txId}`), feeTransaction);
+      console.log(`EditProduct: Recorded transaction ${txId} for product ${targetProductId}`);
 
       // Set success message
-      if (productId === "new") {
-        setSuccess(`Product created${mintedCnfts.cnfts?.length ? ` and ${mintedCnfts.cnfts.length} cNFTs minted` : ""} successfully!`);
-      } else {
-        setSuccess("Product updated successfully!");
-      }
+      setSuccess(productId === "new" ? "Product created successfully!" : "Product updated successfully!");
 
       // Reset form and redirect
       setForm({ name: "", description: "", price: "", quantity: "", shippingLocation: "", categories: [], isActive: true, storeId: "" });
@@ -431,9 +389,8 @@ function EditProduct() {
     } catch (err) {
       console.error("EditProduct: Error saving product:", err);
       setError("Failed to save product: " + err.message);
-      setMintError("Failed to mint cNFTs: " + err.message);
     } finally {
-      setIsMinting(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -538,26 +495,6 @@ function EditProduct() {
                     {success}
                   </MDTypography>
                 )}
-                {mintError && (
-                  <MDTypography
-                    variant="body2"
-                    color="error"
-                    mb={2}
-                    sx={{ textAlign: { xs: "center", md: "left" } }}
-                  >
-                    {mintError}
-                  </MDTypography>
-                )}
-                {mintSuccess && (
-                  <MDTypography
-                    variant="body2"
-                    color="success"
-                    mb={2}
-                    sx={{ textAlign: { xs: "center", md: "left" } }}
-                  >
-                    {mintSuccess}
-                  </MDTypography>
-                )}
                 <form onSubmit={handleSubmit}>
                   <MDBox mb={3}>
                     <Autocomplete
@@ -642,9 +579,18 @@ function EditProduct() {
                       label="Price (USDC)"
                       type="number"
                       value={form.price}
-                      onChange={(e) => setForm({ ...form, price: e.target.value })}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === "" || parseFloat(value) >= 0.01) {
+                          setForm({ ...form, price: value });
+                        } else {
+                          setForm({ ...form, price: "0.01" });
+                        }
+                      }}
                       fullWidth
                       required
+                      min="0.01"
+                      step="0.01"
                       sx={{
                         "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
                         "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
@@ -690,9 +636,17 @@ function EditProduct() {
                           label="Quantity"
                           type="number"
                           value={form.quantity}
-                          onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "" || parseInt(value) >= 1) {
+                              setForm({ ...form, quantity: value });
+                            } else {
+                              setForm({ ...form, quantity: "1" });
+                            }
+                          }}
                           fullWidth
                           required
+                          min="1"
                           sx={{
                             "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
                             "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
@@ -861,7 +815,7 @@ function EditProduct() {
                                 alignItems="center"
                                 gap={1}
                                 mb={1}
-                                sx={{ backgroundColor: "rgba(255, 255, 255, 0.5)", padding: "8px", borderRadius: "8px" }}
+                                sx={{ backgroundColor: "#4D455D", padding: "8px", borderRadius: "8px" }} // Updated to #4D455D
                               >
                                 <MDTypography variant="body2" sx={{ color: "#fff", flex: 1 }}>
                                   Size: {variant.size}, Color: {variant.color}, Quantity: {variant.quantity}
@@ -915,8 +869,16 @@ function EditProduct() {
                               label="Quantity"
                               type="number"
                               value={variantForm.quantity}
-                              onChange={(e) => setVariantForm({ ...variantForm, quantity: e.target.value })}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === "" || parseInt(value) >= 1) {
+                                  setVariantForm({ ...variantForm, quantity: value });
+                                } else {
+                                  setVariantForm({ ...variantForm, quantity: "1" });
+                                }
+                              }}
                               fullWidth
+                              min="1"
                               sx={{
                                 "& .MuiInputBase-input": { padding: { xs: "10px", md: "12px" }, color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
                                 "& .MuiInputLabel-root": { color: theme => theme.palette.mode === 'dark' ? '#fff' : '#344767' },
@@ -1020,10 +982,10 @@ function EditProduct() {
                       type="submit"
                       color="dark"
                       variant="gradient"
-                      disabled={isMinting}
+                      disabled={isSubmitting}
                       sx={{ width: { xs: "100%", sm: "auto" } }}
                     >
-                      {isMinting ? "Creating..." : (productId === "new" ? "Create Product" : "Update Product")}
+                      {isSubmitting ? "Processing..." : (productId === "new" ? "Create Product" : "Update Product")}
                     </MDButton>
                     <MDButton
                       onClick={handleCancel}
