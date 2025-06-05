@@ -14,7 +14,7 @@ import { useRouter } from "next/router";
 import { useUser } from "/contexts/UserContext";
 
 // Firebase imports
-import { doc, getDoc, updateDoc, setDoc, collection, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc, collection, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "/lib/firebase";
 
