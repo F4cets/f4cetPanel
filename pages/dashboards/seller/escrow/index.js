@@ -120,13 +120,14 @@ function SellerEscrow() {
           });
         }
 
-        // Fetch NFTs from products/{productId}/nfts subcollection
+        // Fetch products directly from products collection - Modified
         const productsQuery = query(
           collection(db, "products"),
-          where("sellerId", "==", user.walletId)
+          where("sellerId", "==", user.walletId),
+          where("isActive", "==", true)
         );
         const productsSnapshot = await getDocs(productsQuery);
-        const nfts = [];
+        const inventory = [];
 
         for (const productDoc of productsSnapshot.docs) {
           const productData = productDoc.data();
@@ -135,22 +136,22 @@ function SellerEscrow() {
           const productName = productData.name || "Unknown Product";
           const createdDate = productData.createdAt?.toDate ? productData.createdAt.toDate() : new Date(productData.createdAt);
 
-          // Query NFTs subcollection
-          const nftsQuery = query(
-            collection(db, `products/${productId}/nfts`),
-            where("status", "==", "Ordered"),
-            where("transferred", "==", false)
-          );
-          const nftsSnapshot = await getDocs(nftsQuery);
+          // Calculate quantity
+          let quantity = 0;
+          if (productType === "digital") {
+            quantity = parseInt(productData.quantity) || 0;
+          } else if (productType === "rwi") {
+            if (productData.variants && Array.isArray(productData.variants)) {
+              quantity = productData.variants.reduce((sum, variant) => sum + (parseInt(variant.quantity) || 0), 0);
+            }
+          }
 
-          for (const nftDoc of nftsSnapshot.docs) {
-            const nftData = nftDoc.data();
-            nfts.push({
-              id: nftData.assetId,
+          if (quantity > 0) {
+            inventory.push({
               date: createdDate.toISOString().split("T")[0],
               product: productName,
               invId: productId,
-              quantity: 1,
+              quantity,
               status: productData.isActive ? "Active" : "Inactive",
               type: productType,
             });
@@ -158,20 +159,20 @@ function SellerEscrow() {
         }
 
         // Calculate metrics
-        const digitalCount = nfts
+        const digitalCount = inventory
           .filter(item => item.type === "digital")
           .reduce((sum, item) => sum + item.quantity, 0);
-        const rwiCount = nfts
+        const rwiCount = inventory
           .filter(item => item.type === "rwi")
           .reduce((sum, item) => sum + item.quantity, 0);
         const totalItems = transactions.length;
         const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
 
-        console.log("SellerEscrow: Escrow NFT Inventory:", nfts);
+        console.log("SellerEscrow: Inventory:", inventory);
         console.log("SellerEscrow: Digital Count:", digitalCount, "RWI Count:", rwiCount);
 
         setPendingEscrowPayments(transactions);
-        setEscrowNFTInventory(nfts);
+        setEscrowNFTInventory(inventory);
         setDigitalProductsInEscrow(digitalCount);
         setRwiProductsInEscrow(rwiCount);
         setTotalPendingItems(totalItems);
@@ -190,13 +191,12 @@ function SellerEscrow() {
   // Memoize table data to prevent re-renders
   const escrowNFTTableData = useMemo(() => ({
     columns: [
-      { Header: "NFT ID", accessor: "id", width: "15%", sx: { paddingRight: "20px" } },
       { Header: "Date", accessor: "date", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Product", accessor: "product", width: "20%", sx: { paddingRight: "20px" } },
-      { Header: "Inventory ID", accessor: "invId", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Quantity", accessor: "quantity", width: "15%", sx: { paddingRight: "20px" } },
-      { Header: "Status", accessor: "status", width: "10%", sx: { paddingRight: "20px" } },
-    ],
+      { Header: "Product", accessor: "product", width: "25%", sx: { paddingRight: "20px" } },
+      { Header: "Inventory ID", accessor: "invId", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Quantity", accessor: "quantity", width: "20%", sx: { paddingRight: "20px" } },
+      { Header: "Status", accessor: "status", width: "20%", sx: { paddingRight: "20px" } },
+    ], // Removed NFT ID column
     rows: escrowNFTInventory.map(item => ({
       ...item,
       invId: (
@@ -468,7 +468,7 @@ function SellerEscrow() {
                 </Card>
               </Grid>
 
-              {/* Escrow NFT Inventory */}
+              {/* Escrow Inventory */}
               <Grid item xs={12}>
                 <Card
                   sx={{
@@ -479,11 +479,11 @@ function SellerEscrow() {
                 >
                   <MDBox p={3}>
                     <MDTypography variant="h5" color="dark" mb={2}>
-                      Current NFT Inventory Being Held in Escrow
+                      Current Inventory Being Held in Escrow {/* Renamed table title */}
                     </MDTypography>
                     {escrowNFTInventory.length === 0 ? (
                       <MDTypography variant="body2" color="text">
-                        No NFT inventory in escrow.
+                        No inventory in escrow.
                       </MDTypography>
                     ) : (
                       <DataTable
