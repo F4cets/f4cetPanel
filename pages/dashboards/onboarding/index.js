@@ -673,7 +673,7 @@ export default function SellerOnboarding() {
                             "& .MuiInputLabel-root.Mui-focused": { color: "#344767 !important" },
                             "& .MuiInputBase-input::placeholder": { color: "#757575", opacity: 1 },
                             "& .MuiOutlinedInput-root": {
-                              "& fieldset": { borderColor: "#bdbdbd" },
+                              "&nbsp; fieldset": { borderColor: "#bdbdbd" },
                               "&:hover fieldset": { borderColor: "#3f51b5" },
                               "&.Mui-focused fieldset": { borderColor: "#3f51b5" },
                             },
@@ -681,7 +681,7 @@ export default function SellerOnboarding() {
                         />
                       </MDBox>
                     </Grid>
-                    <Grid item xs={12} md={6}>
+                    <Grid item xs={6}>
                       <MDBox mb={4}>
                         <MDInput
                           label="Shipping Address"
@@ -724,12 +724,20 @@ export default function SellerOnboarding() {
                         />
                       </MDBox>
                       <MDBox mb={4}>
+                        {/* CHANGED: Prevent negative values, enforce min 0.01 */}
                         <MDInput
                           label="Minimum Price (USD)"
                           name="minPrice"
                           type="number"
                           value={form.minPrice}
-                          onChange={handleInputChange}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setForm((prev) => ({
+                              ...prev,
+                              minPrice: value === "" || parseFloat(value) >= 0.01 ? value : "0.01",
+                            }));
+                          }}
+                          min="0.01"
                           fullWidth
                           required
                           sx={{
@@ -746,12 +754,20 @@ export default function SellerOnboarding() {
                         />
                       </MDBox>
                       <MDBox mb={4}>
+                        {/* CHANGED: Prevent negative values, enforce min 0.01 */}
                         <MDInput
                           label="Maximum Price (USD)"
                           name="maxPrice"
                           type="number"
                           value={form.maxPrice}
-                          onChange={handleInputChange}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setForm((prev) => ({
+                              ...prev,
+                              maxPrice: value === "" || parseFloat(value) >= 0.01 ? value : "0.01",
+                            }));
+                          }}
+                          min="0.01"
                           fullWidth
                           required
                           sx={{
@@ -824,7 +840,8 @@ export default function SellerOnboarding() {
                                 height: "24px",
                                 "& .MuiChip-label": { padding: "0 8px", fontSize: "0.75rem" },
                                 "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.3)" },
-                              }}
+                              }
+                            }
                             />
                           )}
                         </MDBox>

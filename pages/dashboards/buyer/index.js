@@ -185,6 +185,7 @@ function BuyerDashboard() {
         let purchaseAmount = 0;
         const marketplaceOrdersData = [];
         for (const transaction of transactions.filter(t => t.createdAt >= thirtyDaysAgo)) {
+          // CHANGED: Exclude transactions with type "inventory_fee"
           if (transaction.type === "rwi" || transaction.type === "digital") {
             purchaseCount += 1;
             if (transaction.currency === "SOL") {
@@ -192,21 +193,21 @@ function BuyerDashboard() {
             } else if (transaction.currency === "USDC") {
               purchaseAmount += transaction.amount || 0;
             }
+            const productNames = await Promise.all(
+              (transaction.productIds || []).map(async (productId) => {
+                const productDocRef = doc(db, "products", productId);
+                const productDoc = await getDoc(productDocRef);
+                return productDoc.exists() ? productDoc.data().name || "Unknown" : "Unknown";
+              })
+            );
+            marketplaceOrdersData.push({
+              id: transaction.id,
+              date: transaction.createdAt.toISOString().split("T")[0],
+              product: productNames.length > 0 ? productNames.join(", ") : "Unknown",
+              amount: transaction.amount || 0,
+              status: transaction.shippingStatus || "Pending",
+            });
           }
-          const productNames = await Promise.all(
-            (transaction.productIds || []).map(async (productId) => {
-              const productDocRef = doc(db, "products", productId);
-              const productDoc = await getDoc(productDocRef);
-              return productDoc.exists() ? productDoc.data().name || "Unknown" : "Unknown";
-            })
-          );
-          marketplaceOrdersData.push({
-            id: transaction.id,
-            date: transaction.createdAt.toISOString().split("T")[0],
-            product: productNames.length > 0 ? productNames.join(", ") : "Unknown",
-            amount: transaction.amount || 0,
-            status: transaction.shippingStatus || "Pending",
-          });
         }
 
         setMarketplacePurchasesLast30Days(purchaseCount);
@@ -255,7 +256,7 @@ function BuyerDashboard() {
   // Affiliate Activity Table
   const affiliateTableData = {
     columns: [
-      { Header: "Affiliate Name", accessor: "affiliateName", width: "20%", disableSortBy: true },
+      { Header: "Agent Name", accessor: "affiliateName", width: "20%", disableSortBy: true },
       { Header: "Date", accessor: "date", width: "15%" },
       { Header: "Clicks", accessor: "clicks", width: "15%" },
       { Header: "Purchases", accessor: "purchases", width: "15%" },
