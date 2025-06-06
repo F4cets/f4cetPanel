@@ -53,6 +53,34 @@ function SalesDetails() {
   const [hasFlaggedIssue, setHasFlaggedIssue] = useState(false);
   const [timeUntilRelease, setTimeUntilRelease] = useState(null);
 
+  // FIXED: Handle funds release
+  const handleReleaseFunds = async () => {
+    if (!saleDetails || saleDetails.buyerConfirmed) return;
+
+    try {
+      const response = await fetch('https://releasefunds-232592911911.us-central1.run.app', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: salesId,
+          buyerId: saleDetails.buyerId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to release funds');
+      }
+
+      const result = await response.json();
+      console.log(`SalesDetails: Funds released for order ${salesId}, signature: ${result.signature}`);
+      setSuccess('Funds released successfully!');
+    } catch (err) {
+      console.error('SalesDetails: Error releasing funds:', err);
+      setError('Failed to release funds: ' + err.message);
+    }
+  };
+
   // Fetch sale details, messages, and notifications
   useEffect(() => {
     if (!user || !user.walletId || !salesId) return;
@@ -150,7 +178,7 @@ function SalesDetails() {
               buyer: buyerName,
               itemName: productNames.join(", ") || "Unknown Product",
               type: saleData.type || "rwi",
-              salePrice: saleData.amount || 0,
+              salePrice: saleData.sellerAmount || 0, // FIXED: Use sellerAmount
               currency: saleData.currency || "USDC",
               status: saleData.shippingStatus || "Pending",
               date: createdDateForDisplay.toISOString().split('T')[0],
@@ -164,6 +192,7 @@ function SalesDetails() {
               shippingConfirmedAt: saleData.shippingConfirmedAt || null,
               timeline,
               nfts,
+              createdAt: saleData.createdAt,
             };
             setSaleDetails(data);
             setTrackingNumber(data.trackingNumber || "");
@@ -258,21 +287,32 @@ function SalesDetails() {
     };
   }, [user, salesId]);
 
-  // Escrow release countdown timer
+  // FIXED: Escrow release countdown timer for RWI and digital
   useEffect(() => {
-    if (!saleDetails || !saleDetails.deliveryConfirmedAt || saleDetails.buyerConfirmed || hasFlaggedIssue) {
+    if (!saleDetails || saleDetails.buyerConfirmed || hasFlaggedIssue) {
       setTimeUntilRelease(null);
       return;
     }
 
     const calculateTimeUntilRelease = () => {
-      const deliveryDate = new Date(saleDetails.deliveryConfirmedAt);
-      const releaseDate = new Date(deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      let releaseDate;
+      if (saleDetails.type === 'rwi' && saleDetails.deliveryConfirmedAt) {
+        const deliveryDate = new Date(saleDetails.deliveryConfirmedAt);
+        releaseDate = new Date(deliveryDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      } else if (saleDetails.type === 'digital' && saleDetails.createdAt) {
+        const createdDate = saleDetails.createdAt.toDate ? saleDetails.createdAt.toDate() : new Date(saleDetails.createdAt);
+        releaseDate = new Date(createdDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      } else {
+        setTimeUntilRelease(null);
+        return;
+      }
+
       const now = new Date();
       const timeDiff = releaseDate - now;
 
       if (timeDiff <= 0) {
         setTimeUntilRelease({ expired: true });
+        handleReleaseFunds();
         return;
       }
 
@@ -290,7 +330,7 @@ function SalesDetails() {
     return () => clearInterval(timer);
   }, [saleDetails, hasFlaggedIssue]);
 
-  // Redirect if unauthorized
+  // FIXED: Use user.walletId
   useEffect(() => {
     if (!user || !user.walletId || user.role !== "seller") {
       console.log("SalesDetails: Unauthorized access, redirecting to home");
@@ -309,7 +349,7 @@ function SalesDetails() {
     try {
       const messageData = {
         orderId: salesId,
-        senderId: user.walletId,
+        senderId: user.walletId, // FIXED: Use user.walletId
         receiverId: saleDetails.buyerId,
         message: messageInput.trim(),
         timestamp: new Date().toISOString(),
@@ -661,7 +701,7 @@ function SalesDetails() {
                     </MDBox>
                     <MDBox mb={2}>
                       <MDTypography variant="h6" color="dark">
-                        Amount
+                        Seller Amount
                       </MDTypography>
                       <MDTypography variant="body2" color="text">
                         {saleDetails.salePrice} {saleDetails.currency || "N/A"}
@@ -731,7 +771,7 @@ function SalesDetails() {
                           </MDButton>
                         </MDBox>
                       )}
-                      {saleDetails.deliveryConfirmedAt && !saleDetails.buyerConfirmed && (
+                      {!saleDetails.buyerConfirmed && (
                         <MDBox mb={2}>
                           <MDTypography variant="body1" color="dark" mb={1}>
                             Escrow Auto-Release Timer
@@ -747,18 +787,16 @@ function SalesDetails() {
                           </MDTypography>
                         </MDBox>
                       )}
-                      {saleDetails.type === "rwi" && (
-                        <MDBox mb={2}>
-                          <MDTypography variant="body1" color="dark" mb={1}>
-                            Buyer Confirmation
-                          </MDTypography>
-                          <MDTypography variant="body2" color={saleDetails.buyerConfirmed ? "success" : "warning"}>
-                            {saleDetails.buyerConfirmed
-                              ? "Confirmed: Funds released from escrow."
-                              : "Pending: Awaiting buyer confirmation or auto-release after 7 days."}
-                          </MDTypography>
-                        </MDBox>
-                      )}
+                      <MDBox mb={2}>
+                        <MDTypography variant="body1" color="dark" mb={1}>
+                          Buyer Confirmation
+                        </MDTypography>
+                        <MDTypography variant="body2" color={saleDetails.buyerConfirmed ? "success" : "warning"}>
+                          {saleDetails.buyerConfirmed
+                            ? "Confirmed: Funds released from escrow."
+                            : "Pending: Awaiting buyer confirmation or auto-release after 7 days."}
+                        </MDTypography>
+                      </MDBox>
                       <MDBox mb={2}>
                         <MDTypography variant="body1" color="dark" mb={1}>
                           Buyer Rating

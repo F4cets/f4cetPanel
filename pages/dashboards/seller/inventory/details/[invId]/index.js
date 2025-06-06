@@ -1,6 +1,6 @@
 /**
 =========================================================
-* F4cetPanel - Inventory Details Page
+* F4cetPanel - Seller Inventory Details Page
 =========================================================
 
 * Copyright 2025 F4cets Team
@@ -44,7 +44,7 @@ function InventoryDetails() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Fetch inventory details from Firestore
+  // Fetch inventory details
   useEffect(() => {
     const fetchInventory = async () => {
       if (!user || !user.walletId || !invId) return;
@@ -58,7 +58,7 @@ function InventoryDetails() {
             id: invSnapshot.id,
             ...invSnapshot.data(),
             createdAt: invSnapshot.data().createdAt?.toDate().toISOString().split("T")[0] || "N/A",
-            timeline: invSnapshot.data().timeline || [], // Preserve timeline if exists
+            timeline: invSnapshot.data().timeline || [],
           };
           console.log("InventoryDetails: Fetched product:", data);
           setInventoryDetails(data);
@@ -260,15 +260,24 @@ function InventoryDetails() {
                       <MDTypography variant="h6" color="dark">
                         Price (USDC)
                       </MDTypography>
+                      {/* CHANGED: Prevent negative values, enforce min 0.01 */}
                       <MDInput
                         type="number"
                         value={price}
-                        onChange={(e) => setPrice(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === "" || parseFloat(value) >= 0.01) {
+                            setPrice(value);
+                          } else {
+                            setPrice("0.01");
+                          }
+                        }}
+                        min="0.01"
                         fullWidth
                         sx={{
                           "& .MuiInputBase-input": {
                             padding: { xs: "10px", md: "12px" },
-                            color: "white", // Changed to white for dark background
+                            color: "white",
                           },
                         }}
                       />
