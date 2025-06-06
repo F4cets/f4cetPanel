@@ -50,6 +50,7 @@
     "draft-js": "^0.11.7",
     "dropzone": "5.9.3",
     "firebase": "^11.6.1",
+    "firebase-admin": "^12.0.0",
     "flatpickr": "4.6.13",
     "formidable": "^3.5.4",
     "formik": "2.4.5",
