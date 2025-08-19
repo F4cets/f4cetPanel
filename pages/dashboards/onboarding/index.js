@@ -511,7 +511,7 @@ export default function SellerOnboarding() {
                           Drag & Drop or Click to Upload
                         </MDTypography>
                         <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                          (Supports PNG, JPG, WebP, up to 5MB)
+                          (Supports PNG, JPG, WebP, up to 2MB)
                         </MDTypography>
                         <MDInput
                           id="thumbnailInput"
@@ -593,7 +593,7 @@ export default function SellerOnboarding() {
                           Drag & Drop or Click to Upload
                         </MDTypography>
                         <MDTypography variant="caption" sx={{ color: "#344767", display: "block", mb: 1 }}>
-                          (Supports PNG, JPG, WebP, up to 5MB)
+                          (Supports PNG, JPG, WebP, up to 2MB)
                         </MDTypography>
                         <MDInput
                           id="bannerInput"
