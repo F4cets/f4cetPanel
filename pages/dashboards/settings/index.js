@@ -406,7 +406,7 @@ function AccountSettings() {
                         mb: 1 
                       }}
                     >
-                      (Supports PNG, JPG, up to 5MB)
+                      (Supports PNG, JPG, up to 2MB)
                     </MDTypography>
                     <MDInput
                       id="avatarInput"

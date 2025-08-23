@@ -184,7 +184,7 @@ function Profile() {
                 <Divider sx={{ mb: 3, backgroundColor: "rgba(0, 0, 0, 0.1)" }} />
                 <MDBox mb={3} display="flex" justifyContent={{ xs: "center", md: "start" }}>
                   <MDButton
-                    href="https://x.com/f4cetsofficial"
+                    href="https://x.com/f4cetmarket"
                     target="_blank"
                     color="dark"
                     variant="outlined"

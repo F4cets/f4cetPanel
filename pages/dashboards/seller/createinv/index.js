@@ -899,7 +899,7 @@ function CreateInventory() {
                       Drag & Drop or Click to Upload Images (Max 3)
                     </MDTypography>
                     <MDTypography variant="caption" sx={{ color: "#212121", display: "block", mb: 1 }}>
-                      (Supports PNG, JPG, up to 5MB each)
+                      (Supports PNG, JPG, up to 2MB each)
                     </MDTypography>
                     <MDInput
                       id="imageInput"
